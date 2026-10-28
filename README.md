@@ -78,6 +78,10 @@ Windows PowerShell: `psql $env:DATABASE_URL -c "SELECT id, content, created_at F
 
 To run the PostgreSQL integration test against a disposable test database, set `TEST_DATABASE_URL` to its connection URL before running `python -m pytest tests`. The test creates an entry, verifies it remains retrievable after recreating the app, and removes that test entry.
 
+## GitHub Actions
+
+Pushes and pull requests run backend tests on Linux, Windows, and macOS, a PostgreSQL integration test, and a frontend production build.
+
 ## Known PoC limits
 
 - Entries are shared by all users; authentication and editing/deleting entries are outside this prototype.

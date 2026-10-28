@@ -23,7 +23,7 @@ def request(app, method, path, **kwargs):
 
 
 def test_create_and_list_entry(tmp_path):
-    database_url = f"sqlite:///{tmp_path / 'journal.db'}"
+    database_url = f"sqlite:///{(tmp_path / 'journal.db').as_posix()}"
     app = make_client(database_url)
     created = request(app, "POST", "/api/entries", json={"content": "A test entry"})
     assert created.status_code == 201
@@ -38,7 +38,7 @@ def test_create_and_list_entry(tmp_path):
 
 
 def test_entry_survives_app_restart(tmp_path):
-    database_url = f"sqlite:///{tmp_path / 'journal.db'}"
+    database_url = f"sqlite:///{(tmp_path / 'journal.db').as_posix()}"
     first_app = make_client(database_url)
     assert request(first_app, "POST", "/api/entries", json={"content": "Persist me"}).status_code == 201
     first_app.state.engine.dispose()
