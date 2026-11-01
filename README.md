@@ -6,6 +6,31 @@ A small React + FastAPI + PostgreSQL journal app. It is a tested starting point 
 
 `src/frontend/src/App.jsx` sends create/read requests to `src/backend/app/main.py`. FastAPI stores entries in PostgreSQL's `journal_entries` table. Tests are in `src/backend/tests/`.
 
+## Project structure
+
+```text
+.
+├── .env.example                 # Backend settings template
+├── .github/workflows/ci.yml     # Automated checks on pushes and pull requests
+├── .gitignore                   # Keeps local config and build files out of Git
+├── docs/poc-to-mvp-plan.md      # How to grow the PoC into the MVP
+└── src/
+    ├── backend/
+    │   ├── app/main.py          # FastAPI routes and database model
+    │   ├── requirements.txt     # Python dependencies
+    │   └── tests/               # SQLite API tests and PostgreSQL test
+    └── frontend/
+        ├── .env.example         # Frontend API URL template
+        ├── index.html           # Page loaded by the browser
+        ├── package.json         # Frontend scripts and dependencies
+        ├── package-lock.json    # Locked npm dependency versions
+        ├── vite.config.js       # Vite React setup
+        └── src/
+            ├── App.jsx          # Journal entry form and list
+            ├── main.jsx         # React entry point
+            └── style.css        # App styles
+```
+
 ## Setup
 
 Install Python 3.10+, Node.js 20+, and PostgreSQL 14+. Create a PostgreSQL role and database named `aurajournal`, then copy the example settings:
