@@ -78,11 +78,6 @@ def create_app(database_url: str | None = None) -> FastAPI:
             content={"detail": "Database is unavailable. Please try again later."},
         )
 
-    @app.get("/api/health")
-    async def health(session: Session = Depends(get_session)):
-        session.execute(select(1))
-        return {"status": "ok", "database": "connected"}
-
     @app.post("/api/entries", response_model=EntryResponse, status_code=201)
     async def create_entry(payload: EntryCreate, session: Session = Depends(get_session)):
         entry = JournalEntry(content=payload.content.strip())

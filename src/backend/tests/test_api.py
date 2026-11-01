@@ -59,23 +59,21 @@ def test_invalid_entries_are_rejected():
     app.state.engine.dispose()
 
 
-def test_health_checks_database():
-    app = make_client("sqlite://")
-    assert request(app, "GET", "/api/health").json() == {"status": "ok", "database": "connected"}
-    app.state.engine.dispose()
-
-
 def test_database_error_returns_controlled_response():
     app = make_client("sqlite://")
-    health_route = next(route for route in app.routes if getattr(route, "path", None) == "/api/health")
-    get_session = health_route.dependant.dependencies[0].call
+    entries_route = next(
+        route
+        for route in app.routes
+        if getattr(route, "path", None) == "/api/entries" and "GET" in route.methods
+    )
+    get_session = entries_route.dependant.dependencies[0].call
 
     async def unavailable_session():
         raise OperationalError("database down", {}, RuntimeError("connection refused"))
         yield
 
     app.dependency_overrides[get_session] = unavailable_session
-    response = request(app, "GET", "/api/health")
+    response = request(app, "GET", "/api/entries")
     assert response.status_code == 503
     assert response.json() == {"detail": "Database is unavailable. Please try again later."}
     app.state.engine.dispose()

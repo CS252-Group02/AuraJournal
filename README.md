@@ -1,29 +1,23 @@
-# AuraJournal PoC
+# AuraJournal
 
-Minimal prototype for validating React → FastAPI communication and PostgreSQL persistence. The app lets you create journal entries and read them back. It does not call AI APIs.
+A small React + FastAPI + PostgreSQL journal app. It is a tested starting point for the MVP, not a finished product.
 
-## Requirements
+## How it works
 
-- Python 3.10 or newer
-- Node.js 20 or newer
-- PostgreSQL 14 or newer, running locally
+`src/frontend/src/App.jsx` sends create/read requests to `src/backend/app/main.py`. FastAPI stores entries in PostgreSQL's `journal_entries` table. Tests are in `src/backend/tests/`.
 
-## Configure PostgreSQL
+## Setup
 
-Create a local role and database (adjust the PostgreSQL administrator command for your installation):
+Install Python 3.10+, Node.js 20+, and PostgreSQL 14+. Create a PostgreSQL role and database named `aurajournal`, then copy the example settings:
 
 ```sql
 CREATE USER aurajournal WITH PASSWORD 'aurajournal';
 CREATE DATABASE aurajournal OWNER aurajournal;
 ```
 
-Copy `.env.example` to `.env` and `src/frontend/.env.example` to `src/frontend/.env.local`. These files contain local placeholder settings; update the database URL if your PostgreSQL setup differs. Vite reads the frontend URL from `.env.local`.
+From the repository root, create your own local environment and config files.
 
-## Create a Python environment
-
-Run these commands from the repository root. Each contributor should create their own virtual environment; it is machine-specific and should not be shared or committed.
-
-**Linux and macOS:**
+**Linux/macOS:**
 
 ```sh
 python3 -m venv .venv
@@ -43,47 +37,33 @@ Copy-Item .env.example .env
 Copy-Item src/frontend/.env.example src/frontend/.env.local
 ```
 
-## Run the application
+Update `.env` if your PostgreSQL credentials differ. The virtual environment and local env files are not shared or committed.
 
-In terminal one, from the repository root:
+## Run
 
-Linux/macOS: `cd src/backend && python -m uvicorn app.main:app --reload --env-file ../../.env`
-
-Windows PowerShell: `Set-Location src/backend; python -m uvicorn app.main:app --reload --env-file ../../.env`
-
-In a second terminal, from the repository root (with the same environment activated):
-
-```sh
-cd src/frontend
-npm install
-npm run dev
-```
-
-Open the local URL printed by Vite (normally `http://localhost:5173`). Submit an entry, confirm it appears under Recent entries, and refresh the page to confirm it is retrieved from the API. The API also exposes `GET /api/health`, `POST /api/entries` (JSON body `{"content":"..."}`), and `GET /api/entries`.
-
-## Tests
-
-Run backend API tests from the repository root, after activating the environment:
+Start the API from the repository root:
 
 ```sh
 cd src/backend
-python -m pytest tests
+python -m uvicorn app.main:app --reload --env-file ../../.env
 ```
 
-The default automated tests cover create/read, persistence across app restarts, invalid input, database health, and controlled database errors using SQLite. A separate PostgreSQL integration test verifies create/read persistence across an app restart against a disposable PostgreSQL database. You can also verify persistence through the UI by creating an entry, restarting FastAPI, and confirming it remains visible. Inspect saved records with:
+In another terminal, activate `.venv`, then start the frontend:
 
-Linux/macOS: `psql "$DATABASE_URL" -c 'SELECT id, content, created_at FROM journal_entries ORDER BY id DESC;'`
+```sh
+cd src/frontend
+npm ci
+npm run dev
+```
 
-Windows PowerShell: `psql $env:DATABASE_URL -c "SELECT id, content, created_at FROM journal_entries ORDER BY id DESC;"`
+Open the URL printed by Vite, usually `http://localhost:5173`. The API provides `POST /api/entries` with `{"content":"..."}` and `GET /api/entries`.
 
-To run the PostgreSQL integration test against a disposable test database, set `TEST_DATABASE_URL` to its connection URL before running `python -m pytest tests`. The test creates an entry, verifies it remains retrievable after recreating the app, and removes that test entry.
+## Tests
 
-## GitHub Actions
+From `src/backend`, run `python -m pytest tests`. These tests use SQLite by default. To include the PostgreSQL integration test, set `TEST_DATABASE_URL` to a disposable test database URL before running pytest. From `src/frontend`, run `npm run build`.
 
-Pushes and pull requests run backend tests on Linux, Windows, and macOS, a PostgreSQL integration test, and a frontend production build.
+GitHub Actions runs the backend tests on Linux, Windows, and macOS, tests PostgreSQL persistence, and builds the frontend.
 
-## Known PoC limits
+## MVP starting point
 
-- Entries are shared by all users; authentication and editing/deleting entries are outside this prototype.
-- The first app startup creates the table automatically; schema migrations are not included.
-- The requested `dev` branch is not available; the current review branch is based on `main`.
+The current flow creates and reads entries. It has no accounts, entry ownership, migrations, or AI features. Agree on MVP requirements before adding them. See [the short PoC-to-MVP plan](docs/poc-to-mvp-plan.md).
