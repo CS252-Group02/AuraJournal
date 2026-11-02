@@ -1,0 +1,272 @@
+/*
+ * Login page. Follows the Vertigo style principles (flat, tonal, 4px radius,
+ * filled controls, motion recipes) with the AuraJournal sage-green palette
+ * from style.css in place of Vertigo's blue-violet neutrals.
+ */
+
+.login {
+  color-scheme: light;
+  --background: oklch(0.965 0.016 148);   /* light green, a touch greener than #f5f7f2 */
+  --foreground: oklch(0.31 0.025 165);    /* #24342e */
+  --card: oklch(1 0 0);                   /* #fff    */
+  --primary: oklch(0.48 0.075 160);       /* #356b51 */
+  --primary-foreground: oklch(0.985 0.005 150);
+  --muted: oklch(0.945 0.012 145);
+  --muted-foreground: oklch(0.56 0.025 160); /* #687a70 */
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.92 0.014 145);        /* #e1e8df */
+  --input: oklch(0.9 0.017 145);          /* #d5dfd4 */
+  --ring: oklch(0.72 0.06 150);           /* #8cae91 */
+  --radius: 0.25rem;
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Dark tokens; Login.jsx adds .dark from the theme switch (light / dark / system). */
+.login.dark {
+  color-scheme: dark;
+  --background: oklch(0.19 0.012 160);
+  --foreground: oklch(0.96 0.008 150);
+  --card: oklch(0.225 0.012 160);
+  --primary: oklch(0.74 0.09 155);
+  --primary-foreground: oklch(0.2 0.02 160);
+  --muted: oklch(0.28 0.014 160);
+  --muted-foreground: oklch(0.72 0.02 155);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.56 0.04 155);
+}
+
+.login ::selection { background: color-mix(in oklch, var(--foreground) 18%, transparent); }
+
+
+.login-form {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  max-width: 20rem;
+}
+
+.login-title {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--foreground);
+}
+
+.login-field { display: grid; gap: 4px; }
+
+.login-input {
+  height: 36px;
+  width: 100%;
+  border: 1px solid var(--input);
+  border-radius: var(--radius);
+  background: var(--card);
+  padding: 0 10px;
+  font: inherit;
+  font-size: 16px; /* avoids iOS zoom */
+  color: var(--foreground);
+  outline: none;
+  transition: border-color 150ms, box-shadow 150ms;
+}
+@media (min-width: 768px) { .login-input { font-size: 14px; } }
+.login.dark .login-input { background: color-mix(in oklch, var(--input) 30%, transparent); }
+.login-input::placeholder { color: var(--muted-foreground); }
+/* Browser autofill paints its own pale fill; keep the input colour instead. */
+.login-input:autofill,
+.login-input:-webkit-autofill {
+  -webkit-text-fill-color: var(--foreground);
+  caret-color: var(--foreground);
+  box-shadow: inset 0 0 0 1000px var(--card);
+  transition: background-color 9999s;
+}
+.login-input:autofill:focus-visible,
+.login-input:-webkit-autofill:focus-visible {
+  box-shadow: inset 0 0 0 1000px var(--card), 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent);
+}
+.login-input:focus-visible {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent);
+}
+.login-input[aria-invalid="true"] {
+  border-color: var(--destructive);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--destructive) 20%, transparent);
+}
+
+.login-error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--destructive);
+}
+
+.login-button {
+  height: 36px;
+  margin-top: 4px;
+  border: 0;
+  border-radius: var(--radius);
+  padding: 0 14px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+  transition: background-color 150ms, scale 150ms;
+}
+.login-button:hover { background: color-mix(in oklch, var(--primary) 80%, transparent); }
+.login-button:active { scale: 0.97; }
+.login-button:focus-visible { box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent); }
+
+/* Secondary sign-in: outlined, quieter than the primary button. */
+.login-google {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0 14px;
+  background: var(--card);
+  color: var(--foreground);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+  transition: background-color 150ms, scale 150ms;
+}
+.login.dark .login-google { border-color: var(--input); background: color-mix(in oklch, var(--input) 30%, transparent); }
+.login-google:hover { background: var(--muted); }
+.login-google:active { scale: 0.97; }
+.login-google:focus-visible { box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent); }
+.login-google svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+/* "or" with a hairline either side. */
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+.login-divider::before,
+.login-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.login-switch {
+  margin: 6px 0 0;
+  font-size: 12px;
+  text-align: center;
+  color: var(--muted-foreground);
+}
+.login-switch a {
+  color: var(--foreground);
+  font-weight: 500;
+  text-underline-offset: 3px;
+  text-decoration: none;
+}
+.login-switch a:hover { text-decoration: underline; }
+.login-switch a:focus-visible { outline: 3px solid color-mix(in oklch, var(--ring) 50%, transparent); border-radius: 2px; }
+
+.login .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Theme switch: segmented control with a sliding selection pill. */
+.theme-switch {
+  position: fixed;
+  top: 16px;
+  right: 24px;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius);
+  background: var(--muted);
+}
+.theme-switch .pill {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 32px;
+  height: 28px;
+  border-radius: calc(var(--radius) * 0.8);
+  background: var(--background);
+  box-shadow: 0 1px 2px color-mix(in oklch, var(--foreground) 10%, transparent);
+  transition: translate 240ms var(--ease-drawer);
+}
+.theme-option {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: calc(var(--radius) * 0.8);
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  outline: none;
+  transition: color 150ms;
+}
+.theme-option:hover,
+.theme-option[aria-pressed="true"] { color: var(--foreground); }
+.theme-option:focus-visible { box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent); }
+.theme-option svg { width: 16px; height: 16px; }
+
+@media (max-width: 640px) {
+  .theme-switch { top: 12px; right: 12px; }
+}
+
+/* Motion: content rises out of a blur; a refused form shakes. */
+.reveal > * { animation: rise 520ms var(--ease-drawer) both; }
+.reveal > :nth-child(2) { animation-delay: 70ms; }
+.reveal > :nth-child(n + 3) { animation-delay: 140ms; }
+@keyframes rise { from { opacity: 0; translate: 0 10px; filter: blur(4px); } }
+
+.login-form.shake { animation: shake 360ms var(--ease-drawer); }
+@keyframes shake {
+  0%, 100% { translate: 0 0; }
+  20% { translate: -6px 0; }
+  40% { translate: 5px 0; }
+  60% { translate: -3px 0; }
+  80% { translate: 2px 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login *, .login ::before, .login ::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
