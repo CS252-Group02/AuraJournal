@@ -1,0 +1,21 @@
+{
+  "name": "aurajournal",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/start.js",
+    "dev": "vite src/frontend --config src/frontend/vite.config.js",
+    "build": "vite build src/frontend --config src/frontend/vite.config.js"
+  },
+  "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.18.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.4.1",
+    "concurrently": "^9.2.1",
+    "vite": "^6.3.5"
+  }
+}

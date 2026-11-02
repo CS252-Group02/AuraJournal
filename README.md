@@ -17,6 +17,11 @@ A small React + FastAPI + PostgreSQL journal app. It is a tested starting point 
 ├── docs/fedora-postgresql.md    # Fedora PostgreSQL setup notes
 ├── docs/poc-to-mvp-plan.md      # How to grow the PoC into the MVP
 ├── docs/security-rules.md       # Journal/account rules and current security gaps
+├── package.json                 # Root npm dependencies and scripts
+├── package-lock.json            # Locked npm dependencies
+├── scripts/
+│   ├── start-backend.js          # Cross-platform backend launcher
+│   └── start.js                  # Dependency bootstrap and service runner
 └── src/
     ├── backend/
     │   ├── app/main.py          # FastAPI routes and database model
@@ -25,8 +30,6 @@ A small React + FastAPI + PostgreSQL journal app. It is a tested starting point 
     └── frontend/
         ├── .env.example         # Frontend API URL template
         ├── index.html           # Page loaded by the browser
-        ├── package.json         # Frontend scripts and dependencies
-        ├── package-lock.json    # Locked npm dependency versions
         ├── vite.config.js       # Vite React setup
         └── src/
             ├── App.jsx          # Journal entry form and list
@@ -94,37 +97,13 @@ Update `.env` if your PostgreSQL credentials differ. The virtual environment and
 
 ## Run
 
-PostgreSQL must be running before you start the app. Run the backend and frontend in separate terminals. In each new terminal, start from the repository root. Virtual environment activation applies only to the terminal where you run it.
-
-### Terminal 1: backend
-
-**Linux/macOS:**
+PostgreSQL must be running before you start the app. From the repository root, run:
 
 ```sh
-source .venv/bin/activate
-cd src/backend
-python -m uvicorn app.main:app --reload --env-file ../../.env
+npm start
 ```
 
-**Windows PowerShell:**
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-Set-Location src/backend
-python -m uvicorn app.main:app --reload --env-file ../../.env
-```
-
-### Terminal 2: frontend
-
-The frontend uses Node.js, so do not activate `.venv` in this terminal. Install its packages once (or again after dependencies change), then start Vite.
-
-```sh
-cd src/frontend
-npm ci
-npm run dev
-```
-
-In PowerShell, use `Set-Location src/frontend` before running `npm ci` and `npm run dev`. Open the URL printed by Vite, usually `http://localhost:5173`. The API provides `POST /api/entries` with `{"content":"..."}` and `GET /api/entries`.
+`npm start` installs npm dependencies when needed, then runs the backend and frontend together with `[backend]` and `[frontend]` log labels. Press Ctrl+C to stop both. The launcher uses `.venv`'s Python when available; otherwise it uses `python3` on Linux/macOS or `python` on Windows. Make sure the Python backend dependencies and `.env` are set up as described above. Open `http://localhost:5173` when Vite is ready. The API provides `POST /api/entries` with `{"content":"..."}` and `GET /api/entries`.
 
 ## Tests
 
@@ -148,7 +127,7 @@ Set-Location src/backend
 python -m pytest tests
 ```
 
-To build the frontend, open a terminal at the repository root, run `Set-Location src/frontend` (or `cd src/frontend` on Linux/macOS), then run `npm run build`. No Python environment activation is needed for the frontend.
+To build the frontend, run `npm run build` from the repository root. No Python environment activation is needed for the frontend.
 
 GitHub Actions runs the PostgreSQL backend tests on Linux, Windows, and macOS, and builds the frontend.
 

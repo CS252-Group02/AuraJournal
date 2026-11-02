@@ -1,0 +1,27 @@
+{
+  "provider": "Deepgram",
+  "requested_options": {
+    "model": "nova-3",
+    "language": "vi",
+    "smart_format": "true"
+  },
+  "audio_file": "vivoice34_train_0000.wav",
+  "audio_source_path": "D:\\AskAI\\AI\\data\\audio\\vivoice34_train_0000.wav",
+  "audio_bytes": 1449678,
+  "audio_sha256": "4e8ef8b2b379e36bef2b662b677102489f0c10365bb5c43e6dbaae33c9d4b73a",
+  "audio_duration_seconds": 45.3,
+  "local_wav_duration_seconds": 45.3,
+  "provider_audio_duration_seconds": 45.3,
+  "meets_week5_duration_20_to_60_seconds": true,
+  "request_elapsed_seconds": 4.737,
+  "request_id": "01a19b20-e786-7453-832f-d7f465aacff5",
+  "model_info": {
+    "92e6452b-d4f4-4abf-93fe-3d802995c287": {
+      "name": "general-nova-3",
+      "version": "2026-09-24.19075",
+      "arch": "nova-3"
+    }
+  },
+  "provider_confidence": 0.9921875,
+  "note": "Confidence is not measured accuracy. Elapsed time includes networking and service processing. The transcript is saved without LLM correction."
+}
