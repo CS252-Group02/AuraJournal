@@ -16,6 +16,7 @@ A small React + FastAPI + PostgreSQL journal app. It is a tested starting point 
 ├── docs/application-flow.md     # Frontend, backend, and test flow
 ├── docs/fedora-postgresql.md    # Fedora PostgreSQL setup notes
 ├── docs/poc-to-mvp-plan.md      # How to grow the PoC into the MVP
+├── docs/security-rules.md       # Journal/account rules and current security gaps
 └── src/
     ├── backend/
     │   ├── app/main.py          # FastAPI routes and database model
@@ -156,3 +157,5 @@ For the request flow, backend behavior, and test details, see the [application f
 ## MVP starting point
 
 The current flow creates and reads entries. It has no accounts, entry ownership, migrations, or AI features. Agree on MVP requirements before adding them. See [the short PoC-to-MVP plan](docs/poc-to-mvp-plan.md).
+
+For the Security & Data team's rules aligned with the supplied MVP Blueprint, current PoC limitations, and security acceptance checks, see [journal and account security rules](docs/security-rules.md). These are written requirements awaiting peer review; they do not add authentication or entry ownership to the current app.
