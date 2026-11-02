@@ -1,0 +1,11 @@
+{
+  "name": "aurajournal",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "concurrently --names backend,frontend --prefix name --kill-others \"node scripts/start-backend.js\" \"npm run dev --prefix src/frontend\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

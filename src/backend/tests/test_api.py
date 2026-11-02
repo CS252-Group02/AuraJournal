@@ -90,6 +90,6 @@ def test_database_error_returns_controlled_response(app):
     assert response.json() == {"detail": "Database is unavailable. Please try again later."}
 
 
-def test_sqlite_url_is_rejected():
+def test_non_postgresql_url_is_rejected():
     with pytest.raises(ValueError, match="requires a PostgreSQL DATABASE_URL"):
-        create_app("sqlite://")
+        create_app("mysql://user:password@localhost/database")

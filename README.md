@@ -14,6 +14,8 @@ A small React + FastAPI + PostgreSQL journal app. It is a tested starting point 
 ├── .github/workflows/ci.yml     # Automated checks on pushes and pull requests
 ├── .gitignore                   # Keeps local config and build files out of Git
 ├── docs/application-flow.md     # Frontend, backend, and test flow
+├── package.json                 # Root command for running both servers
+├── scripts/start-backend.js     # Cross-platform backend launcher
 ├── docs/fedora-postgresql.md    # Fedora PostgreSQL setup notes
 ├── docs/poc-to-mvp-plan.md      # How to grow the PoC into the MVP
 └── src/
@@ -93,37 +95,15 @@ Update `.env` if your PostgreSQL credentials differ. The virtual environment and
 
 ## Run
 
-PostgreSQL must be running before you start the app. Run the backend and frontend in separate terminals. In each new terminal, start from the repository root. Virtual environment activation applies only to the terminal where you run it.
-
-### Terminal 1: backend
-
-**Linux/macOS:**
+PostgreSQL must be running before you start the app. Install the root and frontend Node dependencies once, then run both servers from the repository root:
 
 ```sh
-source .venv/bin/activate
-cd src/backend
-python -m uvicorn app.main:app --reload --env-file ../../.env
-```
-
-**Windows PowerShell:**
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-Set-Location src/backend
-python -m uvicorn app.main:app --reload --env-file ../../.env
-```
-
-### Terminal 2: frontend
-
-The frontend uses Node.js, so do not activate `.venv` in this terminal. Install its packages once (or again after dependencies change), then start Vite.
-
-```sh
-cd src/frontend
 npm ci
-npm run dev
+npm ci --prefix src/frontend
+npm start
 ```
 
-In PowerShell, use `Set-Location src/frontend` before running `npm ci` and `npm run dev`. Open the URL printed by Vite, usually `http://localhost:5173`. The API provides `POST /api/entries` with `{"content":"..."}` and `GET /api/entries`.
+`npm start` runs the backend and frontend together and labels their output `[backend]` and `[frontend]` in the same terminal. Press Ctrl+C to stop both. The launcher uses `.venv`'s Python when available; otherwise it uses `python3` on Linux/macOS or `python` on Windows. Make sure the Python backend dependencies and `.env` are set up as described above. Open `http://localhost:5173` when Vite is ready. The API provides `POST /api/entries` with `{"content":"..."}` and `GET /api/entries`.
 
 ## Tests
 
