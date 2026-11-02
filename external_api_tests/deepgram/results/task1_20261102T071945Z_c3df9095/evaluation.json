@@ -1,0 +1,8 @@
+{
+  "character_edits": 7,
+  "reference_characters": 372,
+  "cer": 0.01881720430107527,
+  "cer_percent": 1.882,
+  "normalization": "NFC, lowercase, remove spaces/punctuation; retain letters, digits and Vietnamese diacritics",
+  "note": "CER is an error rate, not accuracy, and can exceed 100%."
+}
