@@ -1,0 +1,2 @@
+sample_id,dataset_url,split,original_sample_id,license,audio_filename,reference_filename,notes
+vivoice34_train_0000,https://huggingface.co/datasets/anonymous-vivoice34/ViVoice34,train,session_510001_4a8298b2407d9ec0/rec_420001.wav,CC BY 4.0,vivoice34_train_0000.wav,vivoice34_train_0000.txt,"Dataset Viewer row 0; duration 45.299999 seconds; downloaded as one sample through the Hugging Face datasets-server rows endpoint"
