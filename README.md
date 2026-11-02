@@ -14,10 +14,13 @@ A small React + FastAPI + PostgreSQL journal app. It is a tested starting point 
 ├── .github/workflows/ci.yml     # Automated checks on pushes and pull requests
 ├── .gitignore                   # Keeps local config and build files out of Git
 ├── docs/application-flow.md     # Frontend, backend, and test flow
-├── package.json                 # Root command for running both servers
-├── scripts/start-backend.js     # Cross-platform backend launcher
 ├── docs/fedora-postgresql.md    # Fedora PostgreSQL setup notes
 ├── docs/poc-to-mvp-plan.md      # How to grow the PoC into the MVP
+├── package.json                 # Root npm dependencies and scripts
+├── package-lock.json            # Locked npm dependencies
+├── scripts/
+│   ├── start-backend.js          # Cross-platform backend launcher
+│   └── start.js                  # Dependency bootstrap and service runner
 └── src/
     ├── backend/
     │   ├── app/main.py          # FastAPI routes and database model
@@ -26,8 +29,6 @@ A small React + FastAPI + PostgreSQL journal app. It is a tested starting point 
     └── frontend/
         ├── .env.example         # Frontend API URL template
         ├── index.html           # Page loaded by the browser
-        ├── package.json         # Frontend scripts and dependencies
-        ├── package-lock.json    # Locked npm dependency versions
         ├── vite.config.js       # Vite React setup
         └── src/
             ├── App.jsx          # Journal entry form and list
@@ -95,15 +96,13 @@ Update `.env` if your PostgreSQL credentials differ. The virtual environment and
 
 ## Run
 
-PostgreSQL must be running before you start the app. Install the root and frontend Node dependencies once, then run both servers from the repository root:
+PostgreSQL must be running before you start the app. From the repository root, run:
 
 ```sh
-npm ci
-npm ci --prefix src/frontend
 npm start
 ```
 
-`npm start` runs the backend and frontend together and labels their output `[backend]` and `[frontend]` in the same terminal. Press Ctrl+C to stop both. The launcher uses `.venv`'s Python when available; otherwise it uses `python3` on Linux/macOS or `python` on Windows. Make sure the Python backend dependencies and `.env` are set up as described above. Open `http://localhost:5173` when Vite is ready. The API provides `POST /api/entries` with `{"content":"..."}` and `GET /api/entries`.
+`npm start` installs npm dependencies when needed, then runs the backend and frontend together with `[backend]` and `[frontend]` log labels. Press Ctrl+C to stop both. The launcher uses `.venv`'s Python when available; otherwise it uses `python3` on Linux/macOS or `python` on Windows. Make sure the Python backend dependencies and `.env` are set up as described above. Open `http://localhost:5173` when Vite is ready. The API provides `POST /api/entries` with `{"content":"..."}` and `GET /api/entries`.
 
 ## Tests
 
@@ -127,7 +126,7 @@ Set-Location src/backend
 python -m pytest tests
 ```
 
-To build the frontend, open a terminal at the repository root, run `Set-Location src/frontend` (or `cd src/frontend` on Linux/macOS), then run `npm run build`. No Python environment activation is needed for the frontend.
+To build the frontend, run `npm run build` from the repository root. No Python environment activation is needed for the frontend.
 
 GitHub Actions runs the PostgreSQL backend tests on Linux, Windows, and macOS, and builds the frontend.
 
