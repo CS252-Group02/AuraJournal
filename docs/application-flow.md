@@ -61,7 +61,7 @@ The tests check that:
 - An entry remains saved after creating a fresh app instance.
 - Empty, missing, and whitespace-only content is rejected.
 - Database failures produce a controlled 503 response.
-- A SQLite URL is rejected.
+- A non-PostgreSQL database URL is rejected.
 
 The test fixture creates the table if needed and clears `journal_entries` before each test. Use a disposable test database, never the database containing your journal entries. From `src/backend`, run:
 
