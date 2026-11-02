@@ -1,6 +1,6 @@
 # PoC to MVP
 
-Keep the create/read flow as the baseline. Preserve the API tests, PostgreSQL integration test, frontend build, and cross-platform CI as regression checks.
+Keep the create/read flow as the baseline. Preserve the PostgreSQL API tests, frontend build, and cross-platform CI as regression checks. See the [application flow guide](application-flow.md) for how the frontend, backend, and tests work.
 
 Before expanding, agree on MVP features, user accounts and entry ownership, required entry operations, and deployment constraints. Add only the data model and API behavior those decisions require.
 

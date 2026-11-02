@@ -8,9 +8,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import DateTime, Integer, String, create_engine, func, select
+from sqlalchemy.engine import make_url
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
-from sqlalchemy.pool import StaticPool
 
 
 class Base(DeclarativeBase):
@@ -44,11 +44,9 @@ def create_app(database_url: str | None = None) -> FastAPI:
         "DATABASE_URL",
         "postgresql+psycopg://aurajournal:aurajournal@localhost:5432/aurajournal",
     )
+    if make_url(url).get_backend_name() != "postgresql":
+        raise ValueError("AuraJournal requires a PostgreSQL DATABASE_URL.")
     engine_options = {"pool_pre_ping": True}
-    if url.startswith("sqlite"):
-        engine_options["connect_args"] = {"check_same_thread": False}
-        if url in {"sqlite://", "sqlite:///:memory:"}:
-            engine_options["poolclass"] = StaticPool
     engine = create_engine(url, **engine_options)
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
 
@@ -58,7 +56,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
         yield
         engine.dispose()
 
-    app = FastAPI(title="AuraJournal PoC API", lifespan=lifespan)
+    app = FastAPI(title="AuraJournal API", lifespan=lifespan)
     app.state.engine = engine
     app.add_middleware(
         CORSMiddleware,
