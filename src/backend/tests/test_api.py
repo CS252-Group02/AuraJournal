@@ -1,33 +1,29 @@
 import asyncio
-import os
 import uuid
 
 import httpx
 import pytest
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 from sqlalchemy.exc import OperationalError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
-from app.main import Base, JournalEntry, create_app
-
-
-@pytest.fixture
-def database_url():
-    url = os.environ.get("TEST_DATABASE_URL")
-    if not url:
-        pytest.fail("TEST_DATABASE_URL must point to a disposable PostgreSQL test database.")
-    return url
+from app.main import create_app
+from app.database import get_session
+from app.config import DEVELOPMENT_USER_ID
+from app.models import JournalEntry, User
 
 
-@pytest.fixture
-def app(database_url):
-    application = create_app(database_url)
-    Base.metadata.create_all(application.state.engine)
-    with Session(application.state.engine) as session:
-        session.execute(delete(JournalEntry))
-        session.commit()
-    yield application
+def application_for(engine):
+    application = create_app(engine.url.render_as_string(hide_password=False))
     application.state.engine.dispose()
+    application.state.engine = engine
+    application.state.session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+    return application
+
+
+@pytest.fixture
+def app(migrated_engine):
+    return application_for(migrated_engine)
 
 
 async def request(app, method, path, **kwargs):
@@ -41,27 +37,27 @@ def test_create_and_list_entry(app):
     assert created.status_code == 201
     entry = created.json()
     assert entry["content"] == "A test entry"
-    assert entry["id"]
+    assert uuid.UUID(entry["id"]).version == 4
+    assert entry["created_at"] == entry["updated_at"]
 
     listed = asyncio.run(request(app, "GET", "/api/entries"))
     assert listed.status_code == 200
     assert listed.json() == [entry]
 
 
-def test_entry_survives_app_restart(database_url, app):
+def test_entry_survives_app_restart(app):
     content = f"Persist me {uuid.uuid4()}"
     created = asyncio.run(request(app, "POST", "/api/entries", json={"content": content}))
     assert created.status_code == 201
     entry_id = created.json()["id"]
     app.state.engine.dispose()
 
-    restarted_app = create_app(database_url)
-    Base.metadata.create_all(restarted_app.state.engine)
+    restarted_app = application_for(app.state.engine)
     response = asyncio.run(request(restarted_app, "GET", "/api/entries"))
     assert response.status_code == 200
     assert any(entry["id"] == entry_id and entry["content"] == content for entry in response.json())
     with Session(restarted_app.state.engine) as session:
-        session.execute(delete(JournalEntry).where(JournalEntry.id == entry_id))
+        session.execute(delete(JournalEntry).where(JournalEntry.id == uuid.UUID(entry_id)))
         session.commit()
     restarted_app.state.engine.dispose()
 
@@ -74,12 +70,6 @@ def test_invalid_entries_are_rejected(app):
 
 
 def test_database_error_returns_controlled_response(app):
-    entries_route = next(
-        route for route in app.routes
-        if getattr(route, "path", None) == "/api/entries" and "GET" in route.methods
-    )
-    get_session = entries_route.dependant.dependencies[0].call
-
     async def unavailable_session():
         raise OperationalError("database down", {}, RuntimeError("connection refused"))
         yield
@@ -93,3 +83,51 @@ def test_database_error_returns_controlled_response(app):
 def test_non_postgresql_url_is_rejected():
     with pytest.raises(ValueError, match="requires a PostgreSQL DATABASE_URL"):
         create_app("mysql://user:password@localhost/database")
+
+
+def test_entry_owner_is_server_controlled(app):
+    with Session(app.state.engine) as session:
+        other = User(email="other@example.test", password_hash="!disabled")
+        session.add(other)
+        session.flush()
+        session.add(JournalEntry(user_id=other.id, content="Private to another owner"))
+        session.commit()
+        other_id = str(other.id)
+
+    rejected = asyncio.run(request(app, "POST", "/api/entries", json={
+        "content": "Cannot choose owner", "user_id": other_id,
+    }))
+    assert rejected.status_code == 422
+    created = asyncio.run(request(app, "POST", "/api/entries", json={"content": "  Local entry  "}))
+    assert created.status_code == 201
+    assert created.json()["content"] == "Local entry"
+    listed = asyncio.run(request(app, "GET", "/api/entries"))
+    assert listed.json() == [created.json()]
+    with Session(app.state.engine) as session:
+        assert session.scalar(select(JournalEntry.user_id).where(
+            JournalEntry.id == uuid.UUID(created.json()["id"])
+        )) == DEVELOPMENT_USER_ID
+
+
+def test_entry_length_limit(app):
+    assert asyncio.run(request(app, "POST", "/api/entries", json={
+        "content": "a" * 5000,
+    })).status_code == 201
+    assert asyncio.run(request(app, "POST", "/api/entries", json={
+        "content": "a" * 5001,
+    })).status_code == 422
+
+
+def test_entries_sorted_by_creation_time(app):
+    from datetime import datetime, timezone
+
+    with Session(app.state.engine) as session:
+        session.add_all([
+            JournalEntry(id=uuid.UUID(int=2), user_id=DEVELOPMENT_USER_ID,
+                         content="Older", created_at=datetime(2020, 1, 1, tzinfo=timezone.utc)),
+            JournalEntry(id=uuid.UUID(int=1), user_id=DEVELOPMENT_USER_ID,
+                         content="Newer", created_at=datetime(2021, 1, 1, tzinfo=timezone.utc)),
+        ])
+        session.commit()
+    listed = asyncio.run(request(app, "GET", "/api/entries"))
+    assert [entry["content"] for entry in listed.json()] == ["Newer", "Older"]
