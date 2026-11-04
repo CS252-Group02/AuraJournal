@@ -4,7 +4,7 @@ A small React + FastAPI + PostgreSQL journal app. It is a tested starting point 
 
 ## How it works
 
-`src/frontend/src/App.jsx` sends create/read requests to `src/backend/app/main.py`. FastAPI stores entries in PostgreSQL's `journal_entries` table. Tests are in `src/backend/tests/`.
+`src/frontend/src/App.jsx` sends create/read requests to FastAPI. The backend separates database setup, models, validation schemas, and routes. PostgreSQL stores users, journal entries, mood records, and journal images; the current journal flow uses a seeded development user. Tests are in `src/backend/tests/`.
 
 ## Project structure
 
@@ -14,7 +14,8 @@ A small React + FastAPI + PostgreSQL journal app. It is a tested starting point 
 ├── .github/workflows/ci.yml     # Automated checks on pushes and pull requests
 ├── .gitignore                   # Keeps local config and build files out of Git
 ├── docs/application-flow.md     # Frontend, backend, and test flow
-├── docs/fedora-postgresql.md    # Fedora PostgreSQL setup notes
+├── docs/database-migrations.md  # Current schema setup and migrations
+├── docs/development-users.md    # Temporary user and additional test users
 ├── docs/poc-to-mvp-plan.md      # How to grow the PoC into the MVP
 ├── package.json                 # Root npm dependencies and scripts
 ├── package-lock.json            # Locked npm dependencies
@@ -23,7 +24,9 @@ A small React + FastAPI + PostgreSQL journal app. It is a tested starting point 
 │   └── start.js                  # Dependency bootstrap and service runner
 └── src/
     ├── backend/
-    │   ├── app/main.py          # FastAPI routes and database model
+    │   ├── app/                 # App setup, database, models, schemas, and routers
+    │   ├── alembic.ini          # Migration configuration
+    │   ├── migrations/          # Versioned PostgreSQL schema
     │   ├── requirements.txt     # Python dependencies
     │   └── tests/               # PostgreSQL API tests
     └── frontend/
@@ -36,6 +39,28 @@ A small React + FastAPI + PostgreSQL journal app. It is a tested starting point 
             └── style.css        # App styles
 ```
 
+## Backend app layout
+
+```text
+app/
+├── main.py                # FastAPI app and router registration
+├── config.py              # Settings and development owner
+├── database.py            # Engine and session dependency
+├── models/
+│   ├── __init__.py         # Model imports and exports
+│   ├── base.py             # Declarative base and timestamp mixins
+│   ├── user.py
+│   ├── journal_entry.py
+│   ├── mood_record.py
+│   └── journal_image.py
+├── schemas/
+│   ├── __init__.py
+│   └── entries.py          # API input/output models
+└── routers/
+    ├── __init__.py
+    └── entries.py          # Journal endpoints
+```
+
 ## Setup
 
 Install Python 3.10+, Node.js 20+, and PostgreSQL 14+. First open PostgreSQL's `psql` command prompt. The SQL below must be entered at the `psql` prompt (which usually ends in `=#`), not at Bash, PowerShell, or another system shell.
@@ -46,7 +71,7 @@ Install Python 3.10+, Node.js 20+, and PostgreSQL 14+. First open PostgreSQL's `
 sudo -u postgres psql
 ```
 
-Fedora may need its PostgreSQL cluster initialized and localhost password authentication configured first; see the [Fedora PostgreSQL setup note](docs/fedora-postgresql.md).
+Fedora may need its PostgreSQL cluster initialized and localhost password authentication configured first.
 
 **macOS:** With PostgreSQL installed and running, Homebrew users can connect to the default database with:
 
@@ -94,6 +119,16 @@ Copy-Item src/frontend/.env.example src/frontend/.env.local
 
 Update `.env` if your PostgreSQL credentials differ. The virtual environment and local env files are not shared or committed.
 
+Before starting the app, apply database migrations. With the virtual environment active, run from `src/backend`:
+
+```sh
+python -m alembic upgrade head
+```
+
+An empty database runs the initial journal-table migration (`0001`) and then the current four-table migration (`0002`). **If your database already has the original journal table without migration tracking, follow the backup and baseline-stamp instructions in [database setup](docs/database-migrations.md) first.** A database already at revision `0002` needs no schema changes. Return to the repository root afterward. The app does not create tables at startup.
+
+The migration seeds the temporary development user. See [development users and testing](docs/development-users.md) for its identity and how to create additional test users.
+
 ## Run
 
 PostgreSQL must be running before you start the app. From the repository root, run:
@@ -106,7 +141,7 @@ npm start
 
 ## Tests
 
-The backend tests require PostgreSQL and clear all `journal_entries` rows in the test database before each test. Use the dedicated `aurajournal_test` database created during setup; never use your app database or other data you want to keep. In a new terminal at the repository root:
+The backend tests require PostgreSQL. Each database test creates an isolated schema, applies migrations, and drops that schema afterward; the test role needs permission to create schemas. Use the dedicated `aurajournal_test` database created during setup; never use your app database or other data you want to keep. In a new terminal at the repository root:
 
 **Linux/macOS:**
 
@@ -134,4 +169,4 @@ For the request flow, backend behavior, and test details, see the [application f
 
 ## MVP starting point
 
-The current flow creates and reads entries. It has no accounts, entry ownership, migrations, or AI features. Agree on MVP requirements before adding them. See [the short PoC-to-MVP plan](docs/poc-to-mvp-plan.md).
+The current flow creates and reads entries for a fixed development user. Versioned migrations and user/entry/mood/image models are in place. Authentication, mood/image endpoints, and AI features are not implemented yet. See [the short PoC-to-MVP plan](docs/poc-to-mvp-plan.md).
