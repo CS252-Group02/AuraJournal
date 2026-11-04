@@ -14,6 +14,7 @@ A small React + FastAPI + PostgreSQL journal app. It is a tested starting point 
 ├── .github/workflows/ci.yml     # Automated checks on pushes and pull requests
 ├── .gitignore                   # Keeps local config and build files out of Git
 ├── docs/application-flow.md     # Frontend, backend, and test flow
+├── docs/database-create-and-test.md # Create users and test journals in PostgreSQL
 ├── docs/database-migrations.md  # Current schema setup and migrations
 ├── docs/development-users.md    # Temporary user and additional test users
 ├── docs/poc-to-mvp-plan.md      # How to grow the PoC into the MVP
@@ -165,7 +166,7 @@ To build the frontend, run `npm run build` from the repository root. No Python e
 
 GitHub Actions runs the PostgreSQL backend tests on Linux, Windows, and macOS, and builds the frontend.
 
-For the request flow, backend behavior, and test details, see the [application flow guide](docs/application-flow.md).
+For an interactive walkthrough to create and inspect test users and journals, see [create and test the database](docs/database-create-and-test.md). For request flow, backend behavior, and test details, see the [application flow guide](docs/application-flow.md).
 
 ## MVP starting point
 
