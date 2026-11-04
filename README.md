@@ -14,8 +14,9 @@ A small React + FastAPI + PostgreSQL journal app. It is a tested starting point 
 ├── .github/workflows/ci.yml     # Automated checks on pushes and pull requests
 ├── .gitignore                   # Keeps local config and build files out of Git
 ├── docs/application-flow.md     # Frontend, backend, and test flow
-├── docs/database-create-and-test.md # Create users and test journals in PostgreSQL
-├── docs/database-migrations.md  # Current schema setup and migrations
+├── docs/database/               # Database setup, migrations, and test data
+│   ├── create-and-test.md
+│   └── migrations.md
 ├── docs/development-users.md    # Temporary user and additional test users
 ├── docs/poc-to-mvp-plan.md      # How to grow the PoC into the MVP
 ├── package.json                 # Root npm dependencies and scripts
@@ -126,7 +127,7 @@ Before starting the app, apply database migrations. With the virtual environment
 python -m alembic upgrade head
 ```
 
-An empty database runs the initial journal-table migration (`0001`) and then the current four-table migration (`0002`). **If your database already has the original journal table without migration tracking, follow the backup and baseline-stamp instructions in [database setup](docs/database-migrations.md) first.** A database already at revision `0002` needs no schema changes. Return to the repository root afterward. The app does not create tables at startup.
+An empty database runs the initial journal-table migration (`0001`) and then the current four-table migration (`0002`). **If your database already has the original journal table without migration tracking, follow the backup and baseline-stamp instructions in [database setup](docs/database/migrations.md) first.** A database already at revision `0002` needs no schema changes. Return to the repository root afterward. The app does not create tables at startup.
 
 The migration seeds the temporary development user. See [development users and testing](docs/development-users.md) for its identity and how to create additional test users.
 
@@ -166,7 +167,7 @@ To build the frontend, run `npm run build` from the repository root. No Python e
 
 GitHub Actions runs the PostgreSQL backend tests on Linux, Windows, and macOS, and builds the frontend.
 
-For an interactive walkthrough to create and inspect test users and journals, see [create and test the database](docs/database-create-and-test.md). For request flow, backend behavior, and test details, see the [application flow guide](docs/application-flow.md).
+For an interactive walkthrough to create and inspect test users and journals, see [create and test the database](docs/database/create-and-test.md). For request flow, backend behavior, and test details, see the [application flow guide](docs/application-flow.md).
 
 ## MVP starting point
 

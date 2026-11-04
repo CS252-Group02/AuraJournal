@@ -18,7 +18,7 @@ python3 -m alembic current
 
 The revision should be `0002`. This creates the schema and the temporary development user. These commands use the sample credentials from `.env.example`; adjust them if your PostgreSQL role or password differs.
 
-If the database already contains data, read [database migration instructions](database-migrations.md) before applying migrations. Do not use the test database for important data.
+If the database already contains data, read [database migration instructions](migrations.md) before applying migrations. Do not use the test database for important data.
 
 ## 2. Open the database in psql
 

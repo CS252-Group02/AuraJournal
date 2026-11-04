@@ -4,7 +4,7 @@ Authentication is not implemented yet. Login and registration screens are placeh
 
 ## Default user for browser and API tests
 
-After following [database setup and migration](database-migrations.md), migration `0002` has already created:
+After following [database setup and migration](database/migrations.md), migration `0002` has already created:
 
 | Field | Value |
 | --- | --- |

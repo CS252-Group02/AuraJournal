@@ -31,7 +31,7 @@ sequenceDiagram
 
 `POST /api/entries` accepts content from 1 to 5000 characters, trims it, and rejects blank content. Extra fields, including `user_id`, are rejected. The server assigns the fixed development user. Responses contain `id` as a UUID string, `content`, `created_at`, and `updated_at`. `GET /api/entries` selects only that owner's entries, sorted by creation time descending with UUID as a deterministic tie-breaker. It does not expose other users' entries, but there is no authentication: anyone accessing this local app shares the development user's journal.
 
-PostgreSQL stores users, entries, mood records, and journal images. Each entry requires an owner and can have at most one mood record and one image. Mood/image endpoints and AI integrations are deferred. See [database migrations](database-migrations.md) for schema details and [development users](development-users.md) for testing with additional users.
+PostgreSQL stores users, entries, mood records, and journal images. Each entry requires an owner and can have at most one mood record and one image. Mood/image endpoints and AI integrations are deferred. See [database migrations](database/migrations.md) for schema details and [development users](development-users.md) for testing with additional users.
 
 The app connects using `DATABASE_URL`, defaulting to the local `aurajournal` PostgreSQL database. CORS allows `FRONTEND_ORIGIN`, defaulting to `http://localhost:5173`. SQLAlchemy errors return HTTP 503 with a generic availability message. App startup does not create tables; run Alembic before starting the backend. Shutdown disposes the connection pool.
 
