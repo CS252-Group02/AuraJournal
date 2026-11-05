@@ -16,7 +16,7 @@ python3 -m alembic upgrade head
 python3 -m alembic current
 ```
 
-The revision should be `0002`. This creates the schema and the temporary development user. These commands use the sample credentials from `.env.example`; adjust them if your PostgreSQL role or password differs.
+The revision should be `0003`. This creates the schema and the temporary development user. These commands use the sample credentials from `.env.example`; adjust them if your PostgreSQL role or password differs.
 
 If the database already contains data, read [database migration instructions](migrations.md) before applying migrations. Do not use the test database for important data.
 
@@ -36,7 +36,7 @@ SELECT current_database();
 SELECT id, email FROM users ORDER BY email;
 ```
 
-You should see the four application tables (`users`, `journal_entries`, `mood_records`, `journal_images`), the Alembic version table, and the seeded development user.
+You should see the six application tables (`users`, `journal_entries`, `mood_records`, `journal_images`, `auth_sessions`, `login_attempts`), the Alembic version table, and the seeded development user.
 
 ## 3. Create three test users
 
@@ -59,7 +59,7 @@ WHERE email LIKE '%@example.test'
 ORDER BY email;
 ```
 
-The unique ID for each user is the value referenced by `journal_entries.user_id`. `!disabled` is only a placeholder; authentication is not implemented.
+The unique ID for each user is the value referenced by `journal_entries.user_id`. `!disabled` is only a placeholder; these SQL-created users cannot log in. Register through the browser to create usable accounts.
 
 ## 4. Add three journals for each test user
 
@@ -164,4 +164,7 @@ The automated tests create temporary schemas and remove them afterward. Your man
 
 ## What you will see in the browser
 
-The current journal API always reads and writes entries for `development@aurajournal.local`, so Alice, Bob, and Carol's database entries do not show in the browser. This guide is for inspecting database relationships; user login and per-user journal selection have not been connected yet.
+The journal API requires a valid account session and only returns that account's
+entries. SQL-created users above have disabled passwords; their records are for
+relationship tests only. Register accounts through the browser for login and
+isolation tests. See [authentication](../authentication.md).

@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.main import create_app
 from app.database import get_session
-from app.config import DEVELOPMENT_USER_ID
 from app.models import JournalEntry, User
 
 
@@ -23,12 +22,21 @@ def application_for(engine):
 
 @pytest.fixture
 def app(migrated_engine):
-    return application_for(migrated_engine)
+    application = application_for(migrated_engine)
+    response = asyncio.run(request(application, "POST", "/api/auth/register", json={
+        "email": "api@example.com", "password": "test-password",
+    }))
+    assert response.status_code == 201
+    application.auth_cookies = dict(response.cookies)
+    application.user_id = uuid.UUID(response.json()["id"])
+    return application
 
 
 async def request(app, method, path, **kwargs):
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        client.cookies.update(getattr(app, "auth_cookies", {}))
+        kwargs.setdefault("headers", {"Origin": "http://localhost:5173", "X-AuraJournal-CSRF": "1"})
         return await client.request(method, path, **kwargs)
 
 
@@ -53,6 +61,7 @@ def test_entry_survives_app_restart(app):
     app.state.engine.dispose()
 
     restarted_app = application_for(app.state.engine)
+    restarted_app.auth_cookies = app.auth_cookies
     response = asyncio.run(request(restarted_app, "GET", "/api/entries"))
     assert response.status_code == 200
     assert any(entry["id"] == entry_id and entry["content"] == content for entry in response.json())
@@ -106,7 +115,7 @@ def test_entry_owner_is_server_controlled(app):
     with Session(app.state.engine) as session:
         assert session.scalar(select(JournalEntry.user_id).where(
             JournalEntry.id == uuid.UUID(created.json()["id"])
-        )) == DEVELOPMENT_USER_ID
+        )) == app.user_id
 
 
 def test_entry_length_limit(app):
@@ -123,9 +132,9 @@ def test_entries_sorted_by_creation_time(app):
 
     with Session(app.state.engine) as session:
         session.add_all([
-            JournalEntry(id=uuid.UUID(int=2), user_id=DEVELOPMENT_USER_ID,
+            JournalEntry(id=uuid.UUID(int=2), user_id=app.user_id,
                          content="Older", created_at=datetime(2020, 1, 1, tzinfo=timezone.utc)),
-            JournalEntry(id=uuid.UUID(int=1), user_id=DEVELOPMENT_USER_ID,
+            JournalEntry(id=uuid.UUID(int=1), user_id=app.user_id,
                          content="Newer", created_at=datetime(2021, 1, 1, tzinfo=timezone.utc)),
         ])
         session.commit()

@@ -8,11 +8,16 @@ Based on AuraJournal Website Blueprint v0.67 in *CS252 - Capstone Defense (1).zi
 
 FR-01–FR-05 are **Must**: Email/Google/Facebook authentication, voice transcription, mood-based visuals/music, timeline/calendar history, and visual recaps. Streak tracking (FR-06) is **Should**. Public sharing and clinical assessment are outside the MVP; additional emotion-estimation/coaching ideas are outside the agreed Must scope.
 
-The current [backend](../src/backend/app/main.py) saves and lists shared text entries in PostgreSQL. Validation, ignored local env files, and CI exist. Accounts, ownership, AI/media, privacy pages, and deletion are not implemented. Encryption is not configured by this repo. Existing [tests](../src/backend/tests/test_api.py) verify persistence and API behavior, not account isolation.
+The backend implements email/password registration, Argon2id hashing, seven-day
+revocable cookie sessions, login throttling, origin/header CSRF checks, and
+session-derived journal ownership. Google/Facebook login, email verification,
+password recovery, account deletion, AI/media workflows, and production encryption
+remain unimplemented. Tests cover authentication and journal isolation; these do
+not certify the broader acceptance checks below. See [authentication](authentication.md).
 
 ## Security rules
 
-1. **Use fictional local data.** Keep the unauthenticated PoC on localhost. Separate development, test, staging, and production data and credentials. Tests must use the disposable `aurajournal_test` database: fixtures delete all journal rows in their configured database.
+1. **Use fictional local data.** Keep the unauthenticated PoC on localhost. Separate development, test, staging, and production data and credentials. Tests must use the disposable `aurajournal_test` database: fixtures create and drop isolated schemas in that database.
 
 2. **Protect secrets.** Keep database passwords, API keys, and signing/encryption secrets in backend env files or deployment secret settings. Never commit them or place them in frontend `VITE_*` values. The sample password is local-only. Review staged files; revoke/rotate exposed credentials.
 

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { api } from './api.js';
+import { useAuth } from './Auth.jsx';
 
 export default function App() {
+  const { user, logout } = useAuth();
   const [content, setContent] = useState('');
   const [entries, setEntries] = useState([]);
   const [message, setMessage] = useState('Loading entries…');
@@ -10,12 +12,10 @@ export default function App() {
 
   async function loadEntries() {
     try {
-      const response = await fetch(`${API_URL}/api/entries`);
-      if (!response.ok) throw new Error('Could not load entries.');
-      setEntries(await response.json());
+      setEntries(await api('/api/entries'));
       setMessage('');
-    } catch {
-      setMessage('Could not connect to AuraJournal. Check that the API and database are running.');
+    } catch (error) {
+      setMessage(error.status ? error.message : 'Could not connect to AuraJournal. Please try again.');
     }
   }
 
@@ -28,13 +28,10 @@ export default function App() {
     setBusy(true);
     setMessage('');
     try {
-      const response = await fetch(`${API_URL}/api/entries`, {
+      await api('/api/entries', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content }),
+        body: { content },
       });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.detail || 'Could not save entry.');
       setContent('');
       setMessage('Entry saved.');
       await loadEntries();
@@ -48,6 +45,10 @@ export default function App() {
   return (
     <main className="page">
       <header>
+        <div className="form-footer">
+          <span>{user.email}</span>
+          <button type="button" onClick={logout}>Log out</button>
+        </div>
         <p className="eyebrow">A small space to reflect</p>
         <h1>AuraJournal</h1>
         <p className="intro">Write a thought and see it saved to your journal.</p>
