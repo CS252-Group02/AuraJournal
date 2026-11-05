@@ -235,3 +235,5 @@ htmlcov/
 Thumbs.db
 
 .vscode/
+# Local database migration backup
+*.dump

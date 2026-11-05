@@ -27,6 +27,9 @@ jobs:
           user: aurajournal
           database: aurajournal_test
       - run: python -m pip install -r requirements.txt
+      - run: python -m alembic upgrade head
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
       - run: python -m pytest tests
 
   frontend-build:
