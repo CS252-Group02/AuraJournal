@@ -5,6 +5,7 @@ sqlalchemy>=2.0,<2.1
 psycopg[binary]>=3.2,<4
 pytest>=8,<10
 httpx>=0.27,<1
+groq>=1.7,<2
 
 alembic>=1.13,<2
 argon2-cffi>=23.1,<26
