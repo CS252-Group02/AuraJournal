@@ -19,6 +19,7 @@ A small React + FastAPI + PostgreSQL journal app. It is a tested starting point 
 │   └── migrations.md
 ├── docs/development-users.md    # Temporary user and additional test users
 ├── docs/poc-to-mvp-plan.md      # How to grow the PoC into the MVP
+├── docs/security-rules.md       # Journal/account rules and current security gaps
 ├── package.json                 # Root npm dependencies and scripts
 ├── package-lock.json            # Locked npm dependencies
 ├── scripts/
@@ -171,4 +172,7 @@ For an interactive walkthrough to create and inspect test users and journals, se
 
 ## MVP starting point
 
+The current flow creates and reads entries. It has no accounts, entry ownership, migrations, or AI features. Agree on MVP requirements before adding them. See [the short PoC-to-MVP plan](docs/poc-to-mvp-plan.md).
+
+For the Security & Data team's rules aligned with the supplied MVP Blueprint, current PoC limitations, and security acceptance checks, see [journal and account security rules](docs/security-rules.md). These are written requirements awaiting peer review; they do not add authentication or entry ownership to the current app.
 The current flow creates and reads entries for a fixed development user. Versioned migrations and user/entry/mood/image models are in place. Authentication, mood/image endpoints, and AI features are not implemented yet. See [the short PoC-to-MVP plan](docs/poc-to-mvp-plan.md).
