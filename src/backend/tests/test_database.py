@@ -17,7 +17,7 @@ from conftest import migrate
 def test_fresh_migration_matches_models(migrated_engine):
     with migrated_engine.connect() as connection:
         assert compare_metadata(MigrationContext.configure(connection), Base.metadata) == []
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0002"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0003"
     # Reapplying head must leave the seed intact and avoid duplicate insertion.
     migrate(migrated_engine)
     with Session(migrated_engine) as session:
@@ -72,7 +72,7 @@ def test_initial_revision_and_downgrade_guard(isolated_engine):
     with Session(isolated_engine) as session:
         assert session.scalar(select(JournalEntry.content)) == "Initial schema entry"
     with isolated_engine.connect() as connection:
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0002"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0003"
 
 
 @pytest.mark.parametrize("model, fields", [

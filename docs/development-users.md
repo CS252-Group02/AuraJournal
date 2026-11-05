@@ -1,20 +1,16 @@
 # Development users and test entries
 
-Authentication is not implemented yet. Login and registration screens are placeholders. These instructions create database records for local testing; they do not create usable login credentials.
+Email/password authentication is now implemented. Create usable accounts through
+`/register`, not by inserting password hashes manually. See [authentication](authentication.md).
 
-## Default user for browser and API tests
+The seeded `development@aurajournal.local` user has a disabled `!disabled` password
+marker and cannot log in. Its journals remain stored but inaccessible to new accounts.
+The API derives journal ownership from the verified session; it never accepts a
+client-selected `user_id`.
 
-After following [database setup and migration](database/migrations.md), migration `0002` has already created:
-
-| Field | Value |
-| --- | --- |
-| ID | `00000000-0000-4000-8000-000000000001` |
-| Email | `development@aurajournal.local` |
-| Password marker | `!disabled` |
-
-You do not need to register or create another user to test the app. Run `npm start` from the repository root and open `http://localhost:5173`. The unauthenticated journal API always creates and lists entries for this fixed user. `user_id` is not accepted in the create-entry request.
-
-You can also send `POST http://localhost:8000/api/entries` with JSON `{"content":"My development entry"}` and read `GET http://localhost:8000/api/entries`. There is no token or password to provide. This shared-owner behavior is intended for local development; it does not provide user isolation between people accessing the app.
+The following SQL examples are for database relationship tests only. SQL-created
+users with `!disabled` markers also cannot log in. API/browser tests should register
+accounts normally and verify isolation by logging out and switching accounts.
 
 ## Create an additional test user with SQL
 
@@ -26,7 +22,7 @@ VALUES (gen_random_uuid(), 'tester@example.test', '!disabled')
 RETURNING id, email, created_at, updated_at;
 ```
 
-Use a different email for each user; email is unique. `!disabled` is an explicit unusable password marker, not a password hash or a password to type into the login screen. Future authentication must reject disabled users until they receive real credentials.
+Use a different email for each user; email is unique. `!disabled` is an explicit unusable password marker, not a password hash or a password to type into the login screen. Authentication rejects disabled users.
 
 Add an entry for that user:
 
@@ -46,15 +42,14 @@ JOIN journal_entries e ON e.user_id = u.id
 WHERE u.email = 'tester@example.test';
 ```
 
-These entries are available for database/ORM testing. They will not appear in the current browser journal or `GET /api/entries`, which always selects the fixed development owner. Creating an additional user does not switch the API owner. Do not add a client-selected `user_id` to work around this; authenticated ownership will be implemented separately.
+These entries are available for database/ORM testing. They will not appear in another account's browser journal or `GET /api/entries`, which selects the verified account's entries. Creating an additional user does not switch the API owner. Do not add a client-selected `user_id` to work around this; ownership is enforced by the authenticated session.
 
 When manually updating a user or entry with SQL, set `updated_at = now()` yourself. ORM writes through SQLAlchemy set it automatically.
 
-## Verify the temporary flow
+## Verify account isolation
 
-1. Create an entry in the browser and confirm it appears after reloading and restarting the backend.
-2. Inspect the entry in PostgreSQL and confirm its `user_id` is the fixed UUID above.
-3. Create the additional user and entry using the SQL examples; confirm the current journal API does not return that user's entry.
-4. Use the dedicated test database for automated checks, never your app database. The tests create and remove isolated schemas and apply the migrations to each one.
-
-The default development user is part of the temporary app flow. Keep it in place while using the journal API. Deleting any user cascades to that user's entries, moods, and images.
+1. Register account A, create an entry, refresh, and confirm persistence.
+2. Log out, register account B, and verify A's entries are absent.
+3. Log back into A and verify its entry returns.
+4. Confirm requests without a valid session return 401.
+5. Use only the dedicated test database for automated checks; tests create and remove isolated schemas.

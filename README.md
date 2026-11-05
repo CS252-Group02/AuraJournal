@@ -4,7 +4,7 @@ A small React + FastAPI + PostgreSQL journal app. It is a tested starting point 
 
 ## How it works
 
-`src/frontend/src/App.jsx` sends create/read requests to FastAPI. The backend separates database setup, models, validation schemas, and routes. PostgreSQL stores users, journal entries, mood records, and journal images; the current journal flow uses a seeded development user. Tests are in `src/backend/tests/`.
+`src/frontend/src/App.jsx` sends create/read requests to FastAPI. The backend separates database setup, models, validation schemas, and routes. PostgreSQL stores users, journal entries, mood records, and journal images; the journal flow authenticates accounts and scopes entries to the signed-in user. Tests are in `src/backend/tests/`.
 
 ## Project structure
 
@@ -128,9 +128,9 @@ Before starting the app, apply database migrations. With the virtual environment
 python -m alembic upgrade head
 ```
 
-An empty database runs the initial journal-table migration (`0001`) and then the current four-table migration (`0002`). **If your database already has the original journal table without migration tracking, follow the backup and baseline-stamp instructions in [database setup](docs/database/migrations.md) first.** A database already at revision `0002` needs no schema changes. Return to the repository root afterward. The app does not create tables at startup.
+An empty database runs the initial journal-table migration (`0001`) then the four-table migration (`0002`), then authentication sessions and throttling (`0003`). **If your database already has the original journal table without migration tracking, follow the backup and baseline-stamp instructions in [database setup](docs/database/migrations.md) first.** A database already at revision `0002` must apply `0003`. Return to the repository root afterward. The app does not create tables at startup.
 
-The migration seeds the temporary development user. See [development users and testing](docs/development-users.md) for its identity and how to create additional test users.
+The old development user remains disabled and its entries stay private. Register a real account in the browser. See [accounts and sessions](docs/authentication.md) for configuration and API details.
 
 ## Run
 
@@ -170,9 +170,22 @@ GitHub Actions runs the PostgreSQL backend tests on Linux, Windows, and macOS, a
 
 For an interactive walkthrough to create and inspect test users and journals, see [create and test the database](docs/database/create-and-test.md). For request flow, backend behavior, and test details, see the [application flow guide](docs/application-flow.md).
 
-## MVP starting point
+## Accounts and current limits
 
-The current flow creates and reads entries. It has no accounts, entry ownership, migrations, or AI features. Agree on MVP requirements before adding them. See [the short PoC-to-MVP plan](docs/poc-to-mvp-plan.md).
+Email/password registration, login, logout, seven-day revocable cookie sessions,
+and private journal create/list are implemented. Open `/register` to create an
+account; `/` requires login. Existing development-user entries remain stored and
+are not assigned to new users. Google sign-in, email verification, password
+recovery, account deletion, mood/image endpoints, and AI features are deferred.
 
-For the Security & Data team's rules aligned with the supplied MVP Blueprint, current PoC limitations, and security acceptance checks, see [journal and account security rules](docs/security-rules.md). These are written requirements awaiting peer review; they do not add authentication or entry ownership to the current app.
-The current flow creates and reads entries for a fixed development user. Versioned migrations and user/entry/mood/image models are in place. Authentication, mood/image endpoints, and AI features are not implemented yet. See [the short PoC-to-MVP plan](docs/poc-to-mvp-plan.md).
+See [authentication](docs/authentication.md) for API, CSRF, cookie, and deployment
+settings. Use `localhost` consistently for frontend and API. Local HTTP uses
+`AUTH_COOKIE_SECURE=false`; HTTPS deployments must set it to `true`.
+
+Run `npm run test:frontend` for API/session-race tests and `npm run build` for the
+frontend build. PostgreSQL tests cover authentication and account isolation in
+addition to database behavior. CI runs both frontend checks and cross-platform
+backend tests.
+
+The [security rules](docs/security-rules.md) include broader deployment and product
+requirements; implementing authentication does not certify all those requirements.

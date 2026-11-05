@@ -1,14 +1,17 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, status
+from fastapi import Depends, FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 
 from app.config import database_url as configured_database_url, frontend_origin
 from app.database import make_engine
 from app.routers.entries import router as entries_router
+from app.routers.auth import router as auth_router
+from app.auth import require_browser_request
 
 
 def create_app(database_url: str | None = None) -> FastAPI:
@@ -21,14 +24,21 @@ def create_app(database_url: str | None = None) -> FastAPI:
         finally:
             engine.dispose()
 
-    app = FastAPI(title="AuraJournal API", lifespan=lifespan)
+    app = FastAPI(title="AuraJournal API", lifespan=lifespan, dependencies=[Depends(require_browser_request)])
     app.state.engine = engine
     app.state.session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+
+    @app.middleware("http")
+    async def private_responses(request, call_next):
+        response = await call_next(request)
+        response.headers["Cache-Control"] = "no-store"
+        return response
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[frontend_origin()],
+        allow_credentials=True,
         allow_methods=["GET", "POST"],
-        allow_headers=["Content-Type"],
+        allow_headers=["Content-Type", "X-AuraJournal-CSRF"],
     )
 
     @app.exception_handler(SQLAlchemyError)
@@ -38,7 +48,16 @@ def create_app(database_url: str | None = None) -> FastAPI:
             content={"detail": "Database is unavailable. Please try again later."},
         )
 
+    @app.exception_handler(RequestValidationError)
+    async def validation_error_handler(_, error):
+        # Pydantic's default details include submitted input, including passwords.
+        return JSONResponse(status_code=422, content={"detail": [
+            {"loc": list(item["loc"]), "msg": item["msg"], "type": item["type"]}
+            for item in error.errors()
+        ]})
+
     app.include_router(entries_router)
+    app.include_router(auth_router)
     return app
 
 
