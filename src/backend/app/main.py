@@ -11,6 +11,8 @@ from app.config import database_url as configured_database_url, frontend_origin
 from app.database import make_engine
 from app.routers.entries import router as entries_router
 from app.routers.auth import router as auth_router
+from app.routers.summaries import router as summaries_router
+from app.services import JournalSummarizer
 from app.auth import require_browser_request
 
 
@@ -27,6 +29,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
     app = FastAPI(title="AuraJournal API", lifespan=lifespan, dependencies=[Depends(require_browser_request)])
     app.state.engine = engine
     app.state.session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+    app.state.journal_summarizer = JournalSummarizer()
 
     @app.middleware("http")
     async def private_responses(request, call_next):
@@ -57,6 +60,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
         ]})
 
     app.include_router(entries_router)
+    app.include_router(summaries_router)
     app.include_router(auth_router)
     return app
 

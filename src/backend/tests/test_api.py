@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime, timezone
 import uuid
 
 import httpx
@@ -10,6 +11,26 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.main import create_app
 from app.database import get_session
 from app.models import JournalEntry, User
+from app.services import (
+    AIInvalidResponseError,
+    AIServiceNotConfiguredError,
+    AIServiceUnavailableError,
+    EmptyJournalError,
+    JournalSummary,
+)
+
+
+class FakeSummarizer:
+    def __init__(self, *results):
+        self.results = iter(results)
+        self.calls = []
+
+    def summarize(self, text):
+        self.calls.append(text)
+        result = next(self.results)
+        if isinstance(result, Exception):
+            raise result
+        return result
 
 
 def application_for(engine):
@@ -128,8 +149,6 @@ def test_entry_length_limit(app):
 
 
 def test_entries_sorted_by_creation_time(app):
-    from datetime import datetime, timezone
-
     with Session(app.state.engine) as session:
         session.add_all([
             JournalEntry(id=uuid.UUID(int=2), user_id=app.user_id,
@@ -140,3 +159,116 @@ def test_entries_sorted_by_creation_time(app):
         session.commit()
     listed = asyncio.run(request(app, "GET", "/api/entries"))
     assert [entry["content"] for entry in listed.json()] == ["Newer", "Older"]
+
+
+def test_generate_and_overwrite_journal_summary(app):
+    created = asyncio.run(request(app, "POST", "/api/entries", json={
+        "content": "Today I finished an important assignment.",
+    })).json()
+    first = JournalSummary(
+        summary="The writer completed an important assignment.",
+        reflection_question="What helped you finish it?",
+    )
+    second = JournalSummary(
+        summary="An important assignment was completed today.",
+        reflection_question="How do you feel after completing it?",
+    )
+    summarizer = FakeSummarizer(first, second)
+    app.state.journal_summarizer = summarizer
+
+    first_response = asyncio.run(request(
+        app, "POST", f"/api/entries/{created['id']}/summary", json={},
+    ))
+    second_response = asyncio.run(request(
+        app, "POST", f"/api/entries/{created['id']}/summary", json={},
+    ))
+
+    assert first_response.status_code == 200
+    assert first_response.json()["summary"] == first.summary
+    assert second_response.status_code == 200
+    assert second_response.json()["summary"] == second.summary
+    assert summarizer.calls == [created["content"], created["content"]]
+
+    listed = asyncio.run(request(app, "GET", "/api/entries")).json()
+    assert listed[0]["ai_summary"] == second.summary
+    assert listed[0]["ai_reflection_question"] == second.reflection_question
+    listed_at = datetime.fromisoformat(listed[0]["ai_summarized_at"].replace("Z", "+00:00"))
+    response_at = datetime.fromisoformat(
+        second_response.json()["summarized_at"].replace("Z", "+00:00")
+    )
+    assert listed_at == response_at
+    with Session(app.state.engine) as session:
+        entry = session.get(JournalEntry, uuid.UUID(created["id"]))
+        assert entry.ai_summary == second.summary
+        assert entry.ai_reflection_question == second.reflection_question
+        assert entry.ai_summarized_at is not None
+
+
+def test_summary_hides_missing_and_other_users_entries(app):
+    missing_id = uuid.uuid4()
+    summarizer = FakeSummarizer()
+    app.state.journal_summarizer = summarizer
+    missing = asyncio.run(request(
+        app, "POST", f"/api/entries/{missing_id}/summary", json={},
+    ))
+
+    with Session(app.state.engine) as session:
+        other = User(email="summary-other@example.test", password_hash="!disabled")
+        entry = JournalEntry(user=other, content="Private journal")
+        session.add(entry)
+        session.commit()
+        other_entry_id = entry.id
+    forbidden = asyncio.run(request(
+        app, "POST", f"/api/entries/{other_entry_id}/summary", json={},
+    ))
+
+    assert missing.status_code == 404
+    assert forbidden.status_code == 404
+    assert missing.json() == forbidden.json() == {"detail": "Journal entry was not found."}
+    assert summarizer.calls == []
+
+
+@pytest.mark.parametrize("error,status_code,detail", [
+    (EmptyJournalError("empty"), 422, "Journal entry cannot be empty."),
+    (AIInvalidResponseError("invalid"), 502, "AI service returned an invalid response."),
+    (AIServiceNotConfiguredError("missing key"), 503,
+     "AI summary service is unavailable. Please try again later."),
+    (AIServiceUnavailableError("offline"), 503,
+     "AI summary service is unavailable. Please try again later."),
+])
+def test_summary_errors_preserve_previous_result(app, error, status_code, detail):
+    old_time = datetime(2020, 1, 1, tzinfo=timezone.utc)
+    with Session(app.state.engine) as session:
+        entry = JournalEntry(
+            user_id=app.user_id,
+            content="Keep my previous summary",
+            ai_summary="Previous summary",
+            ai_reflection_question="Previous question?",
+            ai_summarized_at=old_time,
+        )
+        session.add(entry)
+        session.commit()
+        entry_id = entry.id
+    app.state.journal_summarizer = FakeSummarizer(error)
+
+    response = asyncio.run(request(
+        app, "POST", f"/api/entries/{entry_id}/summary", json={},
+    ))
+
+    assert response.status_code == status_code
+    assert response.json() == {"detail": detail}
+    with Session(app.state.engine) as session:
+        entry = session.get(JournalEntry, entry_id)
+        assert entry.ai_summary == "Previous summary"
+        assert entry.ai_reflection_question == "Previous question?"
+        assert entry.ai_summarized_at == old_time
+
+
+def test_summary_requires_login(app):
+    anonymous = application_for(app.state.engine)
+    response = asyncio.run(request(
+        anonymous, "POST", f"/api/entries/{uuid.uuid4()}/summary", json={},
+    ))
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Please log in."}
+    anonymous.state.engine.dispose()

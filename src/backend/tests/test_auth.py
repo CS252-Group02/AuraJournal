@@ -1,6 +1,6 @@
 from datetime import timedelta
 from concurrent.futures import ThreadPoolExecutor
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 import pytest
@@ -177,12 +177,16 @@ def test_csrf_cors_and_secure_cookie(application, monkeypatch):
 
 def test_auth_migration_preserves_data_and_session_cascades(isolated_engine):
     migrate(isolated_engine, "0002")
-    with Session(isolated_engine) as session:
-        user = User(email="Mixed@Example.com", password_hash="!disabled")
-        entry = JournalEntry(content="Preserve", user=user)
-        session.add(entry)
-        session.commit()
-        user_id, entry_id = user.id, entry.id
+    user_id, entry_id = uuid4(), uuid4()
+    with isolated_engine.begin() as connection:
+        connection.execute(text(
+            "INSERT INTO users (id, email, password_hash) "
+            "VALUES (:id, :email, :password_hash)"
+        ), {"id": user_id, "email": "Mixed@Example.com", "password_hash": "!disabled"})
+        connection.execute(text(
+            "INSERT INTO journal_entries (id, user_id, content) "
+            "VALUES (:id, :user_id, :content)"
+        ), {"id": entry_id, "user_id": user_id, "content": "Preserve"})
     migrate(isolated_engine)
     with Session(isolated_engine) as session:
         assert session.get(User, user_id).email == "mixed@example.com"

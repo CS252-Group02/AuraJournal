@@ -14,3 +14,11 @@ def database_url() -> str:
 
 def frontend_origin() -> str:
     return os.environ.get("FRONTEND_ORIGIN", "http://localhost:5173")
+
+
+def groq_api_key() -> str | None:
+    return os.environ.get("GROQ_API_KEY")
+
+
+def groq_model() -> str:
+    return os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b")

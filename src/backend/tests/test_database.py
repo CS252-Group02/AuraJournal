@@ -17,7 +17,7 @@ from conftest import migrate
 def test_fresh_migration_matches_models(migrated_engine):
     with migrated_engine.connect() as connection:
         assert compare_metadata(MigrationContext.configure(connection), Base.metadata) == []
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0003"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0004"
     # Reapplying head must leave the seed intact and avoid duplicate insertion.
     migrate(migrated_engine)
     with Session(migrated_engine) as session:
@@ -55,6 +55,9 @@ def test_legacy_upgrade_preserves_entries(isolated_engine):
         assert all(isinstance(entry.id, UUID) and entry.id.version == 4 for entry in entries)
         assert all(entry.user_id == DEVELOPMENT_USER_ID for entry in entries)
         assert all(entry.created_at == entry.updated_at for entry in entries)
+        assert all(entry.ai_summary is None for entry in entries)
+        assert all(entry.ai_reflection_question is None for entry in entries)
+        assert all(entry.ai_summarized_at is None for entry in entries)
         assert entries[0].created_at == datetime(2020, 1, 1, 1, 2, 3, tzinfo=timezone.utc)
         assert entries[1].created_at == datetime(2021, 2, 3, 4, 5, 6, tzinfo=timezone.utc)
 
@@ -72,7 +75,32 @@ def test_initial_revision_and_downgrade_guard(isolated_engine):
     with Session(isolated_engine) as session:
         assert session.scalar(select(JournalEntry.content)) == "Initial schema entry"
     with isolated_engine.connect() as connection:
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0003"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0004"
+
+
+def test_ai_summary_migration_preserves_existing_entry(isolated_engine):
+    migrate(isolated_engine, "0003")
+    entry_id = uuid4()
+    with isolated_engine.begin() as connection:
+        connection.execute(text(
+            "INSERT INTO journal_entries (id, user_id, content) "
+            "VALUES (:id, :user_id, :content)"
+        ), {
+            "id": entry_id,
+            "user_id": DEVELOPMENT_USER_ID,
+            "content": "Written before AI migration",
+        })
+
+    migrate(isolated_engine)
+
+    with Session(isolated_engine) as session:
+        entry = session.get(JournalEntry, entry_id)
+        assert entry.content == "Written before AI migration"
+        assert entry.ai_summary is None
+        assert entry.ai_reflection_question is None
+        assert entry.ai_summarized_at is None
+    with isolated_engine.connect() as connection:
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0004"
 
 
 @pytest.mark.parametrize("model, fields", [
