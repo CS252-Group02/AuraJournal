@@ -15,5 +15,8 @@ class EntryResponse(BaseModel):
 
     id: UUID
     content: str
+    ai_summary: str | None
+    ai_reflection_question: str | None
+    ai_summarized_at: datetime | None
     created_at: datetime
     updated_at: datetime

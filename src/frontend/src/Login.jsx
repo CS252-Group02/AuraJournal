@@ -1,16 +1,21 @@
 import { useState } from 'react';
-import AuthLayout, { Divider, Field, GoogleButton, SwitchLink, useShake } from './AuthLayout.jsx';
+import AuthLayout, { Field, SwitchLink, useShake } from './AuthLayout.jsx';
+import { useAuth } from './Auth.jsx';
 
 export default function Login() {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  const { authenticate } = useAuth();
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState({});
   const refuse = useShake();
 
-  function submit(event) {
+  async function submit(event) {
     event.preventDefault();
+    if (busy) return;
     const next = {};
-    if (!username.trim()) next.username = 'Enter your username.';
+    if (!email.trim()) next.email = 'Enter your email.';
     if (!password) next.password = 'Enter your password.';
     setErrors(next);
 
@@ -19,7 +24,15 @@ export default function Login() {
       return;
     }
 
-    // TODO: wire to the backend auth endpoint.
+    setBusy(true);
+    setMessage('');
+    try {
+      await authenticate('login', { email, password });
+    } catch (error) {
+      setMessage(error.status ? error.message : 'Could not connect. Please try again.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -28,12 +41,13 @@ export default function Login() {
         <h1 className="login-title">AuraJournal</h1>
 
         <Field
-          id="username"
-          label="Username"
+          id="email"
+          label="Email"
+          type="email"
           autoComplete="username"
-          value={username}
-          onChange={(event) => setUsername(event.target.value)}
-          error={errors.username}
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          error={errors.email}
         />
         <Field
           id="password"
@@ -45,9 +59,8 @@ export default function Login() {
           error={errors.password}
         />
 
-        <button type="submit" className="login-button">Log in</button>
-        <Divider />
-        <GoogleButton />
+        <p role="alert" className="login-error">{message}</p>
+        <button type="submit" className="login-button" disabled={busy}>{busy ? 'Logging in…' : 'Log in'}</button>
         <SwitchLink text="No account?" to="/register" label="Register" />
       </form>
     </AuthLayout>

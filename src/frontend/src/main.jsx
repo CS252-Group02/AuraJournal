@@ -6,16 +6,31 @@ import Login from './Login.jsx';
 import Register from './Register.jsx';
 import Record from './Record.jsx';
 import './style.css';
+import { AuthProvider, GuestPage, PrivatePage } from './Auth.jsx';
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
+      <AuthProvider>
       <Routes>
-        <Route path="/" element={<App />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/record" element={<Record />} />
+<Route
+  path="/"
+  element={<PrivatePage><App /></PrivatePage>}
+/>
+<Route
+  path="/login"
+  element={<GuestPage><Login /></GuestPage>}
+/>
+<Route
+  path="/register"
+  element={<GuestPage><Register /></GuestPage>}
+/>
+<Route
+  path="/record"
+  element={<PrivatePage><Record /></PrivatePage>}
+/>
       </Routes>
+      </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>,
 );
