@@ -4,6 +4,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import App from './App.jsx';
 import Login from './Login.jsx';
 import Register from './Register.jsx';
+import Record from './Record.jsx';
 import './style.css';
 import { AuthProvider, GuestPage, PrivatePage } from './Auth.jsx';
 
@@ -12,9 +13,22 @@ createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <AuthProvider>
       <Routes>
-        <Route path="/" element={<PrivatePage><App /></PrivatePage>} />
-        <Route path="/login" element={<GuestPage><Login /></GuestPage>} />
-        <Route path="/register" element={<GuestPage><Register /></GuestPage>} />
+<Route
+  path="/"
+  element={<PrivatePage><App /></PrivatePage>}
+/>
+<Route
+  path="/login"
+  element={<GuestPage><Login /></GuestPage>}
+/>
+<Route
+  path="/register"
+  element={<GuestPage><Register /></GuestPage>}
+/>
+<Route
+  path="/record"
+  element={<PrivatePage><Record /></PrivatePage>}
+/>
       </Routes>
       </AuthProvider>
     </BrowserRouter>

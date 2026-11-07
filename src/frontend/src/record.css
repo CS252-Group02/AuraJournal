@@ -1,0 +1,344 @@
+@font-face {
+  font-family: 'AuraJournal Record Inter';
+  src: url('./assets/record-inter-latin.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'AuraJournal Record Cormorant';
+  src: url('./assets/record-cormorant-garamond-latin-600.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
+.record-page {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 740px) minmax(0, 1fr);
+  grid-template-rows: auto 1fr auto;
+  min-height: max(740px, 100svh);
+  padding: 4.222222svh 24px 2.555556svh;
+  background: #f2f3eb;
+  color: #283d36;
+  font-family: 'AuraJournal Record Inter', sans-serif;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: normal;
+  letter-spacing: normal;
+  -webkit-font-smoothing: antialiased;
+}
+
+.record-page *,
+.record-page::before,
+.record-page::after,
+.record-page *::before,
+.record-page *::after {
+  box-sizing: border-box;
+}
+
+.record-page p,
+.record-page h1,
+.record-page h2 {
+  margin: 0;
+}
+
+/* The placeholder and its ambiance stay behind every foreground element. */
+.record-background {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: #f3f3ea;
+  pointer-events: none;
+}
+
+.record-background-image {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.record-background::before,
+.record-background::after {
+  content: '';
+  position: absolute;
+}
+
+.record-background::before {
+  inset: auto 0 0;
+  height: 19.444444%;
+  background: rgb(223 234 220 / 68%);
+}
+
+.record-background::after {
+  left: 4.8125%;
+  top: 19.333333%;
+  width: 256px;
+  height: 256px;
+  border-radius: 50%;
+  background: rgb(248 237 206 / 48%);
+}
+
+.record-header {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: max(20px, calc(7.125vw - 60px));
+  min-height: 60px;
+  margin: 0 -12px;
+}
+
+.record-brand {
+  padding-top: 2px;
+  margin: 0;
+}
+
+.record-brand h1 {
+  height: 39px;
+  font: 600 26px / normal 'AuraJournal Record Inter', sans-serif;
+  letter-spacing: normal;
+  white-space: pre;
+}
+
+.record-brand p {
+  margin: 10px 0 0 2px;
+  color: #728e7c;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.record-page .record-sidebar-toggle {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 48px;
+  height: 60px;
+  padding: 0;
+  border: 0;
+  border-radius: 15px;
+  background: rgb(255 254 250 / 87%);
+  color: #527d65;
+  font: 600 25px / normal 'AuraJournal Record Inter', sans-serif;
+  opacity: 1;
+  cursor: default;
+}
+
+.record-content {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  min-width: 0;
+  margin-top: max(32px, calc(14.666667svh - 60px));
+}
+
+.record-primary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  width: min(320px, 100%);
+  min-height: 340px;
+}
+
+/* The original 284 / 218 / 150 / 46px concentric circles. */
+.record-orbit {
+  display: grid;
+  place-items: center;
+  width: min(284px, 100%);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #e4eedf;
+}
+
+.record-orbit::before {
+  content: '';
+  grid-area: 1 / 1;
+  width: 76.760563%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #c7dec9;
+}
+
+.record-page .record-trigger {
+  position: relative;
+  grid-area: 1 / 1;
+  display: grid;
+  place-items: center;
+  width: 52.816901%;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #527d65;
+  opacity: 1;
+  cursor: default;
+}
+
+.record-trigger::after {
+  content: '';
+  width: 30.666667%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #fffefa;
+}
+
+.record-page .record-label {
+  align-self: stretch;
+  min-height: 45px;
+  margin-top: 1px;
+  text-align: center;
+  font: 600 34px / normal 'AuraJournal Record Cormorant', Georgia, serif;
+}
+
+.record-transcript {
+  flex: 0 0 auto;
+  width: min(740px, 100%);
+  min-height: clamp(180px, 23.333333svh, 210px);
+  padding: 25px 32px 32px;
+  border-radius: 24px;
+  background: rgb(255 254 250 / 91%);
+}
+
+.record-page .record-transcript h2 {
+  color: #527d65;
+  font: 600 13px / normal 'AuraJournal Record Inter', sans-serif;
+}
+
+.record-page .record-transcript p {
+  margin-top: 34px;
+  padding-left: 1px;
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+.record-mascot {
+  grid-column: 3;
+  grid-row: 1 / 3;
+  align-self: start;
+  justify-self: end;
+  width: 295px;
+  max-width: 100vw;
+  min-height: 250px;
+  margin-top: 6svh;
+  margin-right: max(0px, calc(2.3125vw - 24px));
+}
+
+.record-page .record-mascot-speech {
+  width: min(290px, 100%);
+  min-height: 80px;
+  padding: 19px 21px 7px 19px;
+  border-radius: 20px;
+  background: rgb(255 254 250 / 94%);
+  color: #344e42;
+  font-size: 15px;
+}
+
+.record-mascot-art {
+  padding: 13px 0 0 96px;
+}
+
+.record-mascot-face {
+  position: relative;
+  width: 124px;
+  height: 124px;
+  border-radius: 50%;
+  background: #fffefa;
+}
+
+/* Features are positioned within the face, independently of page layout. */
+.record-mascot-face::before,
+.record-mascot-eyes::before,
+.record-mascot-eyes::after,
+.record-mascot-blush::before,
+.record-mascot-blush::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+}
+
+.record-mascot-face::before {
+  left: 57px;
+  top: -5px;
+  width: 21px;
+  height: 21px;
+  background: #7fa48b;
+}
+
+.record-mascot-eyes::before,
+.record-mascot-eyes::after {
+  top: 54px;
+  width: 10px;
+  height: 10px;
+  background: #344e42;
+}
+
+.record-mascot-eyes::before { left: 33px; }
+.record-mascot-eyes::after { left: 77px; }
+
+.record-mascot-blush::before,
+.record-mascot-blush::after {
+  top: 81px;
+  width: 18px;
+  height: 18px;
+  background: #f1dcd1;
+}
+
+.record-mascot-blush::before { left: 23px; }
+.record-mascot-blush::after { left: 88px; }
+
+.record-back {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 180px;
+  height: 38px;
+  margin-top: 2.777778svh;
+  margin-left: max(0px, calc(7.125vw - 24px));
+  color: #527d66;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: pre;
+}
+
+/* Let content determine height and stack the companion before it can overlap. */
+@media (max-width: 1023px) {
+  .record-page {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 1fr auto auto;
+    min-height: 100svh;
+    padding: 32px 20px 23px;
+  }
+
+  .record-header { margin: 0 -8px; gap: 20px; }
+  .record-content { margin-top: clamp(40px, 8svh, 72px); }
+  .record-transcript { min-height: 210px; }
+
+  .record-mascot {
+    grid-column: 1;
+    grid-row: 3;
+    justify-self: center;
+    width: min(295px, 100%);
+    margin: 32px 0 0;
+  }
+
+  .record-back { grid-row: 4; margin: 24px 0 0; }
+}
+
+@media (max-width: 360px) {
+  .record-header { gap: 12px; }
+  .record-brand h1 { font-size: 23px; }
+  .record-brand p { font-size: 10px; }
+  .record-transcript { padding-inline: 24px; }
+}
