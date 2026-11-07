@@ -142,9 +142,89 @@ npm start
 
 `npm start` installs npm dependencies when needed, then runs the backend and frontend together with `[backend]` and `[frontend]` log labels. Press Ctrl+C to stop both. The launcher uses `.venv`'s Python when available; otherwise it uses `python3` on Linux/macOS or `python` on Windows. Make sure the Python backend dependencies and `.env` are set up as described above. Open `http://localhost:5173` when Vite is ready. The API provides `POST /api/entries` with `{"content":"..."}` and `GET /api/entries`.
 
+## AI title suggestions
+
+`POST /api/ai/suggest-title` accepts journal text directly and returns one short
+title. It does not look up or save journal entries and rejects `entry_id` or any
+other extra fields. Set `GROQ_API_KEY` and optionally `GROQ_MODEL` (default:
+`openai/gpt-oss-20b`), using the same configuration as journal summarization.
+
+Request: `{"content":"Today I finally completed my project after several challenging weeks."}`
+
+Example response: `{"suggested_title":"A Project Finally Completed"}`
+
+Content must be nonblank and at most 5000 characters. Titles are validated as one
+plain-text line of at most 100 characters. The prompt requests the journal's
+language and prefers 3–8 words where natural; relevance and language compliance
+are model instructions, not guarantees enforced by validation.
+
+The endpoint requires the existing login cookie, configured `Origin`,
+`X-AuraJournal-CSRF: 1`, and `Content-Type: application/json`. Existing session
+authentication reads PostgreSQL; the title service and handler do not access the
+database or persist content/results. Responses use `Cache-Control: no-store`.
+Errors follow existing conventions: `401` for invalid sessions, `403` for invalid
+origin/CSRF, `415` for non-JSON requests, `422` for invalid input, `502` for invalid
+AI output, and `503` for missing/invalid Groq credentials or provider failures,
+including rate limits. No provider details or submitted content appear in errors.
+
+### Optional manual Groq verification
+
+This sends only the three practice entries below directly to Groq, with one
+completion per entry and no database access. It is not a CI test. With the Python
+environment activated and `GROQ_API_KEY` exported securely (optionally set
+`GROQ_MODEL`), run from the repository root:
+
+```sh
+cd src/backend
+python - <<'PY'
+import os
+import sys
+from app.services import JournalSummaryError, JournalTitleGenerator
+
+if not os.environ.get("GROQ_API_KEY", "").strip():
+    sys.exit("Not executed: GROQ_API_KEY is unavailable.")
+
+examples = {
+    "Vietnamese": "Hôm nay tôi hoàn thành bài tập môn Toán sau nhiều giờ cố gắng. Buổi tối tôi nghỉ ngơi và đọc sách.",
+    "English": "Today I finally completed my project after several challenging weeks.",
+    "Minimal": "Hôm nay tôi ở nhà.",
+}
+generator = JournalTitleGenerator()
+for label, content in examples.items():
+    try:
+        title = generator.generate(content).suggested_title
+    except JournalSummaryError:
+        sys.exit("Verification failed; check AI configuration/provider availability. Details omitted.")
+    print(f"{label}: {title}")
+PY
+```
+
+Inspect each title for concise wording, the entry's language, and grounding:
+Vietnamese should describe mathematics homework or the stated day's activities;
+English should describe project completion; Minimal should describe staying home,
+without added emotions or activities. Do not require exact wording. All titles
+must be one plain-text suggestion of at most 100 characters. A successful command
+checks structure; human review checks meaning. Do not substitute private entries
+or log credentials/provider details. Missing credentials means this check was
+not executed, rather than passed.
+
 ## Tests
 
-The backend tests require PostgreSQL. Each database test creates an isolated schema, applies migrations, and drops that schema afterward; the test role needs permission to create schemas. Use the dedicated `aurajournal_test` database created during setup; never use your app database or other data you want to keep. In a new terminal at the repository root:
+AI service tests and isolated title API tests use mocked Groq responses and can
+run without PostgreSQL. With the Python environment activated, run from
+`src/backend`:
+
+```sh
+python -m pytest tests/test_ai_service.py tests/test_ai_title_service.py tests/test_ai_titles_api.py
+```
+
+The title API tests override authentication and fail on database access. Real
+session authentication, journal summary persistence, and other backend regression
+tests require PostgreSQL. Each database test creates an isolated schema, applies
+migrations, and drops that schema afterward; the test role needs permission to
+create schemas. Use the dedicated `aurajournal_test` database created during
+setup; never use your app database or other data you want to keep. In a new
+terminal at the repository root:
 
 **Linux/macOS:**
 
@@ -176,7 +256,7 @@ Email/password registration, login, logout, seven-day revocable cookie sessions,
 and private journal create/list are implemented. Open `/register` to create an
 account; `/` requires login. Existing development-user entries remain stored and
 are not assigned to new users. Google sign-in, email verification, password
-recovery, account deletion, mood/image endpoints, and AI features are deferred.
+recovery, account deletion, mood/image endpoints, and AI frontend integration are deferred.
 
 See [authentication](docs/authentication.md) for API, CSRF, cookie, and deployment
 settings. Use `localhost` consistently for frontend and API. Local HTTP uses

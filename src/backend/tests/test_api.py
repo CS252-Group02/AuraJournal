@@ -1,22 +1,26 @@
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+from unittest.mock import Mock
 import uuid
 
 import httpx
 import pytest
-from sqlalchemy import delete, select
+from sqlalchemy import delete, event, select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.main import create_app
+from app.auth import COOKIE_NAME, digest, utcnow
 from app.database import get_session
-from app.models import JournalEntry, User
+from app.models import AuthSession, JournalEntry, User
 from app.services import (
     AIInvalidResponseError,
     AIServiceNotConfiguredError,
     AIServiceUnavailableError,
     EmptyJournalError,
     JournalSummary,
+    JournalTitle,
 )
 
 
@@ -272,3 +276,58 @@ def test_summary_requires_login(app):
     assert response.status_code == 401
     assert response.json() == {"detail": "Please log in."}
     anonymous.state.engine.dispose()
+
+
+def test_suggest_title_authenticates_without_reading_or_writing_journals(app):
+    asyncio.run(request(app, "POST", "/api/entries", json={"content": "Existing private entry"}))
+    before = asyncio.run(request(app, "GET", "/api/entries")).json()
+    generate = Mock(return_value=JournalTitle(suggested_title="A Project Finally Completed"))
+    app.state.journal_title_generator = SimpleNamespace(generate=generate)
+    statements = []
+
+    def capture_sql(connection, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    event.listen(app.state.engine, "before_cursor_execute", capture_sql)
+    try:
+        response = asyncio.run(request(app, "POST", "/api/ai/suggest-title", json={
+            "content": "Today I finally completed my project.",
+        }))
+    finally:
+        event.remove(app.state.engine, "before_cursor_execute", capture_sql)
+
+    assert response.status_code == 200
+    assert response.json() == {"suggested_title": "A Project Finally Completed"}
+    generate.assert_called_once_with("Today I finally completed my project.")
+    # Only the existing cookie/session and user lookups may access PostgreSQL.
+    assert len(statements) == 2
+    assert all(statement.lstrip().upper().startswith("SELECT") for statement in statements)
+    assert all("journal_entries" not in statement for statement in statements)
+    assert asyncio.run(request(app, "GET", "/api/entries")).json() == before
+
+
+@pytest.mark.parametrize("auth_state", ["anonymous", "invalid", "expired", "revoked", "disabled"])
+def test_suggest_title_respects_existing_session_authentication(app, auth_state):
+    generate = Mock()
+    app.state.journal_title_generator = SimpleNamespace(generate=generate)
+    if auth_state == "anonymous":
+        app.auth_cookies = {}
+    elif auth_state == "invalid":
+        app.auth_cookies = {COOKIE_NAME: "invalid-session-token"}
+    else:
+        with Session(app.state.engine) as session:
+            record = session.get(AuthSession, digest(app.auth_cookies[COOKIE_NAME]))
+            if auth_state == "expired":
+                record.expires_at = utcnow() - timedelta(seconds=1)
+            elif auth_state == "revoked":
+                session.delete(record)
+            else:
+                session.get(User, app.user_id).password_hash = "!disabled"
+            session.commit()
+
+    response = asyncio.run(request(app, "POST", "/api/ai/suggest-title", json={
+        "content": "Private journal content",
+    }))
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Please log in."}
+    generate.assert_not_called()
