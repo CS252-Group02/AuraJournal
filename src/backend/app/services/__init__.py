@@ -7,6 +7,7 @@ from app.services.ai_journal import (
     JournalSummary,
     JournalSummaryError,
 )
+from app.services.ai_title import JournalTitle, JournalTitleGenerator
 
 __all__ = [
     "AIInvalidResponseError",
@@ -16,4 +17,6 @@ __all__ = [
     "JournalSummarizer",
     "JournalSummary",
     "JournalSummaryError",
+    "JournalTitle",
+    "JournalTitleGenerator",
 ]
