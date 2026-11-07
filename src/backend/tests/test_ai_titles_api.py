@@ -1,4 +1,5 @@
 import asyncio
+import json
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -69,6 +70,19 @@ def test_title_endpoint_works_without_database_access(title_app):
     )
 
 
+def test_vietnamese_text_and_title_survive_api_round_trip(title_app):
+    # Mocked Unicode transport check; real-model grounding is checked manually.
+    content = "Hôm nay tôi hoàn thành bài tập môn Toán sau nhiều giờ cố gắng."
+    title = "Hoàn thành bài tập Toán"
+    title_app.title_completions.content = json.dumps({"suggested_title": title})
+
+    response = asyncio.run(request(title_app, "POST", ENDPOINT, json={"content": content}))
+
+    assert response.status_code == 200
+    assert response.json() == {"suggested_title": title}
+    assert title_app.title_completions.calls[0]["messages"][1]["content"] == content
+
+
 def test_title_requests_do_not_reuse_previous_journal_or_result(title_app):
     first = asyncio.run(request(title_app, "POST", ENDPOINT, json={"content": "First journal"}))
     title_app.title_completions.content = '{"suggested_title":"An Evening Walk Outside"}'
@@ -119,7 +133,7 @@ def test_invalid_ai_response_returns_controlled_502(title_app, content):
 def test_missing_credentials_return_controlled_503(title_app, monkeypatch):
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
     factory = Mock()
-    monkeypatch.setattr("app.services.ai_title.Groq", factory)
+    monkeypatch.setattr("app.services._groq.Groq", factory)
     title_app.state.journal_title_generator = JournalTitleGenerator()
 
     response = asyncio.run(request(title_app, "POST", ENDPOINT, json={"content": "Private journal"}))

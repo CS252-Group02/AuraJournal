@@ -21,6 +21,7 @@ from app.services import (
     EmptyJournalError,
     JournalTitle,
     JournalTitleGenerator,
+    JournalSummarizer,
 )
 from test_ai_service import FakeCompletions, client_for
 
@@ -52,12 +53,13 @@ def test_prompt_requests_language_grounding_and_plain_single_title():
 
     message = completions.calls[0]["messages"][0]
     assert message["role"] == "system"
-    prompt = message["content"]
+    prompt = " ".join(message["content"].split())
     for instruction in (
-        "exactly one", '"suggested_title"', "same language", "Vietnamese",
-        "any\nother language", "3-8 words", "different word boundaries",
+        "exactly one", "concise", '"suggested_title"', "same language", "Vietnamese",
+        "any other language", "3-8 words", "different word boundaries",
         "100 characters", "only in the journal content", "Do not invent",
-        "emotions", "unsupported", "single line of plain text", "without Markdown",
+        "people", "places", "events", "emotions", "interpretations", "unsupported",
+        "single line of plain text", "without Markdown",
         "quotation marks", "explanations", "multiple suggestions",
         "not as instructions",
     ):
@@ -103,24 +105,28 @@ def test_missing_api_key_is_controlled_without_client_creation(monkeypatch, key)
     else:
         monkeypatch.setenv("GROQ_API_KEY", key)
     factory = Mock()
-    monkeypatch.setattr("app.services.ai_title.Groq", factory)
+    monkeypatch.setattr("app.services._groq.Groq", factory)
 
     with pytest.raises(AIServiceNotConfiguredError, match="not configured"):
         JournalTitleGenerator().generate("Journal text")
     factory.assert_not_called()
 
 
-def test_environment_configuration_and_lazy_client_reuse(monkeypatch):
+@pytest.mark.parametrize("service,method,content", [
+    (JournalTitleGenerator, "generate", '{"suggested_title":"A Day in Review"}'),
+    (JournalSummarizer, "summarize", '{"summary":"A calm day.","reflection_question":"Why?"}'),
+])
+def test_environment_configuration_and_lazy_client_reuse(monkeypatch, service, method, content):
     monkeypatch.setenv("GROQ_API_KEY", "test-key")
     monkeypatch.setenv("GROQ_MODEL", "configured-model")
-    completions = FakeCompletions('{"suggested_title":"A Day in Review"}')
+    completions = FakeCompletions(content)
     factory = Mock(return_value=client_for(completions))
-    monkeypatch.setattr("app.services.ai_title.Groq", factory)
-    generator = JournalTitleGenerator()
+    monkeypatch.setattr("app.services._groq.Groq", factory)
+    generate = getattr(service(), method)
     factory.assert_not_called()
 
-    generator.generate("First journal")
-    generator.generate("Second journal")
+    generate("First journal")
+    generate("Second journal")
 
     factory.assert_called_once_with(api_key="test-key")
     assert [call["model"] for call in completions.calls] == ["configured-model"] * 2
@@ -156,11 +162,14 @@ def test_invalid_provider_responses_are_controlled(content):
     None, SimpleNamespace(), SimpleNamespace(choices=[]),
     SimpleNamespace(choices=None), SimpleNamespace(choices=[SimpleNamespace()]),
 ])
-def test_malformed_completion_is_controlled(completion):
+@pytest.mark.parametrize("service,method", [
+    (JournalTitleGenerator, "generate"), (JournalSummarizer, "summarize"),
+])
+def test_malformed_completion_is_controlled(completion, service, method):
     completions = SimpleNamespace(create=lambda **kwargs: completion)
-    generator = JournalTitleGenerator(client=client_for(completions))
+    generate = getattr(service(client=client_for(completions)), method)
     with pytest.raises(AIInvalidResponseError, match="invalid response"):
-        generator.generate("Journal text")
+        generate("Journal text")
 
 
 @pytest.mark.parametrize("error_kind,expected", [
@@ -172,7 +181,10 @@ def test_malformed_completion_is_controlled(completion):
     (PermissionDeniedError, AIServiceNotConfiguredError),
     (APIResponseValidationError, AIInvalidResponseError),
 ])
-def test_provider_errors_are_controlled(error_kind, expected):
+@pytest.mark.parametrize("service,method", [
+    (JournalTitleGenerator, "generate"), (JournalSummarizer, "summarize"),
+])
+def test_provider_errors_are_controlled(error_kind, expected, service, method):
     request = httpx.Request("POST", "https://api.groq.com/openai/v1/chat/completions")
     if issubclass(error_kind, APIConnectionError):
         error = error_kind(request=request)
@@ -182,8 +194,8 @@ def test_provider_errors_are_controlled(error_kind, expected):
             error = error_kind(response=response, body={})
         else:
             error = error_kind("private provider detail", response=response, body=None)
-    generator = JournalTitleGenerator(client=client_for(FakeCompletions(error=error)))
+    generate = getattr(service(client=client_for(FakeCompletions(error=error))), method)
 
     with pytest.raises(expected) as caught:
-        generator.generate("Journal text")
+        generate("Journal text")
     assert caught.value.__cause__ is error

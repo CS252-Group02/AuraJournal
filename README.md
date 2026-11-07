@@ -167,6 +167,47 @@ origin/CSRF, `415` for non-JSON requests, `422` for invalid input, `502` for inv
 AI output, and `503` for missing/invalid Groq credentials or provider failures,
 including rate limits. No provider details or submitted content appear in errors.
 
+### Optional manual Groq verification
+
+This sends only the three practice entries below directly to Groq, with one
+completion per entry and no database access. It is not a CI test. With the Python
+environment activated and `GROQ_API_KEY` exported securely (optionally set
+`GROQ_MODEL`), run from the repository root:
+
+```sh
+cd src/backend
+python - <<'PY'
+import os
+import sys
+from app.services import JournalSummaryError, JournalTitleGenerator
+
+if not os.environ.get("GROQ_API_KEY", "").strip():
+    sys.exit("Not executed: GROQ_API_KEY is unavailable.")
+
+examples = {
+    "Vietnamese": "Hôm nay tôi hoàn thành bài tập môn Toán sau nhiều giờ cố gắng. Buổi tối tôi nghỉ ngơi và đọc sách.",
+    "English": "Today I finally completed my project after several challenging weeks.",
+    "Minimal": "Hôm nay tôi ở nhà.",
+}
+generator = JournalTitleGenerator()
+for label, content in examples.items():
+    try:
+        title = generator.generate(content).suggested_title
+    except JournalSummaryError:
+        sys.exit("Verification failed; check AI configuration/provider availability. Details omitted.")
+    print(f"{label}: {title}")
+PY
+```
+
+Inspect each title for concise wording, the entry's language, and grounding:
+Vietnamese should describe mathematics homework or the stated day's activities;
+English should describe project completion; Minimal should describe staying home,
+without added emotions or activities. Do not require exact wording. All titles
+must be one plain-text suggestion of at most 100 characters. A successful command
+checks structure; human review checks meaning. Do not substitute private entries
+or log credentials/provider details. Missing credentials means this check was
+not executed, rather than passed.
+
 ## Tests
 
 AI service tests and isolated title API tests use mocked Groq responses and can
