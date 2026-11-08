@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { api } from './api.js';
 import { useAuth } from './Auth.jsx';
@@ -9,6 +9,11 @@ export default function App() {
   const [entries, setEntries] = useState([]);
   const [message, setMessage] = useState('Loading entries…');
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [draft, setDraft] = useState('');
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [rowBusy, setRowBusy] = useState(false);
+  const confirmDialog = useRef(null);
 
   async function loadEntries() {
     try {
@@ -39,6 +44,60 @@ export default function App() {
       setMessage(error.message || 'Could not connect to AuraJournal.');
     } finally {
       setBusy(false);
+    }
+  }
+
+  function startEdit(entry) {
+    setEditing(entry.id);
+    setDraft(entry.content);
+    setMessage('');
+  }
+
+  function cancelEdit() {
+    setEditing(null);
+    setDraft('');
+  }
+
+  async function saveEdit(event) {
+    event.preventDefault();
+    setRowBusy(true);
+    setMessage('');
+    try {
+      const updated = await api(`/api/entries/${editing}`, { method: 'PATCH', body: { content: draft } });
+      setEntries((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
+      cancelEdit();
+      setMessage('Entry updated.');
+    } catch (error) {
+      setMessage(error.message || 'Could not connect to AuraJournal.');
+    } finally {
+      setRowBusy(false);
+    }
+  }
+
+  function askDelete(entry) {
+    setPendingDelete(entry);
+    confirmDialog.current?.showModal();
+  }
+
+  function closeDelete() {
+    confirmDialog.current?.close();
+  }
+
+  async function confirmDelete() {
+    const target = pendingDelete;
+    setRowBusy(true);
+    setMessage('');
+    try {
+      await api(`/api/entries/${target.id}`, { method: 'DELETE' });
+      setEntries((current) => current.filter((entry) => entry.id !== target.id));
+      if (editing === target.id) cancelEdit();
+      setMessage('Entry deleted.');
+      closeDelete();
+    } catch (error) {
+      setMessage(error.message || 'Could not connect to AuraJournal.');
+      closeDelete();
+    } finally {
+      setRowBusy(false);
     }
   }
 
@@ -80,12 +139,63 @@ export default function App() {
         <ul className="entries">
           {entries.map((entry) => (
             <li key={entry.id}>
-              <p>{entry.content}</p>
-              <time dateTime={entry.created_at}>{new Date(entry.created_at).toLocaleString()}</time>
+              {editing === entry.id ? (
+                <form onSubmit={saveEdit}>
+                  <label htmlFor={`edit-${entry.id}`} className="visually-hidden">Edit entry</label>
+                  <textarea
+                    id={`edit-${entry.id}`}
+                    value={draft}
+                    onChange={(event) => setDraft(event.target.value)}
+                    onKeyDown={(event) => { if (event.key === 'Escape') cancelEdit(); }}
+                    maxLength={5000}
+                    rows={4}
+                    autoFocus
+                    required
+                  />
+                  <div className="form-footer">
+                    <span>{draft.length}/5000</span>
+                    <div className="entry-actions">
+                      <button type="button" className="secondary" onClick={cancelEdit} disabled={rowBusy}>Cancel</button>
+                      <button disabled={rowBusy || !draft.trim() || draft.trim() === entry.content}>
+                        {rowBusy ? 'Saving…' : 'Save changes'}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              ) : (
+                <>
+                  <p>{entry.content}</p>
+                  <div className="form-footer">
+                    <time dateTime={entry.created_at}>{new Date(entry.created_at).toLocaleString()}</time>
+                    <div className="entry-actions">
+                      <button type="button" className="secondary" onClick={() => startEdit(entry)} disabled={rowBusy}>Edit</button>
+                      <button type="button" className="danger" onClick={() => askDelete(entry)} disabled={rowBusy}>Delete</button>
+                    </div>
+                  </div>
+                </>
+              )}
             </li>
           ))}
         </ul>
       </section>
+
+      <dialog
+        ref={confirmDialog}
+        className="confirm-dialog"
+        aria-labelledby="confirm-heading"
+        aria-describedby="confirm-body"
+        onClose={() => setPendingDelete(null)}
+      >
+        <h2 id="confirm-heading">Delete this entry?</h2>
+        <p id="confirm-body">This can’t be undone. The entry and its AI summary will be removed for good.</p>
+        {pendingDelete && <blockquote>{pendingDelete.content}</blockquote>}
+        <div className="entry-actions">
+          <button type="button" className="secondary" onClick={closeDelete} disabled={rowBusy} autoFocus>Cancel</button>
+          <button type="button" className="danger-solid" onClick={confirmDelete} disabled={rowBusy}>
+            {rowBusy ? 'Deleting…' : 'Delete entry'}
+          </button>
+        </div>
+      </dialog>
     </main>
   );
 }

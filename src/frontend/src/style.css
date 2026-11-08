@@ -26,3 +26,19 @@ h2 { margin-top: 34px; font-size: 1.2rem; }
 .entries { list-style: none; padding: 0; display: grid; gap: 12px; }
 .entries li p { white-space: pre-wrap; margin: 0 0 12px; line-height: 1.55; }
 time { color: #748178; font-size: .8rem; }
+.entries li textarea { margin-bottom: 0; }
+.entries li .form-footer { margin-top: 10px; }
+.entry-actions { display: flex; gap: 8px; }
+.entry-actions button { padding: 7px 13px; font-size: .85rem; }
+button.secondary { background: transparent; color: #356b51; border: 1px solid #d5dfd4; }
+button.secondary:hover:not(:disabled) { background: #eef3ec; }
+button.danger { background: transparent; color: #a33b32; border: 1px solid #ecd3cf; }
+button.danger:hover:not(:disabled) { background: #fbefed; }
+button.danger-solid { background: #a33b32; }
+.confirm-dialog { width: min(100% - 32px, 440px); border: 0; border-radius: 16px; padding: 24px; color: inherit; box-shadow: 0 20px 50px rgb(36 52 46 / 22%); }
+.confirm-dialog::backdrop { background: rgb(36 52 46 / 35%); }
+.confirm-dialog h2 { margin: 0 0 8px; }
+.confirm-dialog p { margin: 0; color: #687a70; line-height: 1.5; }
+.confirm-dialog blockquote { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #d5dfd4; color: #4b5b53; white-space: pre-wrap; max-height: 7.5em; overflow: hidden; }
+.confirm-dialog .entry-actions { justify-content: flex-end; margin-top: 20px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
