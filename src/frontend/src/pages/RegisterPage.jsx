@@ -19,7 +19,7 @@ export default function Register() {
     if (busy) return;
     const next = {};
     if (!EMAIL.test(form.email.trim())) next.email = 'Enter a valid email.';
-    if (form.password.length < 8 || form.password.length > 128) next.password = 'Use 8–128 characters.';
+    if ([...form.password].length < 15 || [...form.password].length > 128) next.password = 'Use 15–128 characters and avoid common passwords.';
     if (form.confirm !== form.password) next.confirm = 'Passwords do not match.';
     setErrors(next);
 

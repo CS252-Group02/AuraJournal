@@ -1,8 +1,10 @@
 # Database setup and migrations
 
+> Security update: current schema head is **0005**. See [security hardening](../security-hardening.md) for the current password policy, independent account/IP limits, request quotas, and separate migration/runtime roles.
+
 AuraJournal uses PostgreSQL 14+ and Alembic. Start PostgreSQL and install `src/backend/requirements.txt` in your virtual environment first. Alembic reads the repository-root `.env`; an exported `DATABASE_URL` takes precedence. Commands below run from `src/backend`, with the virtual environment active.
 
-Current head is **0003**, which adds revocable sessions, login throttling, and normalized-email enforcement. See [authentication](../authentication.md). Existing development entries stay inaccessible to real accounts.
+Current head is **0005**, which adds shared request budgets and independent login indexes. See [authentication](../authentication.md). Existing development entries stay inaccessible to real accounts.
 
 ## Fresh database
 
@@ -13,22 +15,26 @@ python -m alembic upgrade head
 python -m alembic current
 ```
 
-The current revision should be `0003`. Return to the repository root and run `npm start`. The backend no longer creates or modifies tables at startup.
+The current revision should be `0005`. Return to the repository root and run `npm start`. The backend no longer creates or modifies tables at startup.
 
 ## Version history
 
 ```text
-<base> → 0001 → 0002 → 0003 (head)
+<base> → 0001 → 0002 → 0003 → 0004 → 0005 (head)
 ```
 
 - `0001_legacy_entries.py`: the initial journal table with integer IDs, content, and creation time.
 - `0002_journal_schema.py`: converts entry IDs to UUIDs, adds required user ownership and update timestamps, and creates users, mood records, and journal images. It also seeds the development user.
 
-An empty database runs both migrations with `python -m alembic upgrade head`. To inspect the chain, run `python -m alembic history`.
+- `0003_auth_sessions.py`: revocable sessions, login attempts, normalized emails.
+- `0004_ai_summary.py`: saved AI summary, reflection question, and generation timestamp.
+- `0005_security_limits.py`: shared request budgets and independent login indexes.
+
+An empty database runs all migrations with `python -m alembic upgrade head`. To inspect the chain, run `python -m alembic history`.
 
 ## Existing database
 
-If `python -m alembic current` reports `0003` and the six application tables match the models, the database is current. Databases at `0002` need `python -m alembic upgrade head`. Running `python -m alembic upgrade head` leaves its data unchanged. Do not stamp it back to an earlier revision.
+If `python -m alembic current` reports `0005` and the seven application tables match the models, the database is current. Databases at `0002`, `0003`, or `0004` need `python -m alembic upgrade head`. These upgrades preserve existing journal content; back up important data first. Do not stamp it back to an earlier revision.
 
 A database already recorded at `0001` only needs `python -m alembic upgrade head`, after a backup.
 

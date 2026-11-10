@@ -1,4 +1,5 @@
 from uuid import UUID
+from app.passwords import validate_new_password
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from email_validator import EmailNotValidError, validate_email
@@ -22,3 +23,11 @@ class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     email: str
+
+
+class RegistrationCredentials(Credentials):
+    @field_validator("password")
+    @classmethod
+    def strong_password(cls, value):
+        validate_new_password(value)
+        return value

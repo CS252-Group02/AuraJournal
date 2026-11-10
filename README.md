@@ -147,7 +147,7 @@ Before starting the app, apply database migrations. With the virtual environment
 python -m alembic upgrade head
 ```
 
-An empty database runs the initial journal-table migration (`0001`) then the four-table migration (`0002`), then authentication sessions and throttling (`0003`). **If your database already has the original journal table without migration tracking, follow the backup and baseline-stamp instructions in [database setup](docs/database/migrations.md) first.** A database already at revision `0002` must apply `0003`. Return to the repository root afterward. The app does not create tables at startup.
+An empty database runs the initial journal-table migration (`0001`) then the four-table migration (`0002`), then authentication (`0003`), saved AI summaries (`0004`), and security budgets (`0005`). **If your database already has the original journal table without migration tracking, follow the backup and baseline-stamp instructions in [database setup](docs/database/migrations.md) first.** Existing databases must upgrade through `0005`. Return to the repository root afterward. The app does not create tables at startup.
 
 The old development user remains disabled and its entries stay private. Register a real account in the browser. See [accounts and sessions](docs/authentication.md) for configuration and API details.
 
@@ -268,6 +268,10 @@ To build the frontend, run `npm run build` from the repository root. No Python e
 GitHub Actions runs the PostgreSQL backend tests on Linux, Windows, and macOS, and builds the frontend.
 
 For an interactive walkthrough to create and inspect test users and journals, see [create and test the database](docs/database/create-and-test.md). For request flow, backend behavior, and test details, see the [application flow guide](docs/application-flow.md).
+
+## Security rollout
+
+See [backend and database security hardening](docs/security-hardening.md) for migration `0005`, password/rate-limit changes, restricted database roles, PostgreSQL authentication, and production setup. Apply this guide before deployment; installing code does not edit PostgreSQL authentication rules.
 
 ## Accounts and current limits
 

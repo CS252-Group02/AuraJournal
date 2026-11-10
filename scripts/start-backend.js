@@ -39,7 +39,7 @@ if (process.argv.includes('--check')) {
 
 const backend = spawn(
   python,
-  ['-m', 'uvicorn', 'app.main:app', '--reload', '--env-file', '../../.env'],
+  ['-m', 'uvicorn', 'app.main:app', '--reload', '--no-proxy-headers', '--env-file', '../../.env'],
   { cwd: join(root, 'src', 'backend'), stdio: 'inherit' },
 );
 

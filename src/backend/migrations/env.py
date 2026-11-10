@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 
 from alembic import context
 from dotenv import load_dotenv
@@ -20,7 +21,7 @@ def run_migrations_online():
             context.run_migrations()
         return
 
-    engine = make_engine(database_url())
+    engine = make_engine(os.environ.get("MIGRATION_DATABASE_URL") or database_url())
     try:
         with engine.connect() as connection:
             context.configure(connection=connection, target_metadata=target_metadata)
@@ -32,7 +33,7 @@ def run_migrations_online():
 
 def run_migrations_offline():
     context.configure(
-        url=database_url(), target_metadata=target_metadata,
+        url=os.environ.get("MIGRATION_DATABASE_URL") or database_url(), target_metadata=target_metadata,
         literal_binds=True, dialect_opts={"paramstyle": "named"},
     )
     with context.begin_transaction():

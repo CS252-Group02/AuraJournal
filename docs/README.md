@@ -9,6 +9,7 @@ Start with the repository [README](../README.md) for prerequisites and startup.
 | [Database migrations](database/migrations.md) | Fresh setup, existing database upgrades, revision history, and backup considerations |
 | [Create and test a database](database/create-and-test.md) | SQL examples and relationship checks in the disposable test database |
 | [Development users](development-users.md) | Disabled seed users, database-only sample users, and account isolation checks |
+| [Security hardening](security-hardening.md) | Backend protections, migration 0005, runtime roles, SCRAM authentication, and deployment checks |
 | [Security rules](security-rules.md) | Broader product/security requirements and implementation gaps |
 | [PoC to MVP](poc-to-mvp-plan.md) | Development approach and future feature planning |
 

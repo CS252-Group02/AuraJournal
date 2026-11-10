@@ -15,14 +15,20 @@ from app.routers.summaries import router as summaries_router
 from app.routers.titles import router as titles_router
 from app.services import JournalSummarizer, JournalTitleGenerator
 from app.auth import require_browser_request
+from app.deployment import production, validate_settings, validate_database
+from app.request_limits import RequestSizeLimit
 
 
 def create_app(database_url: str | None = None) -> FastAPI:
-    engine = make_engine(database_url or configured_database_url())
+    url = database_url or configured_database_url()
+    validate_settings(url, frontend_origin())
+    engine = make_engine(url)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         try:
+            if production():
+                validate_database(engine)
             yield
         finally:
             engine.dispose()
@@ -37,7 +43,12 @@ def create_app(database_url: str | None = None) -> FastAPI:
     async def private_responses(request, call_next):
         response = await call_next(request)
         response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        if production():
+            response.headers["Strict-Transport-Security"] = "max-age=31536000"
         return response
+    app.add_middleware(RequestSizeLimit)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[frontend_origin()],

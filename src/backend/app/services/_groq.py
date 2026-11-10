@@ -102,5 +102,5 @@ class _GroqJSONClient:
             raise AIServiceNotConfiguredError(
                 "GROQ_API_KEY is not configured."
             )
-        self._client = Groq(api_key=self._api_key)
+        self._client = Groq(api_key=self._api_key, timeout=20.0, max_retries=0)
         return self._client

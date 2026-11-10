@@ -1,5 +1,7 @@
 # Accounts and private journals
 
+> Security update: current schema head is **0005**. See [security hardening](security-hardening.md) for the current password policy, independent account/IP limits, request quotas, and separate migration/runtime roles.
+
 This guide describes the implemented email/password account flow, its database
 changes, and how journal access is restricted to the signed-in account.
 
@@ -15,14 +17,14 @@ python -m alembic -c src/backend/alembic.ini current
 npm start
 ```
 
-The migration command should report revision `0003` when checking `current`.
+The migration command should report revision `0005` when checking `current`.
 Using `-c` lets Alembic find its configuration from the repository root. Without
 `-c`, run Alembic commands from `src/backend`.
 
 Migration is an explicit step; starting the app does not apply it.
 
 Open `http://localhost:5173/register` and create an email/password account. Email
-is trimmed and lowercased; passwords are 8–128 characters and are never trimmed.
+is trimmed and lowercased; new passwords are 15–128 characters, checked against a local common-password list, and are never trimmed. Existing accounts retain the 8–128 login contract.
 Registration signs you in immediately. Each account starts with its own empty
 journal. Login uses email, not a username. Google login, email verification,
 password recovery, and account deletion are not implemented in this slice.
@@ -109,14 +111,12 @@ must supply the headers too; visiting `/docs` on the API host alone does not
 bypass the origin policy. CORS allows credentials only for the exact configured
 frontend origin. Never use `*` with credentialed access.
 
-Five failed login attempts for one normalized email/client IP within fifteen
-minutes cause subsequent attempts to return `429` with `Retry-After`. Attempts
-are database-backed and serialized per identity across backend workers. Expired
-attempts are cleaned during login; successful login clears that identity's
-failures. Throttling uses the request client IP supplied by the ASGI server;
-configure Uvicorn's trusted-proxy settings deliberately if deploying behind a
-reverse proxy. This is basic login throttling, not a complete internet-facing
-abuse prevention system.
+Login allows at most five failed attempts per normalized email and thirty per IP
+in fifteen minutes, independently. Limits persist across workers/restarts and return
+429 with Retry-After. Registration permits five attempts per IP per fifteen-minute
+window before hashing. AI title/summary requests share account/IP budgets and a
+one-active-request-per-account guard. See [security hardening](security-hardening.md)
+for exact limits, password policy, trusted-proxy settings, and deployment checks.
 
 ## Code walkthrough
 
@@ -156,7 +156,7 @@ session-token digests are never included in account responses.
 | Symptom | What to check |
 | --- | --- |
 | Alembic says `No 'script_location' key found` | Use the repository-root command with `-c src/backend/alembic.ini`, or change into `src/backend` first. |
-| Requests return `503` | Check PostgreSQL is running, `.env` credentials are correct, and migration `0003` is applied. The API uses a generic response for database errors. |
+| Requests return `503` | Check PostgreSQL is running, `.env` credentials are correct, and migration `0005` is applied. The API uses a generic response for database errors. |
 | Requests return `401` | Sign in again. The cookie may be missing, invalid, expired, or revoked. |
 | Requests return `403` | Check `FRONTEND_ORIGIN` and the CSRF header. Scripts must also supply the expected origin and header. |
 | Requests return `429` | Wait for the interval indicated by `Retry-After`; restarting the API does not clear login failures. |

@@ -128,7 +128,7 @@ def test_environment_configuration_and_lazy_client_reuse(monkeypatch, service, m
     generate("First journal")
     generate("Second journal")
 
-    factory.assert_called_once_with(api_key="test-key")
+    factory.assert_called_once_with(api_key="test-key", timeout=20.0, max_retries=0)
     assert [call["model"] for call in completions.calls] == ["configured-model"] * 2
     assert [call["messages"][1]["content"] for call in completions.calls] == [
         "First journal", "Second journal",
