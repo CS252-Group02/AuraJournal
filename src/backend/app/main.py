@@ -12,7 +12,8 @@ from app.database import make_engine
 from app.routers.entries import router as entries_router
 from app.routers.auth import router as auth_router
 from app.routers.summaries import router as summaries_router
-from app.services import JournalSummarizer
+from app.routers.titles import router as titles_router
+from app.services import JournalSummarizer, JournalTitleGenerator
 from app.auth import require_browser_request
 
 
@@ -30,6 +31,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
     app.state.engine = engine
     app.state.session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     app.state.journal_summarizer = JournalSummarizer()
+    app.state.journal_title_generator = JournalTitleGenerator()
 
     @app.middleware("http")
     async def private_responses(request, call_next):
@@ -61,6 +63,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
 
     app.include_router(entries_router)
     app.include_router(summaries_router)
+    app.include_router(titles_router)
     app.include_router(auth_router)
     return app
 

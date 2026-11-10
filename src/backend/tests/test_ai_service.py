@@ -11,7 +11,12 @@ from app.services import (
     EmptyJournalError,
     JournalSummarizer,
     JournalSummary,
+    JournalTitle,
+    JournalTitleGenerator,
 )
+from app.services._groq import _GroqJSONClient
+from app.services.ai_journal import SYSTEM_PROMPT as SUMMARY_PROMPT
+from app.services.ai_title import SYSTEM_PROMPT as TITLE_PROMPT
 
 
 class FakeCompletions:
@@ -103,3 +108,46 @@ def test_authentication_error_is_reported_as_not_configured():
 
     with pytest.raises(AIServiceNotConfiguredError, match="credentials are invalid"):
         summarizer.summarize("Journal text")
+
+
+@pytest.mark.parametrize("service,method,schema,prompt,content", [
+    (JournalSummarizer, "summarize", JournalSummary, SUMMARY_PROMPT,
+     '{"summary":"A calm day.","reflection_question":"What felt meaningful?"}'),
+    (JournalTitleGenerator, "generate", JournalTitle, TITLE_PROMPT,
+     '{"suggested_title":"A Calm Day at Home"}'),
+])
+def test_services_share_transport_with_one_direct_request(
+    monkeypatch, service, method, schema, prompt, content,
+):
+    calls = []
+    original = _GroqJSONClient.generate
+
+    def track(self, text, **kwargs):
+        calls.append((text, kwargs))
+        return original(self, text, **kwargs)
+
+    monkeypatch.setattr(_GroqJSONClient, "generate", track)
+    completions = FakeCompletions(content)
+    result = getattr(service(client=client_for(completions)), method)("  A calm day at home.  ")
+
+    assert isinstance(result, schema)
+    assert calls == [("  A calm day at home.  ", {
+        "system_prompt": prompt, "response_model": schema,
+    })]
+    assert len(completions.calls) == 1
+    assert completions.calls[0]["messages"] == [
+        {"role": "system", "content": prompt},
+        {"role": "user", "content": "A calm day at home."},
+    ]
+
+
+def test_existing_error_imports_preserve_identity_and_inheritance():
+    import app.services as services
+    from app.services import _groq, ai_journal
+
+    for name in (
+        "EmptyJournalError", "AIInvalidResponseError", "AIServiceNotConfiguredError",
+        "AIServiceUnavailableError", "JournalSummaryError",
+    ):
+        assert getattr(services, name) is getattr(ai_journal, name) is getattr(_groq, name)
+        assert issubclass(getattr(services, name), services.JournalSummaryError)
