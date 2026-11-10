@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -29,3 +31,38 @@ def list_entries(session: Session = Depends(get_session), user: User = Depends(c
         .where(JournalEntry.user_id == user.id)
         .order_by(JournalEntry.created_at.desc(), JournalEntry.id.desc())
     ))
+
+
+def owned_entry(entry_id: UUID, session: Session, user: User) -> JournalEntry:
+    entry = session.scalar(select(JournalEntry).where(
+        JournalEntry.id == entry_id, JournalEntry.user_id == user.id,
+    ))
+    if entry is None:
+        raise HTTPException(404, "Journal entry was not found.")
+    return entry
+
+
+@router.patch("/{entry_id}", response_model=EntryResponse)
+def update_entry(entry_id: UUID, payload: EntryCreate,
+                 session: Session = Depends(get_session), user: User = Depends(current_user)):
+    entry = owned_entry(entry_id, session, user)
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(422, "Entry content cannot be blank.")
+    if entry.content != content:
+        entry.content = content
+        # Saved AI output describes the previous content and must be regenerated.
+        entry.ai_summary = None
+        entry.ai_reflection_question = None
+        entry.ai_summarized_at = None
+    session.commit()
+    session.refresh(entry)
+    return entry
+
+
+@router.delete("/{entry_id}", status_code=204)
+def delete_entry(entry_id: UUID, session: Session = Depends(get_session), user: User = Depends(current_user)):
+    entry = owned_entry(entry_id, session, user)
+    session.delete(entry)
+    session.commit()
+    return Response(status_code=204)
