@@ -27,6 +27,12 @@ src/frontend/
     │   └── AuthLayout.jsx
     ├── lib/
     │   └── api.js
+    ├── features/
+    │   └── record/
+    │       ├── audioRecorder.js
+    │       ├── useAudioRecorder.js
+    │       ├── RecordButton.jsx
+    │       └── RecordBackground.jsx
     ├── styles/
     │   ├── index.css
     │   ├── global.css
@@ -46,6 +52,7 @@ src/frontend/
 | `auth/Auth.jsx` | `AuthProvider`, `useAuth`, `PrivatePage`, and `GuestPage`; initial session check, authentication, logout, and unauthorized events. |
 | `auth/AuthLayout.jsx` | Shared login/register shell and theme selection; existing `ThemeSwitch`, `Field`, `SwitchLink`, `GoogleButton`, `Divider`, `useDark`, and `useShake` remain here. |
 | `lib/` | Shared infrastructure. `api.js` handles request configuration, errors, and session-epoch protection. |
+| `features/record/` | Local microphone lifecycle, audio playback, and independent background presentation. `RecordPage.jsx` composes the screen. |
 | `styles/` | The ordered stylesheet entry, shared defaults, and existing page styles. |
 | `assets/` | Bundled fonts and their license. Keep asset references relative to the importing source file. |
 
@@ -85,17 +92,20 @@ PR1 keeps the existing default component declarations (`App`, `Record`, `Login`,
 and `Register`) intact. `main.jsx` imports those same components under names
 matching their page filenames. No additional wrapper components are involved.
 
-Small components used only within one file may stay local. For example,
-`RecordButton`, `TranscriptPanel`, and `JournalMascot` remain in `RecordPage.jsx`.
+Small components used only within one file may stay local. `TranscriptPanel`
+and `JournalMascot` remain in `RecordPage.jsx`. PR A moved `RecordButton` into
+`features/record/` because it now coordinates a real recording lifecycle and
+playback; its `AudioPlayback` helper remains local to that file.
 Shared authentication helpers such as `Field` remain in `auth/AuthLayout.jsx`;
 sharing a helper between login and registration does not make it a generic UI
 primitive. Reuse an existing component before introducing another one, and
 extract only when an actual responsibility or reuse need warrants it.
 
-### Future organization (directories do not exist yet)
+### Future organization and feature growth
 
-Create these locations only when future work has a real implementation to put
-in them. PR1 adds no shared UI primitives, layouts, feature modules, or hooks.
+`features/record/` now exists for PR A. Shared `components/` directories and
+other feature directories remain future conventions: create them only when
+they contain real implementation. PR1 itself added none of these layers.
 
 | Future location | Placement rule and AuraJournal examples |
 | --- | --- |
@@ -147,6 +157,90 @@ add their stylesheet to `index.css` in an intentional position. Check all routes
 when changing shared rules. Preserve focus, hover, disabled, theme, motion, and
 responsive states as well as the default appearance.
 
+## Record flow — PR A (U06–U07)
+
+Recording is local only. Select the central microphone to Start, select it again
+to Stop, listen with the audio controls or **Replay recording**, and use **Reset**
+to discard the take and return to Ready. The existing transcript area is reserved
+for PR B and explicitly explains that live transcription is not available yet.
+The surrounding visual identity, mascot, fonts, and responsive layout remain.
+
+`audioRecorder.js` is the single resource/state owner. `useAudioRecorder` binds
+its snapshot to React with built-in `useSyncExternalStore`; it does not maintain
+another recording state machine. `RecordButton` owns one hook instance.
+
+- States: `ready`, `requesting_permission`, `recording`, `stopping`, `stopped`,
+  and `error`. `stopping` waits for the final recorder events. Duplicate Start
+  calls are ignored. After a take, Reset is required before recording another.
+- Permission is requested only on Start. Denial, missing/busy devices,
+  unsupported APIs, insecure origins, and capture errors produce useful feedback.
+  Microphone access requires HTTPS or localhost.
+- Stop releases tracks immediately and collects the final `dataavailable`
+  event before creating the Blob/URL. A five-second stop watchdog prevents a
+  broken recorder from leaving the UI stuck; incomplete audio may not replay.
+- Reset and unmount stop tracks, detach capture listeners, cancel timers, revoke
+  object URLs, and clear in-memory audio. Late permission grants are released;
+  stale permission errors cannot interrupt a later session. Cancelling cannot
+  dismiss the browser's native permission prompt, but invalidates its result.
+- Playback uses a native audio element plus an explicit replay action. Playback
+  errors are visible and retryable. Reset/unmount pause and clear the element.
+  No audio is uploaded or persisted, so navigation/reload discards the take.
+
+### Reusing capture in PR B
+
+The hook exposes its `recorder` owner with `getStream()` and
+`subscribeToChunks(listener)` (returns an unsubscribe function). PR B must consume
+this live stream or these ordered chunks; it must not call `getUserMedia` again
+or start a competing capture owner. Subscribers must handle their own failures,
+avoid blocking capture callbacks, and unsubscribe during cleanup. They must not
+stop the borrowed stream's tracks. Attach chunk consumers before Start so the
+initial container header is not missed. Keep the capture owner mounted while opening
+future layout UI; do not key it by Sidebar, background, or transcript state.
+
+Format preference is WebM/Opus, Ogg/Opus, MP4, WebM, then the browser default,
+using `MediaRecorder.isTypeSupported`. The result preserves the actual MIME type
+on the snapshot and Blob. `captureSettings` includes only source-track sample
+rate/channel count, not device identifiers; it does not describe the encoder's
+output sample rate. Chunks are requested at 250ms intervals, which are not a
+guaranteed clock, and individual container chunks may not decode independently.
+
+Do not assume these chunks can be forwarded to any Deepgram model/endpoint.
+Agree on the authenticated backend endpoint, format, event protocol, sequencing,
+and finalization handshake before PR B. If the chosen service accepts the actual
+container/codec, retain the stream header and chunk order. If raw PCM is required,
+attach an encoder such as an AudioWorklet to `getStream()` and agree on the real
+encoding/sample rate; no PCM encoder or network transport is implemented here.
+Deepgram distinguishes [raw and containerized streaming audio](https://developers.deepgram.com/docs/determining-your-audio-format-for-live-streaming-audio).
+Browser final data delivery follows the [MediaRecorder stop lifecycle](https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder/stop).
+
+### Background and shared layout boundaries
+
+`RecordPage` retains the optional `backgroundImage` URL prop and adds
+`backgroundStatus` (`loading`, `ready`, or `error`, default `ready`). It composes
+`RecordBackground`, a decorative presenter that retains the existing visual
+fallback until a supplied ready image loads, and on missing/broken images or
+external loading/error states. Only the background is keyed by its source/state;
+changing either does not remount capture. No image generation or endpoint exists.
+
+The optional `onOpenSidebar` prop enables the existing trigger; without it the
+button remains disabled. It is a callback boundary, not a Record-specific Sidebar.
+Parents must keep the page/capture owner mounted when showing a Sidebar.
+“Back to Main” remains the original non-interactive span. No AppShell, live
+transcription, transcript editing, provider integration, or journal saving was
+implemented in PR A.
+
+Record-route CSS reserves a scrollbar gutter so adding playback does not move
+the central microphone sideways. This rule only applies while `.record-page`
+is mounted; other routes and the shared stylesheets are unchanged.
+
+PR A verification: production build and frontend tests pass (19 recording
+tests plus four existing API tests). An isolated React Strict Mode fixture in
+headless Brave passed 41 browser assertions using Chromium's synthetic microphone
+with the real MediaRecorder and audio decoder. Checks covered playback/retry,
+permission errors/cancellation, unmount cleanup, background/Sidebar isolation,
+and 320–1440px layouts. Physical microphones, Safari/Firefox, and live backend
+sessions were not tested by that fixture; PR A needs no backend endpoint.
+
 ## Adding pages and components in future PRs
 
 1. Put an authorized new route screen in `pages/` and keep its coordination
@@ -179,10 +273,14 @@ npm run build           # Production build in src/frontend/dist/
 npm run test:frontend   # Existing API/session regression tests
 ```
 
-The [frontend tests](../../tests/frontend-api.test.js) verify cookies/CSRF,
+The [API tests](../../tests/frontend-api.test.js) verify cookies/CSRF,
 request payloads, stale-response rejection before and after JSON parsing, and
 unauthorized-event behavior. Their loader reads `src/lib/api.js` relative to
-this directory. There is no committed browser automation framework. Unit tests
+this directory. The [recording tests](../../tests/frontend-record.test.js) cover
+permission/device failures, lifecycle transitions, final data and MIME types,
+duplicate starts, format fallback, stream/chunk reuse, cleanup, and late events.
+Both files run through `npm run test:frontend` without new dependencies.
+There is no committed browser automation framework. Unit tests
 and a build do not verify rendering or a live cookie session.
 
 For browser regression checks, compare the same data and viewport before and
@@ -247,9 +345,10 @@ dependencies or browser test framework to the repository.
   create/list entry routes, and its CORS configuration allows GET/POST. These
   writes remain unsupported; cross-origin requests can fail at preflight before
   reaching a route. Preserve the UI and its existing error handling in PR1.
-- `RecordPage.jsx` is a static Ready screen. Recording/sidebar controls remain
-  disabled, and “Back to Main” remains a non-interactive span. Speech-to-text,
-  navigation, and AI integration require separate feature work.
+- PR A resolves the former static microphone control with local recording and
+  playback. Speech-to-text, transcript review/editing, journal saving from this
+  screen, AI image generation, shared Sidebar, and working “Back to Main”
+  navigation still require separate feature work. No backend changes were needed.
 - `GoogleButton` and `Divider` remain defined in `AuthLayout.jsx` but are not
   rendered by login/register. Google sign-in is not implemented.
 - Legacy global CSS/default inheritance remains a consideration for future

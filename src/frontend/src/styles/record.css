@@ -14,6 +14,9 @@
   font-display: swap;
 }
 
+/* Reserve the document scrollbar only on this route, so playback cannot shift the microphone. */
+html:has(.record-page) { scrollbar-gutter: stable; }
+
 .record-page {
   position: relative;
   isolation: isolate;
@@ -181,8 +184,39 @@
   border-radius: 50%;
   background: #527d65;
   opacity: 1;
-  cursor: default;
+  cursor: pointer;
 }
+
+.record-page .record-trigger:disabled { cursor: default; }
+.record-page .record-trigger:focus-visible,
+.record-page .record-action:focus-visible,
+.record-page .record-sidebar-toggle:focus-visible { outline: 3px solid #283d36; outline-offset: 5px; }
+.record-page .record-sidebar-toggle:not(:disabled) { cursor: pointer; }
+.record-trigger.is-recording::after { border-radius: 6px; }
+
+.record-page .record-feedback {
+  margin: 10px 0;
+  min-height: 42px;
+  color: #527d65;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.record-page .record-error { color: #a33b32; }
+.record-playback { width: 100%; text-align: center; }
+.record-playback audio { display: block; width: 100%; margin: 8px 0; }
+.record-page .record-action {
+  margin-top: 8px;
+  padding: 8px 16px;
+  border: 1px solid #527d65;
+  border-radius: 12px;
+  background: #fffefa;
+  color: #344e42;
+  font-size: 13px;
+  cursor: pointer;
+}
+.record-page .record-action:disabled { cursor: default; }
 
 .record-trigger::after {
   content: '';
