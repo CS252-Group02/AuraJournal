@@ -1,5 +1,3 @@
-import './record.css';
-
 function RecordButton() {
   return (
     <div className="record-primary">

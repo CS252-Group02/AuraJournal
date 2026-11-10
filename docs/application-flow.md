@@ -7,7 +7,7 @@ See [authentication](authentication.md) for endpoints, CSRF, seven-day sessions,
 ```mermaid
 sequenceDiagram
     participant User
-    participant UI as React App.jsx
+    participant UI as React JournalPage.jsx
     participant API as FastAPI entry router
     participant DB as PostgreSQL
     User->>UI: Open journal
@@ -25,7 +25,7 @@ sequenceDiagram
     API-->>UI: Updated JSON list
 ```
 
-`App.jsx` gets its API URL from `VITE_API_URL`, defaulting to `http://localhost:8000`. It reloads entries after a successful save and displays connection/save errors. Login and registration connect to the auth API. The shared API client includes session cookies and the CSRF header; protected routes check `/api/auth/me` before showing private content.
+`pages/JournalPage.jsx` uses `lib/api.js`, which gets its API URL from `VITE_API_URL`, defaulting to `http://localhost:8000`. The journal page reloads entries after a successful save and displays connection/save errors. Login and registration connect to the auth API. The shared API client includes session cookies and the CSRF header; protected routes check `/api/auth/me` before showing private content.
 
 ## Backend and database
 

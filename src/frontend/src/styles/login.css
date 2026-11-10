@@ -1,7 +1,7 @@
 /*
- * Login page. Follows the Vertigo style principles (flat, tonal, 4px radius,
+ * Login and registration pages. Follows the Vertigo style principles (flat, tonal, 4px radius,
  * filled controls, motion recipes) with the AuraJournal sage-green palette
- * from style.css in place of Vertigo's blue-violet neutrals.
+ * from global.css in place of Vertigo's blue-violet neutrals.
  */
 
 .login {
@@ -31,7 +31,7 @@
   -webkit-font-smoothing: antialiased;
 }
 
-/* Dark tokens; Login.jsx adds .dark from the theme switch (light / dark / system). */
+/* Dark tokens; AuthLayout.jsx adds .dark from the theme switch (light / dark / system). */
 .login.dark {
   color-scheme: dark;
   --background: oklch(0.19 0.012 160);

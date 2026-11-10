@@ -1,0 +1,5 @@
+/* Preserve the existing cascade: auth, Record, then shared and journal rules. */
+@import "./login.css";
+@import "./record.css";
+@import "./global.css";
+@import "./journal.css";

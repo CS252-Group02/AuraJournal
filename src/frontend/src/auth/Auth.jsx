@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { api, changeAuthEpoch } from './api.js';
+import { api, changeAuthEpoch } from '../lib/api.js';
 
 const AuthContext = createContext(null);
 export function useAuth() { return useContext(AuthContext); }
