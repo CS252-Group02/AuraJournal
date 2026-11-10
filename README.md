@@ -4,7 +4,7 @@ A small React + FastAPI + PostgreSQL journal app. It is a tested starting point 
 
 ## How it works
 
-`src/frontend/src/App.jsx` sends create/read requests to FastAPI. The backend separates database setup, models, validation schemas, and routes. PostgreSQL stores users, journal entries, mood records, and journal images; the journal flow authenticates accounts and scopes entries to the signed-in user. Tests are in `src/backend/tests/`.
+`src/frontend/src/pages/JournalPage.jsx` sends journal requests to FastAPI through `lib/api.js`. The backend separates database setup, models, validation schemas, and routes. PostgreSQL stores users, journal entries, mood records, and journal images; the journal flow authenticates accounts and scopes entries to the signed-in user. Tests are in `src/backend/tests/`.
 
 ## Project structure
 
@@ -34,13 +34,32 @@ A small React + FastAPI + PostgreSQL journal app. It is a tested starting point 
     │   └── tests/               # PostgreSQL API tests
     └── frontend/
         ├── .env.example         # Frontend API URL template
+        ├── README.md            # Frontend architecture and contributor guide
         ├── index.html           # Page loaded by the browser
         ├── vite.config.js       # Vite React setup
         └── src/
-            ├── App.jsx          # Journal entry form and list
             ├── main.jsx         # React entry point
-            └── style.css        # App styles
+            ├── pages/           # Existing route screens
+            │   ├── JournalPage.jsx
+            │   ├── RecordPage.jsx
+            │   ├── LoginPage.jsx
+            │   └── RegisterPage.jsx
+            ├── auth/            # Session state, guards, and shared auth UI
+            │   ├── Auth.jsx
+            │   └── AuthLayout.jsx
+            ├── lib/
+            │   └── api.js       # Cookie/CSRF requests and session isolation
+            ├── styles/          # Ordered stylesheet entry and existing rules
+            │   ├── index.css
+            │   ├── global.css
+            │   ├── journal.css
+            │   ├── login.css
+            │   └── record.css
+            └── assets/          # Record fonts and their license
 ```
+
+See the [frontend contributor guide](src/frontend/README.md) for directory
+responsibilities, component placement, CSS ordering, and validation instructions.
 
 ## Backend app layout
 

@@ -1,35 +1,51 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
-import App from './App.jsx';
-import Login from './Login.jsx';
-import Register from './Register.jsx';
-import Record from './Record.jsx';
-import './style.css';
-import { AuthProvider, GuestPage, PrivatePage } from './Auth.jsx';
+import JournalPage from './pages/JournalPage.jsx';
+import LoginPage from './pages/LoginPage.jsx';
+import RegisterPage from './pages/RegisterPage.jsx';
+import RecordPage from './pages/RecordPage.jsx';
+import './styles/index.css';
+import { AuthProvider, GuestPage, PrivatePage } from './auth/Auth.jsx';
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
       <AuthProvider>
-      <Routes>
-<Route
-  path="/"
-  element={<PrivatePage><App /></PrivatePage>}
-/>
-<Route
-  path="/login"
-  element={<GuestPage><Login /></GuestPage>}
-/>
-<Route
-  path="/register"
-  element={<GuestPage><Register /></GuestPage>}
-/>
-<Route
-  path="/record"
-  element={<PrivatePage><Record /></PrivatePage>}
-/>
-      </Routes>
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <PrivatePage>
+                <JournalPage />
+              </PrivatePage>
+            }
+          />
+          <Route
+            path="/login"
+            element={
+              <GuestPage>
+                <LoginPage />
+              </GuestPage>
+            }
+          />
+          <Route
+            path="/register"
+            element={
+              <GuestPage>
+                <RegisterPage />
+              </GuestPage>
+            }
+          />
+          <Route
+            path="/record"
+            element={
+              <PrivatePage>
+                <RecordPage />
+              </PrivatePage>
+            }
+          />
+        </Routes>
       </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>,

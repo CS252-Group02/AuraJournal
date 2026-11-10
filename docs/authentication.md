@@ -51,7 +51,7 @@ The first account implementation covers email/password only. The previous
 placeholders with no OAuth request or backend callback. They are hidden so the
 screens only offer a working method; no functional Google authentication was
 removed. The shared `GoogleButton` component remains in
-`src/frontend/src/AuthLayout.jsx`.
+`src/frontend/src/auth/AuthLayout.jsx`.
 
 Google registration/sign-in is deferred. Showing the button alone would not add
 authentication: a future implementation needs Google OAuth/OIDC configuration,
@@ -122,9 +122,9 @@ abuse prevention system.
 
 | Location | Responsibility |
 | --- | --- |
-| `src/frontend/src/Auth.jsx` | Session check, shared account state, protected/guest routes, login and logout |
-| `src/frontend/src/api.js` | Requests with cookies and CSRF headers; ignores responses from a previous session |
-| `src/frontend/src/Login.jsx`, `Register.jsx` | Email/password forms, validation, submission state, and errors |
+| `src/frontend/src/auth/Auth.jsx` | Session check, shared account state, protected/guest routes, login and logout |
+| `src/frontend/src/lib/api.js` | Requests with cookies and CSRF headers; ignores responses from a previous session |
+| `src/frontend/src/pages/LoginPage.jsx`, `pages/RegisterPage.jsx` | Email/password forms, validation, submission state, and errors |
 | `src/backend/app/routers/auth.py` | Register, login, current-account, and logout endpoints |
 | `src/backend/app/auth.py` | Argon2id verification, session creation/validation, cookies, and request-origin checks |
 | `src/backend/app/models/auth.py` | Session-token digests and failed-login records |

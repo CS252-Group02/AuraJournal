@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import './login.css';
 
 const THEME_KEY = 'aurajournal-theme';
 const THEMES = [

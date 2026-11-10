@@ -1,6 +1,6 @@
 @font-face {
   font-family: 'AuraJournal Record Inter';
-  src: url('./assets/record-inter-latin.woff2') format('woff2');
+  src: url('../assets/record-inter-latin.woff2') format('woff2');
   font-style: normal;
   font-weight: 400 600;
   font-display: swap;
@@ -8,7 +8,7 @@
 
 @font-face {
   font-family: 'AuraJournal Record Cormorant';
-  src: url('./assets/record-cormorant-garamond-latin-600.woff2') format('woff2');
+  src: url('../assets/record-cormorant-garamond-latin-600.woff2') format('woff2');
   font-style: normal;
   font-weight: 600;
   font-display: swap;

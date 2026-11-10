@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { api } from './api.js';
-import { useAuth } from './Auth.jsx';
+import { api } from '../lib/api.js';
+import { useAuth } from '../auth/Auth.jsx';
 
 export default function App() {
   const { user, logout } = useAuth();

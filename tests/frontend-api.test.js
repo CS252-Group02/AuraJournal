@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 async function loadApi() {
-  const source = (await readFile(new URL('../src/frontend/src/api.js', import.meta.url), 'utf8'))
+  const source = (await readFile(new URL('../src/frontend/src/lib/api.js', import.meta.url), 'utf8'))
     .replace('import.meta.env.VITE_API_URL', "''");
   return import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}#${Math.random()}`);
 }

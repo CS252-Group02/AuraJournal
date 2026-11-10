@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import AuthLayout, { Field, SwitchLink, useShake } from './AuthLayout.jsx';
-import { useAuth } from './Auth.jsx';
+import AuthLayout, { Field, SwitchLink, useShake } from '../auth/AuthLayout.jsx';
+import { useAuth } from '../auth/Auth.jsx';
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
