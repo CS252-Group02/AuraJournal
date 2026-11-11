@@ -4,7 +4,8 @@ This is the shared working guide for teammates and AI assistants. Read it before
 editing the frontend. The [frontend README](../README.md) contains the detailed
 architecture, file movement table, setup instructions, and PR1 verification.
 
-The structure below describes PR1, based on `main` at `64833bc`. Always inspect
+The PR1 baseline was `main` at `64833bc`; the current structure also includes
+PR A local recording (U06–U07). Always inspect
 the current branch and affected files before working: future changes may make
 this snapshot outdated. Update both guides when an intentional architecture
 change lands. Follow applicable `AGENTS.md` instructions and the current task;
@@ -57,7 +58,7 @@ src/frontend/
     ├── main.jsx              # Mounting, providers, router, guards
     ├── pages/
     │   ├── JournalPage.jsx    # Journal loading/create/edit/delete UI and state
-    │   ├── RecordPage.jsx     # Existing static Ready screen
+    │   ├── RecordPage.jsx     # Record screen composition; no transcription yet
     │   ├── LoginPage.jsx      # Login form and validation
     │   └── RegisterPage.jsx   # Registration form and validation
     ├── auth/
@@ -65,6 +66,12 @@ src/frontend/
     │   └── AuthLayout.jsx     # Shared auth shell, theme, fields, helpers
     ├── lib/
     │   └── api.js             # Cookie/CSRF requests, errors, session isolation
+    ├── features/
+    │   └── record/
+    │       ├── audioRecorder.js     # Sole capture/state/resource owner
+    │       ├── useAudioRecorder.js  # React subscription and unmount cleanup
+    │       ├── RecordButton.jsx     # Start/Stop/Reset and local audio playback
+    │       └── RecordBackground.jsx # Image/status presenter with fallback
     ├── styles/
     │   ├── index.css          # Ordered CSS entry imported once by main.jsx
     │   ├── global.css         # Shared document/element defaults and utilities
@@ -81,7 +88,8 @@ Do not add a second frontend package or migrate the stack as incidental cleanup.
 ## 3. Where future code belongs
 
 Create directories only when they contain real, needed code. `components/` and
-`features/` are future conventions, not directories created by PR1.
+other `features/` directories are future conventions. `features/record/` was
+introduced by PR A for real local recording behavior, not as an empty layer.
 
 | Responsibility | Placement | Examples for future work |
 | --- | --- | --- |
@@ -101,8 +109,9 @@ Feature examples: `features/journal/components/JournalCard.jsx`,
   still belongs to the journal feature when several pages use it.
 - Generic UI must not fetch journal data or know backend contracts, account
   state, recording, or calendar business rules.
-- Small helpers used by one file may stay local. PR1 intentionally leaves
-  `RecordButton`, `TranscriptPanel`, and `JournalMascot` in `RecordPage.jsx`.
+- Small helpers used by one file may stay local. `TranscriptPanel` and
+  `JournalMascot` stay in `RecordPage.jsx`. PR A moved the now-functional
+  `RecordButton` into `features/record/`; `AudioPlayback` stays local to its file.
 - Auth helpers stay in `AuthLayout.jsx`: `ThemeSwitch`, `Field`, `SwitchLink`,
   `GoogleButton`, `Divider`, `useDark`, and `useShake`. Inspect before extracting
   or replacing them; `useAuth` stays with the provider in `Auth.jsx`.
@@ -228,7 +237,7 @@ setup to run both services. See the [frontend README](../README.md) for setup.
 
 - Confirm imports/assets resolve and dependency direction stays clear.
 - Cover changed behavior with meaningful targeted tests. Existing frontend tests
-  cover the API client and session races, not all React UI behavior.
+  cover the API client/session races and recording lifecycle, not all React UI behavior.
 - For routing/UI/CSS changes, check relevant routes and shared consumers in a
   browser when available. Verify login/register/logout, guards, journal
   loading/create/edit/cancel/delete confirmation, Record placeholders, themes,
@@ -254,8 +263,10 @@ remain byte-identical. No browser framework was added to the repository.
   backend has only create/list entry handlers and allows GET/POST through CORS.
   Those writes may fail at preflight or as unsupported requests. Preserve error
   handling; do not add backend support during unrelated frontend cleanup.
-- Record is a static Ready screen. Record/sidebar controls are disabled;
-  “Back to Main” is a span, not working navigation. No speech-to-text is wired.
+- PR A now implements local Start/Stop/Reset and playback. Speech-to-text,
+  transcript editing, journal saving from Record, and AI image generation remain
+  future work. The Sidebar trigger needs an external handler; “Back to Main”
+  remains a span. These are not authorization to implement PR B incidentally.
 - `GoogleButton` and `Divider` remain defined but are not rendered by the auth
   forms. Google authentication is not implemented.
 - Legacy global CSS inheritance remains. Broader scoping needs a deliberate
@@ -285,3 +296,54 @@ frontend tests, and relevant regression checks; report what actually ran, what
 was mocked/skipped, and any pre-existing limitations. Do not commit or open a PR
 unless explicitly requested.
 ```
+
+## 12. Permanent Record architecture and UX decisions (PR A)
+
+- Keep capture in `features/record/`; `RecordPage` composes the existing screen.
+  `audioRecorder.js` alone owns permission requests, the stream, MediaRecorder,
+  accumulated Blob, playback URL, and capture state. The hook subscribes to that
+  owner; it must not duplicate its state machine or acquire another microphone.
+- Flow: Ready -> requesting permission -> Recording -> Stopping -> Stopped.
+  Errors give recovery instructions. Start is guarded against duplicates. Stop
+  flushes final recorder data and releases tracks; Reset discards the take.
+  Recording another take requires Reset. Partial audio is retained on capture
+  interruptions where possible, but a damaged container may not play.
+- Audio stays in memory and is lost on Reset, page unmount, or reload. Stop,
+  Reset, and unmount release media resources; unmount/Reset also revoke playback
+  URLs. Pending permission responses are invalidated and late streams stopped.
+  React Strict Mode cleanup must remain safe. No browser permission prompt can
+  be programmatically dismissed by Cancel.
+- Preserve the central microphone and existing visual identity. Start/Stop uses
+  that control, Reset and native playback/replay appear beneath it, and useful
+  status/error feedback stays accessible. The existing transcript area is
+  explicitly reserved for a later update; do not add fake text or typing effects.
+- PR B must borrow `recorder.getStream()` or use
+  `recorder.subscribeToChunks(listener)` and unsubscribe on cleanup. This is
+  the same microphone session; consumers must not stop its tracks. Chunk handlers
+  must be attached before Start, handle their own errors without blocking capture,
+  and retain the first container header. Do not add another
+  `getUserMedia` pipeline for transcription.
+- MIME selection checks WebM/Opus, Ogg/Opus, MP4, WebM, then browser default. Keep
+  the actual MIME type with the Blob. `captureSettings` is source-track metadata,
+  not a claim about encoded sample rate. Container chunks arrive in order at a
+  requested 250ms timeslice; neither timing nor independent decoding is guaranteed.
+- Before streaming, agree on server authentication, endpoint, actual codec/
+  container/sample rate, event protocol, and stop/finalize handshake. Validate
+  compatibility for the chosen Deepgram endpoint/model. If PCM is needed, encode
+  the existing live stream; do not relabel MediaRecorder data as PCM or WAV. PR A
+  includes no provider client, encoder, WebSocket, transcript state, or save flow.
+- `backgroundImage` and `backgroundStatus` on `RecordPage` control a separate
+  `RecordBackground` presenter. Missing/loading/failed images use the visual
+  fallback; a ready URL must also finish loading. Background changes must never
+  key/remount recording. No AI generation endpoint is assumed.
+- `onOpenSidebar` optionally enables the existing button. Keep it disabled when
+  no callback exists. Keep recording mounted while shared layout UI opens;
+  do not build a feature-specific Sidebar or AppShell here.
+- `npm run test:frontend` runs both API and recording tests. For UI changes,
+  also verify actual encoding/playback, permission recovery, pending permission
+  cancellation/unmount, active-recording unmount, background/sidebar updates,
+  and responsive layout in a browser. Synthetic microphone checks do not replace
+  testing physical hardware and target browsers before release.
+
+See the [Record flow guide](../README.md#record-flow--pr-a-u06u07) for the owner
+API, format references, background props, cleanup, and remaining PR B dependencies.

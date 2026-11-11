@@ -1,19 +1,11 @@
-function RecordButton() {
-  return (
-    <div className="record-primary">
-      <div className="record-orbit">
-        <button className="record-trigger" type="button" aria-labelledby="record-label" disabled />
-      </div>
-      <p className="record-label" id="record-label">Record</p>
-    </div>
-  );
-}
+import RecordButton from '../features/record/RecordButton.jsx';
+import RecordBackground from '../features/record/RecordBackground.jsx';
 
 function TranscriptPanel() {
   return (
     <section className="record-transcript" aria-labelledby="record-transcript-heading">
       <h2 id="record-transcript-heading">YOUR WORDS WILL APPEAR HERE</h2>
-      <p>Your voice will become words here as you speak.</p>
+      <p>Live transcription will appear here in a future update.</p>
     </section>
   );
 }
@@ -32,16 +24,13 @@ function JournalMascot() {
   );
 }
 
-// Static Ready state. The background source can be supplied independently of the UI.
-export default function Record({ backgroundImage }) {
+export default function Record({ backgroundImage, backgroundStatus = 'ready', onOpenSidebar }) {
   return (
     <main className="record-page" aria-label="Record journal">
-      <div className="record-background" aria-hidden="true">
-        {backgroundImage && <img className="record-background-image" src={backgroundImage} alt="" />}
-      </div>
+      <RecordBackground key={`${backgroundStatus}:${backgroundImage || ''}`} imageUrl={backgroundImage} status={backgroundStatus} />
 
       <header className="record-header">
-        <button className="record-sidebar-toggle" type="button" aria-label="Open sidebar" disabled>
+        <button className="record-sidebar-toggle" type="button" aria-label="Open sidebar" disabled={!onOpenSidebar} onClick={onOpenSidebar}>
           <span aria-hidden="true">»</span>
         </button>
         <div className="record-brand">
