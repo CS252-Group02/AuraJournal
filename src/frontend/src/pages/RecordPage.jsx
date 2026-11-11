@@ -1,14 +1,7 @@
 import RecordButton from '../features/record/RecordButton.jsx';
 import RecordBackground from '../features/record/RecordBackground.jsx';
-
-function TranscriptPanel() {
-  return (
-    <section className="record-transcript" aria-labelledby="record-transcript-heading">
-      <h2 id="record-transcript-heading">YOUR WORDS WILL APPEAR HERE</h2>
-      <p>Live transcription will appear here in a future update.</p>
-    </section>
-  );
-}
+import TranscriptView from '../features/record/TranscriptView.jsx';
+import { useRecordFlow } from '../features/record/useRecordFlow.js';
 
 function JournalMascot() {
   return (
@@ -24,9 +17,15 @@ function JournalMascot() {
   );
 }
 
-export default function Record({ backgroundImage, backgroundStatus = 'ready', onOpenSidebar }) {
+export default function Record({ backgroundImage, backgroundStatus = 'ready', onOpenSidebar, services }) {
+  const model = useRecordFlow(services);
+  function reset() {
+    if ((model.editorText || model.phase === 'proofreading' || model.saveUnknown) && model.phase !== 'saved' &&
+        !window.confirm('Discard this take and unsaved draft? A save with an unknown result may already exist in your journals.')) return;
+    model.flow.reset();
+  }
   return (
-    <main className="record-page" aria-label="Record journal">
+    <main className="record-page" aria-label="Record journal" data-has-record-image={Boolean(backgroundImage)}>
       <RecordBackground key={`${backgroundStatus}:${backgroundImage || ''}`} imageUrl={backgroundImage} status={backgroundStatus} />
 
       <header className="record-header">
@@ -40,8 +39,8 @@ export default function Record({ backgroundImage, backgroundStatus = 'ready', on
       </header>
 
       <div className="record-content">
-        <RecordButton />
-        <TranscriptPanel />
+        <RecordButton model={model} onReset={reset} />
+        <TranscriptView model={model} />
       </div>
 
       <JournalMascot />

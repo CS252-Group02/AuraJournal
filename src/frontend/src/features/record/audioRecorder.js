@@ -12,6 +12,8 @@ function captureError(error) {
     case 'NotReadableError':
     case 'TrackStartError':
       return 'Your microphone could not be opened. Close other apps using it, then try again.';
+    case 'NotSupportedError':
+      return 'This browser cannot record a format accepted by live transcription. You can record locally instead.';
     default:
       return 'Recording could not start. Check your microphone and try again.';
   }
@@ -55,13 +57,14 @@ export function createAudioRecorder({
       error ||= 'No audio was captured. Check your microphone and try again.';
     }
     publish({ status: error ? 'error' : 'stopped', blob: blob.size ? blob : null, url, mimeType, error });
+    current.resolveStop(snapshot);
   }
 
   function stop(error = '') {
     const current = session;
-    if (!current) return;
+    if (!current) return Promise.resolve(snapshot);
     current.error ||= error;
-    if (current.stopping) return;
+    if (current.stopping) return current.completion;
     current.stopping = true;
     publish({ status: 'stopping' });
     // Wait for final dataavailable/stop, but never hold a microphone indefinitely.
@@ -77,9 +80,10 @@ export function createAudioRecorder({
     } finally {
       stopTracks(current.stream);
     }
+    return current.completion;
   }
 
-  async function start() {
+  async function start({ allowedMimeTypes } = {}) {
     if (session || !['ready', 'error'].includes(snapshot.status) || snapshot.blob) return;
     if (!secureContext) {
       publish({ status: 'error', error: 'Microphone recording needs HTTPS or localhost. Open AuraJournal using a secure connection.' });
@@ -93,15 +97,21 @@ export function createAudioRecorder({
     publish({ status: 'requesting_permission', error: '' });
     let stream;
     try {
+      const candidates = allowedMimeTypes ? MIME_TYPES.filter(type => allowedMimeTypes.includes(type)) : MIME_TYPES;
+      const mimeType = candidates.find((type) => MediaRecorder.isTypeSupported?.(type)) || '';
+      if (allowedMimeTypes && !mimeType) throw new DOMException('No agreed recording format.', 'NotSupportedError');
       stream = await mediaDevices.getUserMedia({ audio: true });
       if (request !== generation) { stopTracks(stream); return; }
       const tracks = stream.getAudioTracks();
       if (!tracks.length || tracks.some((track) => track.readyState === 'ended')) {
         throw new DOMException('No live audio track.', 'NotFoundError');
       }
-      const mimeType = MIME_TYPES.find((type) => MediaRecorder.isTypeSupported?.(type)) || '';
       const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      if (allowedMimeTypes && !allowedMimeTypes.includes(recorder.mimeType || mimeType)) {
+        throw new DOMException('Unexpected recording format.', 'NotSupportedError');
+      }
       const current = { stream, recorder, mimeType, chunks: [], error: '', stopping: false, timer: null };
+      current.completion = new Promise(resolve => { current.resolveStop = resolve; });
       const onData = ({ data }) => {
         if (session !== current || !data.size) return;
         current.chunks.push(data);
@@ -138,6 +148,7 @@ export function createAudioRecorder({
         if (session.recorder.state !== 'inactive') {
           try { session.recorder.stop(); } catch { /* Capture tracks are already stopped. */ }
         }
+        session.resolveStop({ ...snapshot, status: 'error', error: captureError(error) });
         session = null;
       } else if (stream) stopTracks(stream);
       publish({ status: 'error', error: captureError(error) });
@@ -153,6 +164,7 @@ export function createAudioRecorder({
       if (current.recorder.state !== 'inactive') {
         try { current.recorder.stop(); } catch { /* Tracks are already released. */ }
       }
+      current.resolveStop({ ...READY, cancelled: true });
     }
     if (snapshot.url) urls.revokeObjectURL(snapshot.url);
     publish(READY);

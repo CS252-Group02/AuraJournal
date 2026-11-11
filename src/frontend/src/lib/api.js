@@ -1,12 +1,14 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 let epoch = 0;
 export function changeAuthEpoch() { epoch += 1; }
+export function getAuthEpoch() { return epoch; }
 
-export async function api(path, { method = 'GET', body, signal } = {}) {
+export async function api(path, { method = 'GET', body, signal, idempotencyKey } = {}) {
   const started = epoch;
   const response = await fetch(`${API_URL}${path}`, {
     method, credentials: 'include', signal,
-    headers: { 'Content-Type': 'application/json', 'X-AuraJournal-CSRF': '1' },
+    headers: { 'Content-Type': 'application/json', 'X-AuraJournal-CSRF': '1',
+      ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
   if (started !== epoch) throw new Error('Session changed.');
