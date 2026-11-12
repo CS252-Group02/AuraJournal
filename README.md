@@ -147,7 +147,7 @@ Before starting the app, apply database migrations. With the virtual environment
 python -m alembic upgrade head
 ```
 
-An empty database runs migrations through `0005`: the initial journal table (`0001`), users and related tables (`0002`), authentication (`0003`), saved AI summaries (`0004`), and journal dates (`0005`). **If your database already has the original journal table without migration tracking, follow the backup and baseline-stamp instructions in [database setup](docs/database/migrations.md) first.** Back up a tracked database before running `upgrade head`. The current revision should be `0005`. Return to the repository root afterward. The app does not create tables at startup.
+An empty database runs the complete Alembic history, including journal dates and weekly reflection storage. Check for `(head)` in the output of `alembic current`. **If your database already has the original journal table without migration tracking, follow the backup and baseline-stamp instructions in [database setup](docs/database/migrations.md) first.** Back up a tracked database before running `upgrade head`. Return to the repository root afterward. The app does not create tables at startup.
 
 Entries now store a required `journal_date` using the MVP's UTC+7 calendar (`Asia/Bangkok`). Existing entries use their local creation day; new entries default to the current local day. See [journal dates and timestamps](docs/database/migrations.md#journal-dates-and-timestamps) for migration behavior and Backend date-selection integration.
 

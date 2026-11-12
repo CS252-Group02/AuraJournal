@@ -16,7 +16,7 @@ python3 -m alembic upgrade head
 python3 -m alembic current
 ```
 
-The revision should be `0005`. This creates the schema and the temporary development user. These commands use the sample credentials from `.env.example`; adjust them if your PostgreSQL role or password differs.
+The revision should be marked `(head)`. This creates the schema and the temporary development user. These commands use the sample credentials from `.env.example`; adjust them if your PostgreSQL role or password differs.
 
 If the database already contains data, read [database migration instructions](migrations.md) before applying migrations. Do not use the test database for important data.
 
@@ -36,7 +36,7 @@ SELECT current_database();
 SELECT id, email FROM users ORDER BY email;
 ```
 
-You should see the six application tables (`users`, `journal_entries`, `mood_records`, `journal_images`, `auth_sessions`, `login_attempts`), the Alembic version table, and the seeded development user.
+You should see seven application tables (`users`, `journal_entries`, `mood_records`, `journal_images`, `auth_sessions`, `login_attempts`, `weekly_reflections`), the Alembic version table, and the seeded development user.
 
 ## 3. Create three test users
 

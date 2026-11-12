@@ -2,7 +2,7 @@
 
 AuraJournal uses PostgreSQL 14+ and Alembic. Start PostgreSQL and install `src/backend/requirements.txt` in your virtual environment first. Alembic reads the repository-root `.env`; an exported `DATABASE_URL` takes precedence. Commands below run from `src/backend`, with the virtual environment active.
 
-Current head is **0005**, which adds the required `journal_date` field. Revision `0003` introduced authentication and `0004` added saved AI summaries. See [authentication](../authentication.md). Existing development entries stay inaccessible to real accounts.
+The current head is **0006**. The history below lists the schema changes. See [authentication](../authentication.md) for account setup.
 
 ## Fresh database
 
@@ -13,25 +13,26 @@ python -m alembic upgrade head
 python -m alembic current
 ```
 
-The current revision should be `0005`. Return to the repository root and run `npm start`. The backend no longer creates or modifies tables at startup.
+The current revision should be marked `(head)`. Return to the repository root and run `npm start`. The backend does not modify tables at startup.
 
 ## Version history
 
 ```text
-<base> → 0001 → 0002 → 0003 → 0004 → 0005 (head)
+<base> → 0001 → 0002 → 0003 → 0004 → 0005 → 0006 (head)
 ```
 
 - `0001_legacy_entries.py`: the initial journal table with integer IDs, content, and creation time.
 - `0002_journal_schema.py`: converts entry IDs to UUIDs, adds required user ownership and update timestamps, and creates users, mood records, and journal images. It also seeds the development user.
 - `0003_auth_sessions.py`: adds revocable sessions, login throttling, and normalized-email enforcement.
 - `0004_ai_summary.py`: adds the saved summary, reflection question, and generation timestamp to each entry.
-- `0005_journal_date.py`: adds a required journal day, backfills existing rows using UTC+7, and supplies a database default for new entries.
+- `0005_journal_date.py` adds a required journal day, backfills existing rows using UTC+7 and supplies a database default for new entries.
+- `0006_weekly_reflections.py` stores one summary and two questions per owner and seven-day start date. Deleting the owner cascades to their reflections. Downgrading this revision removes saved reflections.
 
 An empty database runs the complete chain with `python -m alembic upgrade head`. To inspect it, run `python -m alembic history`.
 
 ## Existing database
 
-If `python -m alembic current` reports `0005` and the six application tables match the models, the database is current. For a tracked database at `0002`, `0003`, or `0004`, stop the backend, back up its data, then run `python -m alembic upgrade head`. Revision `0005` fills the new date column while preserving entry IDs, owners, content, timestamps, and saved AI results. Re-running the command at head preserves all existing dates. Do not stamp the database back to an earlier revision.
+For an existing tracked database, back up its data and run `python -m alembic upgrade head` before starting the updated application. Confirm `python -m alembic current` shows the revision marked `(head)`. Re-running the command at head preserves existing dates.
 
 A database already recorded at `0001` only needs `python -m alembic upgrade head`, after a backup.
 
