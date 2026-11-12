@@ -2,7 +2,7 @@
 
 AuraJournal uses PostgreSQL 14+ and Alembic. Start PostgreSQL and install `src/backend/requirements.txt` in your virtual environment first. Alembic reads the repository-root `.env`; an exported `DATABASE_URL` takes precedence. Commands below run from `src/backend`, with the virtual environment active.
 
-Current head is **0003**, which adds revocable sessions, login throttling, and normalized-email enforcement. See [authentication](../authentication.md). Existing development entries stay inaccessible to real accounts.
+Current head is **0005**, which adds the required `journal_date` field. Revision `0003` introduced authentication and `0004` added saved AI summaries. See [authentication](../authentication.md). Existing development entries stay inaccessible to real accounts.
 
 ## Fresh database
 
@@ -13,22 +13,25 @@ python -m alembic upgrade head
 python -m alembic current
 ```
 
-The current revision should be `0003`. Return to the repository root and run `npm start`. The backend no longer creates or modifies tables at startup.
+The current revision should be `0005`. Return to the repository root and run `npm start`. The backend no longer creates or modifies tables at startup.
 
 ## Version history
 
 ```text
-<base> → 0001 → 0002 → 0003 (head)
+<base> → 0001 → 0002 → 0003 → 0004 → 0005 (head)
 ```
 
 - `0001_legacy_entries.py`: the initial journal table with integer IDs, content, and creation time.
 - `0002_journal_schema.py`: converts entry IDs to UUIDs, adds required user ownership and update timestamps, and creates users, mood records, and journal images. It also seeds the development user.
+- `0003_auth_sessions.py`: adds revocable sessions, login throttling, and normalized-email enforcement.
+- `0004_ai_summary.py`: adds the saved summary, reflection question, and generation timestamp to each entry.
+- `0005_journal_date.py`: adds a required journal day, backfills existing rows using UTC+7, and supplies a database default for new entries.
 
-An empty database runs both migrations with `python -m alembic upgrade head`. To inspect the chain, run `python -m alembic history`.
+An empty database runs the complete chain with `python -m alembic upgrade head`. To inspect it, run `python -m alembic history`.
 
 ## Existing database
 
-If `python -m alembic current` reports `0003` and the six application tables match the models, the database is current. Databases at `0002` need `python -m alembic upgrade head`. Running `python -m alembic upgrade head` leaves its data unchanged. Do not stamp it back to an earlier revision.
+If `python -m alembic current` reports `0005` and the six application tables match the models, the database is current. For a tracked database at `0002`, `0003`, or `0004`, stop the backend, back up its data, then run `python -m alembic upgrade head`. Revision `0005` fills the new date column while preserving entry IDs, owners, content, timestamps, and saved AI results. Re-running the command at head preserves all existing dates. Do not stamp the database back to an earlier revision.
 
 A database already recorded at `0001` only needs `python -m alembic upgrade head`, after a backup.
 
@@ -66,6 +69,32 @@ The upgrade preserves entry content and creation times, generates new UUIDs, ini
 
 Migrations are an explicit setup/deployment step, not part of `npm start`.
 
+## Journal dates and timestamps
+
+The MVP uses `Asia/Bangkok` (UTC+7) for journal days. `journal_date` is a required PostgreSQL `DATE` describing the day an entry belongs to. `created_at` and `updated_at` remain timezone-aware timestamps describing when the record was created and changed.
+
+Revision `0005` first adds a nullable column, fills it from `(created_at AT TIME ZONE 'Asia/Bangkok')::date`, then applies `NOT NULL` and the default `(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok')::date`. The old schema recorded no separate journal day, so the backfill assumes the local creation day. New ORM and direct SQL inserts that omit the date receive the current UTC+7 transaction date, regardless of the database session's timezone. Historical/test inserts should set `journal_date` explicitly.
+
+Creation timestamps stay unchanged when the journal date is edited. ORM updates refresh `updated_at`; direct SQL must set it explicitly. This migration does not add a timestamp trigger. The current HTTP entry payload still accepts only `content`; date selection in API requests/responses is the Backend integration step for B03. A future API should pass a supplied calendar date through without treating it as a timestamp.
+
+After the model change, run migration `0005` before restarting the backend. To verify the local database in `psql`:
+
+```sql
+SELECT id, journal_date, created_at, updated_at
+FROM journal_entries
+ORDER BY created_at;
+
+SELECT count(*) AS missing_journal_dates
+FROM journal_entries
+WHERE journal_date IS NULL;
+```
+
+The missing-date count should be zero. `python -m alembic upgrade head` can be run again to verify it is a no-op. Schema changes and backfill run in the existing PostgreSQL transaction, and Alembic records the revision after a successful upgrade.
+
+On the disposable test database, run `python -m pytest tests/test_journal_date.py tests/test_database.py -q` with `TEST_DATABASE_URL` configured. These tests cover fresh installation, legacy data, the UTC+7 midnight boundary, session-independent defaults, required dates, ORM timestamps, repeated upgrades, and downgrade/re-upgrade.
+
+Downgrading to `0004` drops `journal_date` and loses dates selected by users. Re-upgrading derives dates from `created_at` again. Use a backup to recover selected dates, and keep downgrade exercises on disposable data.
+
 ## Schema and code organization
 
 - `app/config.py`: database URL, frontend origin, and temporary development owner.
@@ -90,4 +119,4 @@ python -m alembic revision --autogenerate -m "describe schema change"
 
 Review the generated operations and data conversion carefully before running `python -m alembic upgrade head`. Commit migration files with their corresponding model changes. Keep already-shared/applied migrations unchanged and add a new revision for each subsequent change. Back up data before schema changes.
 
-See [development users](development-users.md) for the temporary owner and additional test users.
+See [development users](../development-users.md) for the temporary owner and additional test users.

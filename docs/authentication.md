@@ -15,7 +15,7 @@ python -m alembic -c src/backend/alembic.ini current
 npm start
 ```
 
-The migration command should report revision `0003` when checking `current`.
+The migration command should report revision `0005` when checking `current`.
 Using `-c` lets Alembic find its configuration from the repository root. Without
 `-c`, run Alembic commands from `src/backend`.
 
