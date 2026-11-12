@@ -2,7 +2,7 @@
 
 AuraJournal uses PostgreSQL 14+ and Alembic. Start PostgreSQL and install `src/backend/requirements.txt` in your virtual environment first. Alembic reads the repository-root `.env`; an exported `DATABASE_URL` takes precedence. Commands below run from `src/backend`, with the virtual environment active.
 
-The current head is **0006**. The history below lists the schema changes. See [authentication](../authentication.md) for account setup.
+The current head is **0007**. The history below lists the schema changes. See [authentication](../authentication.md) for account setup.
 
 ## Fresh database
 
@@ -18,7 +18,7 @@ The current revision should be marked `(head)`. Return to the repository root an
 ## Version history
 
 ```text
-<base> → 0001 → 0002 → 0003 → 0004 → 0005 → 0006 (head)
+<base> → 0001 → 0002 → 0003 → 0004 → 0005 → 0006 → 0007 (head)
 ```
 
 - `0001_legacy_entries.py`: the initial journal table with integer IDs, content, and creation time.
@@ -27,6 +27,7 @@ The current revision should be marked `(head)`. Return to the repository root an
 - `0004_ai_summary.py`: adds the saved summary, reflection question, and generation timestamp to each entry.
 - `0005_journal_date.py` adds a required journal day, backfills existing rows using UTC+7 and supplies a database default for new entries.
 - `0006_weekly_reflections.py` stores one summary and two questions per owner and seven-day start date. Deleting the owner cascades to their reflections. Downgrading this revision removes saved reflections.
+- `0007_journal_browse_index.py` replaces the single-column journal owner index with `(user_id, journal_date, created_at, id)`, supporting date range filters and stable browsing order. Downgrade restores the earlier index.
 
 An empty database runs the complete chain with `python -m alembic upgrade head`. To inspect it, run `python -m alembic history`.
 

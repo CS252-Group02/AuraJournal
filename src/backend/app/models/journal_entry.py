@@ -4,7 +4,7 @@ from datetime import date, datetime
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlalchemy import Date, DateTime, ForeignKey, Text, text
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAt, UpdatedAt
@@ -18,10 +18,13 @@ if TYPE_CHECKING:
 
 class JournalEntry(CreatedAt, UpdatedAt, Base):
     __tablename__ = "journal_entries"
+    __table_args__ = (
+        Index("ix_journal_entries_owner_date", "user_id", "journal_date", "created_at", "id"),
+    )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     user_id: Mapped[UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     journal_date: Mapped[date] = mapped_column(
