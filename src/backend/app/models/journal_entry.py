@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Text
+from sqlalchemy import Date, DateTime, ForeignKey, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAt, UpdatedAt
@@ -24,6 +24,10 @@ class JournalEntry(CreatedAt, UpdatedAt, Base):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    journal_date: Mapped[date] = mapped_column(
+        Date, nullable=False,
+        server_default=text("(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok')::date"),
+    )
     ai_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     ai_reflection_question: Mapped[str | None] = mapped_column(Text, nullable=True)
     ai_summarized_at: Mapped[datetime | None] = mapped_column(
