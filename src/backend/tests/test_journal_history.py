@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.models import JournalEntry
-from app.services.journal_history import daily_entry_counts, entries_in_range
+from app.services.journal_history import current_streak, daily_entry_counts, entries_in_range
 from scripts.seed_week7 import ALICE, BOB, seed_week7
 
 
@@ -55,3 +55,17 @@ def test_calendar_counts_entries_per_owner_and_day(history_session):
     assert daily_entry_counts(history_session, ALICE, end, end) == {}
     with pytest.raises(ValueError, match="start date"):
         daily_entry_counts(history_session, ALICE, end, start)
+
+
+@pytest.mark.parametrize(("owner", "as_of", "expected"), [
+    (ALICE, date(2026, 10, 29), 0),  # All entries are in the future.
+    (ALICE, date(2026, 10, 31), 2),  # Two entries on Oct 31 count as one day.
+    (ALICE, date(2026, 11, 1), 3),   # Oct 30, Oct 31, Nov 1.
+    (ALICE, date(2026, 11, 2), 3),   # Today is still open.
+    (ALICE, date(2026, 11, 3), 1),   # Bob's Nov 2 entry cannot bridge Alice's gap.
+    (ALICE, date(2026, 11, 5), 0),   # Neither today nor yesterday has an entry.
+    (BOB, date(2026, 11, 3), 2),
+    (uuid4(), date(2026, 11, 1), 0),
+])
+def test_current_streak(history_session, owner, as_of, expected):
+    assert current_streak(history_session, owner, as_of) == expected
