@@ -64,6 +64,13 @@ src/frontend/
 | `/login` | `LoginPage.jsx` | `GuestPage` |
 | `/register` | `RegisterPage.jsx` | `GuestPage` |
 | `/record` | `RecordPage.jsx` | `PrivatePage` |
+| `/history` | `HistoryPage.jsx` | `PrivatePage` |
+| `/journal/:id` | `EntryPage.jsx` | `PrivatePage` |
+| `/reflection` | `ReflectionPage.jsx` | `PrivatePage` |
+
+`/reflection` expects `GET /api/reflections/weekly?start=YYYY-MM-DD` (Monday),
+which the backend does not have yet. Proposed response:
+`{ summary, highlights: [], questions: [], days: [{ date, entry_count, image_url }] }`.
 
 Private routes redirect anonymous visitors to `/login`; guest routes redirect
 authenticated visitors to `/`. The provider waits for `/api/auth/me` before
@@ -134,7 +141,7 @@ to satisfy these future conventions.
 ## CSS and assets
 
 `main.jsx` imports `styles/index.css` once. It imports styles in this order:
-`login.css`, `record.css`, `global.css`, then `journal.css`. This explicit entry
+`login.css`, `record.css`, `global.css`, `journal.css`, then `journal-pages.css`. This explicit entry
 preserves the previous eager-loading cascade without relying on page module
 imports to load styles as side effects.
 
@@ -146,7 +153,7 @@ imports to load styles as side effects.
   tokens, theme switch, validation, animations, and reduced-motion rules.
 - `record.css` owns the Record layout, responsive rules, and local font faces.
   Its font URLs use `../assets/...`; preserve the accompanying font license.
-- `index.html` retains the external Be Vietnam Pro font link used by auth pages.
+- `index.html` loads Be Vietnam Pro and Lora from Google Fonts.
 
 The legacy element defaults and some auth helper selectors are intentionally
 retained with their original specificity. Other screens currently inherit them.
