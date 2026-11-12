@@ -68,9 +68,18 @@ src/frontend/
 | `/journal/:id` | `EntryPage.jsx` | `PrivatePage` |
 | `/reflection` | `ReflectionPage.jsx` | `PrivatePage` |
 
-`/reflection` expects `GET /api/reflections/weekly?start=YYYY-MM-DD` (Monday),
-which the backend does not have yet. Proposed response:
-`{ summary, highlights: [], questions: [], days: [{ date, entry_count, image_url }] }`.
+`/reflection` is the **Weekly recap** screen. Generation is explicit: POST
+`/api/reflections/weekly` with `{start: "YYYY-MM-DD", timezone: "Asia/Bangkok"}`.
+The start date is Monday; the browser supplies its IANA timezone. The implemented
+response contains `{week_start, week_end, timezone, entry_count, summary,
+highlights: [{text, entry_ids}]}`. There is no questions panel or generated image
+contract. See [weekly recaps](../../docs/weekly-recap.md).
+
+`features/reflection/reflectionApi.js` owns the API request and cancellable recap
+loader. `ReflectionPage.jsx` owns explicit Generate/Regenerate actions and the
+selected-week/account/source scope. Switching scope cancels pending work and
+discards old results even if the transport resolves after abort. No request runs
+on page mount. The seven-day strip remains entry navigation.
 
 Private routes redirect anonymous visitors to `/login`; guest routes redirect
 authenticated visitors to `/`. The provider waits for `/api/auth/me` before

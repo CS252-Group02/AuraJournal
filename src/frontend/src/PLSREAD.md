@@ -166,6 +166,12 @@ Backend authorization remains necessary regardless of frontend guards.
 
 ## 6. API rules
 
+Weekly recap uses POST `/api/reflections/weekly` with a Monday `start` and browser
+IANA `timezone`. It runs only on Generate/Regenerate, displays factual recap/key
+events, and never renders coaching questions. Keep source-ID links, empty/error
+states, and week/account/source cancellation guards. The `/reflection` route name
+is preserved. See [weekly recap documentation](../../../docs/weekly-recap.md).
+
 Use `lib/api.js` for application API requests. Preserve its API base URL handling
 (`VITE_API_URL`, default `http://localhost:8000`), `credentials: 'include'`, JSON
 serialization, `X-AuraJournal-CSRF: 1`, error formatting/status, and unauthorized
