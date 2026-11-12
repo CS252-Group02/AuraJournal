@@ -4,6 +4,7 @@ Start with the repository [README](../README.md) for prerequisites and startup.
 
 | Guide | Contents |
 | --- | --- |
+| [Weekly recap](weekly-recap.md) | Factual weekly summaries, timezone boundaries, source links, API, and verification |
 | [Accounts and private journals](authentication.md) | Registration, login/logout, seven-day sessions, journal privacy, API, code walkthrough, troubleshooting, and Google sign-in status |
 | [Application flow](application-flow.md) | Frontend-to-backend request flow and test structure |
 | [Database migrations](database/migrations.md) | Fresh setup, existing database upgrades, revision history, and backup considerations |

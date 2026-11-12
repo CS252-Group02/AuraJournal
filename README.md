@@ -163,6 +163,10 @@ npm start
 
 ## AI title suggestions
 
+Weekly recaps are available on `/reflection`: choose a week and select **Generate
+weekly recap** for a factual account of its events. This is separate from
+entry-level reflection questions. See [weekly recap API and behavior](docs/weekly-recap.md).
+
 `POST /api/ai/suggest-title` accepts journal text directly and returns one short
 title. It does not look up or save journal entries and rejects `entry_id` or any
 other extra fields. Set `GROQ_API_KEY` and optionally `GROQ_MODEL` (default:

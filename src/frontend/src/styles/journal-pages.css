@@ -161,6 +161,9 @@
 .reflection-highlights li::before { content: "✦"; position: absolute; left: 0; color: var(--aj-green); font-size: .75rem; top: .2em; }
 .reflection-questions li { padding: 14px 16px; border-radius: 14px; background: var(--aj-bg); font-family: var(--aj-serif); font-size: 1.05rem; line-height: 1.45; }
 .reflection-loading { display: grid; gap: 12px; }
+.reflection-page .recap-events { margin-top: 18px; }
+.reflection-page .recap-sources { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 4px; font-size: .8rem; }
+.reflection-page .reflection-story .aj-btn { justify-self: start; }
 .reflection-skeleton .aj-skeleton:first-child { min-height: 180px; }
 
 .memory-strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }

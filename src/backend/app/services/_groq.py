@@ -55,7 +55,8 @@ class _GroqJSONClient:
         self._model = model or groq_model()
 
     def generate(
-        self, text: str, *, system_prompt: str, response_model: type[ResponseModel]
+        self, text: str, *, system_prompt: str, response_model: type[ResponseModel],
+        max_completion_tokens: int = 300,
     ) -> ResponseModel:
         if not isinstance(text, str) or not (journal_text := text.strip()):
             raise EmptyJournalError("Journal text cannot be empty.")
@@ -70,7 +71,7 @@ class _GroqJSONClient:
                 ],
                 response_format={"type": "json_object"},
                 temperature=0,
-                max_completion_tokens=300,
+                max_completion_tokens=max_completion_tokens,
             )
         except (AuthenticationError, PermissionDeniedError) as error:
             raise AIServiceNotConfiguredError(
