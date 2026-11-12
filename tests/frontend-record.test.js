@@ -262,3 +262,31 @@ test('empty recordings and object URL failures have recoverable error states', a
     assert.equal(recorder.getSnapshot().status, 'ready');
   }
 });
+
+test('awaitable Stop coalesces callers and Reset cancels a pending final-chunk wait', async () => {
+  const first = setup();
+  await first.recorder.start();
+  const stopping = first.recorder.stop();
+  assert.equal(first.recorder.stop(), stopping);
+  const result = await stopping;
+  assert.equal(result.status, 'stopped');
+  assert.equal(await result.blob.text(), 'tail');
+  first.recorder.reset();
+  const pending = setup({ noStopEvent: true });
+  await pending.recorder.start();
+  const ending = pending.recorder.stop(); pending.recorder.reset();
+  assert.equal((await ending).cancelled, true);
+  assert.equal(pending.track.readyState, 'ended');
+});
+
+test('negotiated MIME constraints fail before requesting a second or unsupported microphone session', async () => {
+  const rejected = setup();
+  await rejected.recorder.start({ allowedMimeTypes: ['audio/mp4'] });
+  assert.equal(rejected.recorder.getSnapshot().status, 'error');
+  assert.equal(rejected.calls.length, 0);
+  const accepted = setup();
+  await accepted.recorder.start({ allowedMimeTypes: ['audio/webm;codecs=opus'] });
+  assert.equal(accepted.calls.length, 1);
+  assert.equal(accepted.recorder.getSnapshot().mimeType, 'audio/webm;codecs=opus');
+  accepted.recorder.reset();
+});

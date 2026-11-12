@@ -78,6 +78,13 @@ html:has(.record-page) { scrollbar-gutter: stable; }
   background: rgb(223 234 220 / 68%);
 }
 
+/* Readability belongs to the page background, never to a transcript card. */
+.record-page[data-has-record-image="true"] .record-background::before {
+  inset: 35% 0 0;
+  height: auto;
+  background: linear-gradient(180deg, transparent, rgb(243 243 234 / 90%) 35%, #f3f3ea);
+}
+
 .record-background::after {
   left: 4.8125%;
   top: 19.333333%;
@@ -138,7 +145,7 @@ html:has(.record-page) { scrollbar-gutter: stable; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 32px;
   min-width: 0;
   margin-top: max(32px, calc(14.666667svh - 60px));
@@ -237,23 +244,44 @@ html:has(.record-page) { scrollbar-gutter: stable; }
 .record-transcript {
   flex: 0 0 auto;
   width: min(740px, 100%);
-  min-height: clamp(180px, 23.333333svh, 210px);
-  padding: 25px 32px 32px;
-  border-radius: 24px;
-  background: rgb(255 254 250 / 91%);
+  min-height: 180px;
+  padding: 4px;
+  color: #283d36;
+  overflow-wrap: anywhere;
 }
 
-.record-page .record-transcript h2 {
-  color: #527d65;
-  font: 600 13px / normal 'AuraJournal Record Inter', sans-serif;
-}
-
-.record-page .record-transcript p {
-  margin-top: 34px;
-  padding-left: 1px;
+.record-live {
+  max-height: clamp(180px, 35svh, 420px);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
   font-size: 18px;
-  line-height: 1.4;
+  line-height: 1.6;
+  white-space: pre-wrap;
 }
+.record-page .record-transcript p { margin: 12px 0; line-height: 1.6; }
+.record-interim, .record-transcript-hint { color: #52695d; }
+.record-editor {
+  width: 100%;
+  min-height: 200px;
+  max-height: 50svh;
+  padding: 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  resize: vertical;
+  font: inherit;
+  font-size: 18px;
+  line-height: 1.6;
+  color: inherit;
+}
+.record-editor:focus { outline: 2px solid #527d65; outline-offset: 3px; }
+.record-live:focus-visible, .record-original summary:focus-visible { outline: 2px solid #527d65; outline-offset: 3px; }
+.record-original { margin: 16px 0; }
+.record-original summary { cursor: pointer; }
+.record-original p, .record-saved-text { white-space: pre-wrap; }
+.record-page .record-draft-help { font-size: 13px; color: #52695d; }
+.record-journal-link { display: inline-block; margin: 12px; color: #344e42; }
+.record-transcript .record-playback { max-width: 360px; margin: 20px auto 0; }
 
 .record-mascot {
   grid-column: 3;
