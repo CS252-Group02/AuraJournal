@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import { api } from '../lib/api.js';
 import { useAuth } from '../auth/Auth.jsx';
+import { formatEntryDate } from '../features/journal/formatEntryDate.js';
+
+const RECENT_COUNT = 3;
 
 export default function App() {
   const { user, logout } = useAuth();
@@ -101,6 +105,8 @@ export default function App() {
     }
   }
 
+  const visibleEntries = entries.slice(0, RECENT_COUNT);
+
   return (
     <main className="page">
       <header>
@@ -108,9 +114,7 @@ export default function App() {
           <span>{user.email}</span>
           <button type="button" onClick={logout}>Log out</button>
         </div>
-        <p className="eyebrow">A small space to reflect</p>
         <h1>AuraJournal</h1>
-        <p className="intro">Write a thought and see it saved to your journal.</p>
       </header>
 
       <form className="entry-form" onSubmit={submitEntry}>
@@ -137,7 +141,7 @@ export default function App() {
         <h2 id="entries-heading">Recent entries</h2>
         {entries.length === 0 && !message && <p className="empty">Your saved entries will appear here.</p>}
         <ul className="entries">
-          {entries.map((entry) => (
+          {visibleEntries.map((entry) => (
             <li key={entry.id}>
               {editing === entry.id ? (
                 <form onSubmit={saveEdit}>
@@ -166,7 +170,9 @@ export default function App() {
                 <>
                   <p>{entry.content}</p>
                   <div className="form-footer">
-                    <time dateTime={entry.created_at}>{new Date(entry.created_at).toLocaleString()}</time>
+                    <time dateTime={entry.created_at} title={new Date(entry.created_at).toLocaleString()}>
+                      {formatEntryDate(entry.created_at)}
+                    </time>
                     <div className="entry-actions">
                       <button type="button" className="secondary" onClick={() => startEdit(entry)} disabled={rowBusy}>Edit</button>
                       <button type="button" className="danger" onClick={() => askDelete(entry)} disabled={rowBusy}>Delete</button>
@@ -177,6 +183,10 @@ export default function App() {
             </li>
           ))}
         </ul>
+        <nav className="home-links" aria-label="More of your journal">
+          {entries.length > 0 && <Link to="/history">See all {entries.length} {entries.length === 1 ? 'entry' : 'entries'} →</Link>}
+          <Link to="/reflection">Weekly reflection →</Link>
+        </nav>
       </section>
 
       <dialog

@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:frontend": "node --test tests/frontend-api.test.js tests/frontend-record.test.js tests/frontend-record-flow.test.js",
+    "test:frontend": "node --test tests/frontend-api.test.js tests/frontend-record.test.js tests/frontend-record-flow.test.js tests/frontend-journal.test.js",
     "start": "node scripts/start.js",
     "dev": "vite src/frontend --config src/frontend/vite.config.js",
     "build": "vite build src/frontend --config src/frontend/vite.config.js"

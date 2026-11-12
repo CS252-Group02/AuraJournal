@@ -149,6 +149,9 @@ names listed above are intentional; renaming them is not required cleanup.
 | `/login` | `LoginPage` | `GuestPage` |
 | `/register` | `RegisterPage` | `GuestPage` |
 | `/record` | `RecordPage` | `PrivatePage` |
+| `/history` | `HistoryPage` | `PrivatePage` |
+| `/journal/:id` | `EntryPage` | `PrivatePage` |
+| `/reflection` | `ReflectionPage` | `PrivatePage` |
 
 Preserve `React.StrictMode`, `BrowserRouter`, and the single `AuthProvider` around
 the route tree. Register an authorized new route in `main.jsx`, choosing access
@@ -182,7 +185,7 @@ The existing stylesheet order is intentional:
 
 ```text
 main.jsx -> styles/index.css
-             login.css -> record.css -> global.css -> journal.css
+             login.css -> record.css -> global.css -> journal.css -> journal-pages.css
 ```
 
 Do not reorder these imports, reintroduce scattered page CSS imports, or narrow
