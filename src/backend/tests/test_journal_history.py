@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.models import JournalEntry
-from app.services.journal_history import entries_in_range
+from app.services.journal_history import daily_entry_counts, entries_in_range
 from scripts.seed_week7 import ALICE, BOB, seed_week7
 
 
@@ -44,3 +44,14 @@ def test_range_uses_selected_day_and_sorts_equal_timestamps(history_session):
 def test_range_rejects_reversed_dates(history_session):
     with pytest.raises(ValueError, match="start date"):
         entries_in_range(history_session, ALICE, date(2026, 11, 1), date(2026, 10, 31))
+
+
+def test_calendar_counts_entries_per_owner_and_day(history_session):
+    start, end = date(2026, 10, 31), date(2026, 11, 2)
+    counts = daily_entry_counts(history_session, ALICE, start, end)
+    assert list(counts.items()) == [(start, 2), (date(2026, 11, 1), 1)]
+    assert counts.get(end, 0) == 0
+    assert daily_entry_counts(history_session, BOB, start, end) == {start: 1, end: 1}
+    assert daily_entry_counts(history_session, ALICE, end, end) == {}
+    with pytest.raises(ValueError, match="start date"):
+        daily_entry_counts(history_session, ALICE, end, start)
