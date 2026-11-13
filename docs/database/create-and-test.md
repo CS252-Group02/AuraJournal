@@ -16,7 +16,7 @@ python3 -m alembic upgrade head
 python3 -m alembic current
 ```
 
-The revision should be `0003`. This creates the schema and the temporary development user. These commands use the sample credentials from `.env.example`; adjust them if your PostgreSQL role or password differs.
+The revision should be marked `(head)`. This creates the schema and the temporary development user. These commands use the sample credentials from `.env.example`; adjust them if your PostgreSQL role or password differs.
 
 If the database already contains data, read [database migration instructions](migrations.md) before applying migrations. Do not use the test database for important data.
 
@@ -36,7 +36,7 @@ SELECT current_database();
 SELECT id, email FROM users ORDER BY email;
 ```
 
-You should see the six application tables (`users`, `journal_entries`, `mood_records`, `journal_images`, `auth_sessions`, `login_attempts`), the Alembic version table, and the seeded development user.
+You should see seven application tables (`users`, `journal_entries`, `mood_records`, `journal_images`, `auth_sessions`, `login_attempts`, `weekly_reflections`), the Alembic version table, and the seeded development user.
 
 ## 3. Create three test users
 
@@ -81,12 +81,12 @@ WHERE u.email IN (
 );
 ```
 
-This creates nine journals: each user gets one entry for each sample sentence. PostgreSQL generates each journal UUID. `created_at` and `updated_at` get their database defaults.
+This creates nine journals: each user gets one entry for each sample sentence. PostgreSQL generates each journal UUID. `created_at` and `updated_at` get their database defaults, and `journal_date` defaults to the current day in `Asia/Bangkok` (UTC+7). Supply `journal_date` explicitly when creating historical sample entries.
 
 ## 5. Check who owns each journal
 
 ```sql
-SELECT u.email, e.id AS journal_id, e.content, e.created_at, e.updated_at
+SELECT u.email, e.id AS journal_id, e.content, e.journal_date, e.created_at, e.updated_at
 FROM users AS u
 JOIN journal_entries AS e ON e.user_id = u.id
 WHERE u.email LIKE '%@example.test'
