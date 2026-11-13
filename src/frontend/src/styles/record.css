@@ -260,6 +260,26 @@ html:has(.record-page) { scrollbar-gutter: stable; }
 }
 .record-page .record-transcript p { margin: 12px 0; line-height: 1.6; }
 .record-interim, .record-transcript-hint { color: #52695d; }
+.record-interim { font-style: italic; }
+.record-duration { font-size: 14px; color: #344e42; }
+.record-duration span { font-variant-numeric: tabular-nums; }
+.record-page .record-phase-title {
+  margin: 0;
+  font: 600 30px / 1.2 'AuraJournal Record Cormorant', Georgia, serif;
+  text-align: center;
+}
+.record-page .record-save {
+  background: #356b51;
+  color: #fff;
+  font-size: 16px;
+  min-height: 44px;
+}
+.record-page .record-action:disabled { opacity: .5; }
+.record-back:focus-visible, .record-journal-link:focus-visible {
+  outline: 2px solid #527d65;
+  outline-offset: 4px;
+}
+.record-back[aria-disabled="true"] { opacity: .5; }
 .record-editor {
   width: 100%;
   min-height: 200px;
@@ -403,4 +423,45 @@ html:has(.record-page) { scrollbar-gutter: stable; }
   .record-brand h1 { font-size: 23px; }
   .record-brand p { font-size: 10px; }
   .record-transcript { padding-inline: 24px; }
+}
+
+/* Later phases give the transcript and editor the available working space. */
+.record-page:is([data-record-phase="finalizing"], [data-record-phase="proofreading"],
+  [data-record-phase="review"], [data-record-phase="saving"], [data-record-phase="saved"]) .record-content {
+  grid-column: 2;
+  margin-top: 24px;
+  gap: 20px;
+}
+.record-page:is([data-record-phase="finalizing"], [data-record-phase="proofreading"],
+  [data-record-phase="review"], [data-record-phase="saving"], [data-record-phase="saved"]) .record-primary {
+  width: 100%;
+  min-height: 0;
+}
+.record-page:is([data-record-phase="finalizing"], [data-record-phase="proofreading"],
+  [data-record-phase="review"], [data-record-phase="saving"], [data-record-phase="saved"]) .record-mascot {
+  display: none;
+}
+.record-page:is([data-record-phase="review"], [data-record-phase="saving"]) .record-editor {
+  min-height: clamp(200px, 35svh, 400px);
+}
+.record-page[data-record-phase="recording"] .record-live {
+  height: clamp(180px, 35svh, 420px);
+}
+.record-page .record-original { max-height: 35svh; overflow-y: auto; }
+.record-back { text-decoration: none; }
+.record-page .record-transcript { min-width: 0; }
+
+@media (max-width: 1023px) {
+  .record-page:is([data-record-phase="finalizing"], [data-record-phase="proofreading"],
+    [data-record-phase="review"], [data-record-phase="saving"], [data-record-phase="saved"]) .record-content {
+    grid-column: 1;
+  }
+}
+@media (max-width: 600px), (max-height: 700px) {
+  .record-content { margin-top: 24px; gap: 20px; }
+  .record-primary { min-height: 0; }
+  .record-orbit { width: 220px; }
+  .record-page .record-feedback { min-height: 0; }
+  .record-mascot { display: none; }
+  .record-transcript { padding-inline: 4px; }
 }
