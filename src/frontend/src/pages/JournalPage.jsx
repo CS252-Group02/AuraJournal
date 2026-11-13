@@ -184,6 +184,7 @@ export default function App() {
           ))}
         </ul>
         <nav className="home-links" aria-label="More of your journal">
+          <Link to="/dashboard">Dashboard calendar →</Link>
           {entries.length > 0 && <Link to="/history">See all {entries.length} {entries.length === 1 ? 'entry' : 'entries'} →</Link>}
           <Link to="/reflection">Weekly recap →</Link>
         </nav>

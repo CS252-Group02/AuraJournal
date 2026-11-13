@@ -8,6 +8,7 @@ import RecordPage from './pages/RecordPage.jsx';
 import HistoryPage from './pages/HistoryPage.jsx';
 import EntryPage from './pages/EntryPage.jsx';
 import ReflectionPage from './pages/ReflectionPage.jsx';
+import DashboardPage from './pages/DashboardPage.jsx';
 import './styles/index.css';
 import { AuthProvider, GuestPage, PrivatePage } from './auth/Auth.jsx';
 
@@ -16,6 +17,7 @@ createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <AuthProvider>
         <Routes>
+          <Route path="/dashboard" element={<PrivatePage><DashboardPage /></PrivatePage>} />
           <Route
             path="/"
             element={
