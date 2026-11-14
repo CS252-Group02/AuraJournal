@@ -97,9 +97,11 @@ cookie deployments need a separately reviewed configuration.
 Editing and deleting require the same session, origin, and CSRF checks as creating
 entries. Missing entries and another account's entries both return `404`. Edits
 accept 1–5000 characters, trim whitespace, and reject blank content and extra
-fields. An edit preserves the entry ID and creation timestamp and updates
-`updated_at`. A changed entry needs a new AI summary; unchanged text keeps the
-existing summary. Deletion is permanent and is confirmed in the journal page.
+fields. An edit preserves the entry ID and creation timestamp; actual changes
+update `updated_at`, while no-op edits preserve it. Changed text needs a new AI
+summary; date-only edits keep the existing summary. See the
+[journal-management handoff](journal-management.md) for date validation and
+partial-update examples. Deletion is permanent and is confirmed in the journal page.
 CORS allows `PATCH` and `DELETE` as well as `GET` and `POST`, so the browser can
 complete preflight before sending these requests.
 

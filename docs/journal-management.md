@@ -8,7 +8,7 @@
 | B02 | Implemented: GET `/api/entries/{entry_id}` uses the existing owner filter and returns the same 404 for foreign and missing entries. |
 | B03 | Implemented: optional calendar dates at creation, content/date/both in partial PATCH, and `journal_date` in all entry responses. |
 | B04 | Existing owner-only deletion returns 204 and cascades linked records. |
-| B05 | Existing mutation tests cover isolation; a complete two-account lifecycle is the next implementation step. |
+| B05 | Implemented: two independently registered/logged-in accounts exercise private create/list/detail/edit/delete, ownership spoof rejection, session persistence across app recreation, and unchanged foreign entries. Both accounts take the owner role. |
 | B10 | Existing title, summary, and weekly-recap endpoints are tested with mocked providers. Real HTTPX network transports now fail the test immediately, including when an SDK would otherwise swallow connection errors. Transcription coverage is blocked until an authenticated transcription endpoint and its contract land. |
 
 ## Journal reads
@@ -41,6 +41,50 @@ migration head (`0007` at this handoff). This PR does not migrate the app databa
 Frontend date selection/grouping and weekly-recap filtering still need to consume
 `journal_date` in their respective integration work. They currently use creation
 timestamps. These backend changes deliberately preserve the list's old ordering.
+
+## Frontend integration example
+
+With the existing signed-in `api` helper, create and edit an entry like this:
+
+```javascript
+const entry = await api('/api/entries', {
+  method: 'POST',
+  body: { content: 'Finished our group presentation.', journal_date: '2026-11-14' },
+});
+const saved = await api(`/api/entries/${entry.id}`);
+await api(`/api/entries/${entry.id}`, {
+  method: 'PATCH',
+  body: { journal_date: '2026-11-13' },
+});
+await api(`/api/entries/${entry.id}`, { method: 'DELETE' });
+```
+
+The helper supplies session credentials and mutation headers. Use the returned
+entry on save, handle 401 by asking the user to sign in again, and treat 404 as an
+unavailable entry. Empty lists return `[]`; successful deletion has no JSON body.
+
+## Verification
+
+Run backend tests from `src/backend` with `TEST_DATABASE_URL` pointing to a
+disposable PostgreSQL database, then run frontend checks from the root:
+
+```powershell
+python -m pytest tests -q
+# From the repository root:
+npm run test:frontend
+npm run build
+```
+
+`test_journal_lifecycle.py` covers the complete two-account workflow;
+`test_entry_reads.py`, `test_entry_dates_api.py`, and `test_entry_mutations.py`
+cover invalid sessions, date boundaries/validation, unchanged edits, persisted AI
+invalidation, browser preflights, and cascading deletion. No live provider
+credentials or paid requests are needed.
+
+Verified on Windows for this handoff: **286 backend tests passed**, **69 frontend
+tests passed**, and the production build passed. Backend tests emitted one
+dependency deprecation warning from Starlette/AnyIO. Tests used isolated schemas
+in `aurajournal_test`; the local application database was not migrated or reset.
 
 ## Tests without provider charges
 
