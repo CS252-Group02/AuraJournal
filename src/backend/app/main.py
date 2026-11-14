@@ -64,6 +64,8 @@ def create_app(database_url: str | None = None) -> FastAPI:
             for item in error.errors()
         ]})
 
+    from app.routers.calendar import router as calendar_router
+    app.include_router(calendar_router)
     app.include_router(entries_router)
     app.include_router(summaries_router)
     app.include_router(titles_router)
