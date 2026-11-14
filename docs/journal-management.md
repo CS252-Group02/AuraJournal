@@ -35,7 +35,9 @@ retain their values. Dates are never converted as if they were timestamps.
 
 Owners and `created_at` cannot be changed by clients. Real updates refresh
 `updated_at`; no-op updates preserve it. Content changes clear saved AI output;
-date-only changes preserve it. There is no new migration: use the existing
+date-only changes preserve it. After integration with the pixel-art work, text
+changes also remove the old image reference and stored file; date-only changes
+preserve the image. Deletion retains that work's file cleanup. There is no new migration: use the existing
 migration head (`0007` at this handoff). This PR does not migrate the app database.
 
 Frontend date selection/grouping and weekly-recap filtering still need to consume
@@ -81,7 +83,7 @@ cover invalid sessions, date boundaries/validation, unchanged edits, persisted A
 invalidation, browser preflights, and cascading deletion. No live provider
 credentials or paid requests are needed.
 
-Verified on Windows for this handoff: **286 backend tests passed**, **69 frontend
+Verified on Windows after integrating main's pixel-art changes: **368 backend tests passed**, **69 frontend
 tests passed**, and the production build passed. Backend tests emitted one
 dependency deprecation warning from Starlette/AnyIO. Tests used isolated schemas
 in `aurajournal_test`; the local application database was not migrated or reset.
@@ -97,6 +99,10 @@ The guard is exercised without opening real connections. Existing mocked AI test
 cover valid output, invalid JSON/schema, unavailable providers, invalid credentials,
 and authorization/error contracts. They do not prove model quality or replace a
 separate, explicitly requested live evaluation with fictional input.
+
+The integrated pixel-art provider and endpoint tests also use fakes/MockTransport;
+the same HTTP guard applies to PixelLab calls. Date-only and combined text/date
+edits are checked against real local image storage with fake generated PNGs.
 
 B10 is **partially complete**, not fully complete or silently skipped: there is no
 audio-upload/transcription endpoint in the current backend. Once it lands, add
