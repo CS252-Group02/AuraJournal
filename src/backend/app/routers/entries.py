@@ -42,6 +42,11 @@ def owned_entry(entry_id: UUID, session: Session, user: User) -> JournalEntry:
     return entry
 
 
+@router.get("/{entry_id}", response_model=EntryResponse)
+def get_entry(entry_id: UUID, session: Session = Depends(get_session), user: User = Depends(current_user)):
+    return owned_entry(entry_id, session, user)
+
+
 @router.patch("/{entry_id}", response_model=EntryResponse)
 def update_entry(entry_id: UUID, payload: EntryCreate,
                  session: Session = Depends(get_session), user: User = Depends(current_user)):

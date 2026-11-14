@@ -5,11 +5,20 @@
 | Task | Current handoff |
 | --- | --- |
 | B01 | Existing authenticated owner-filtered list; retain its newest-created-first ordering. |
-| B02 | Owner-protected individual entry read is the next implementation step. |
+| B02 | Implemented: GET `/api/entries/{entry_id}` uses the existing owner filter and returns the same 404 for foreign and missing entries. |
 | B03 | The database has journal dates; HTTP date creation/editing is the next implementation step. |
 | B04 | Existing owner-only deletion returns 204 and cascades linked records. |
 | B05 | Existing mutation tests cover isolation; a complete two-account lifecycle is the next implementation step. |
 | B10 | Existing title, summary, and weekly-recap endpoints are tested with mocked providers. Real HTTPX network transports now fail the test immediately, including when an SDK would otherwise swallow connection errors. Transcription coverage is blocked until an authenticated transcription endpoint and its contract land. |
+
+## Journal reads
+
+Both GET `/api/entries` and GET `/api/entries/{entry_id}` require a valid account
+session. The list stays ordered by `created_at DESC, id DESC`, preserving the
+existing client contract. The detail endpoint returns one `EntryResponse`, never
+an owner ID or account credentials. Missing/foreign resources both return 404;
+anonymous, invalid, expired, revoked, and disabled sessions return 401. Invalid
+UUIDs return 422. Private responses use `Cache-Control: no-store`.
 
 ## Tests without provider charges
 
