@@ -88,10 +88,10 @@ cookie deployments need a separately reviewed configuration.
 | POST `/api/auth/login` | `{email, password}` → `200 {id, email}`, session cookie; invalid/disabled credentials → `401` |
 | GET `/api/auth/me` | `{id, email}`; anonymous/invalid/expired session → `401` |
 | POST `/api/auth/logout` | Send `{}`; revokes session, clears cookie, returns `204` even if already logged out |
-| POST `/api/entries` | `{content}` → entry owned by the verified current user |
+| POST `/api/entries` | `{content, journal_date?}` → entry owned by the verified current user |
 | GET `/api/entries` | Only the verified current user's entries |
 | GET `/api/entries/{entry_id}` | One owned entry; missing and foreign-owned entries both return `404` |
-| PATCH `/api/entries/{entry_id}` | `{content}` updates an owned entry; returns the updated entry; clears the saved AI summary if content changes |
+| PATCH `/api/entries/{entry_id}` | `{content?, journal_date?}` updates an owned entry; at least one field required; clears saved AI output only if content changes |
 | DELETE `/api/entries/{entry_id}` | Deletes an owned entry and linked mood/image records; returns `204` |
 
 Editing and deleting require the same session, origin, and CSRF checks as creating

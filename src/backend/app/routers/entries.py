@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.database import get_session
 from app.auth import current_user
 from app.models import JournalEntry, User
-from app.schemas.entries import EntryCreate, EntryResponse
+from app.schemas.entries import EntryCreate, EntryResponse, EntryUpdate
 
 router = APIRouter(prefix="/api/entries", tags=["entries"])
 
@@ -17,7 +17,8 @@ def create_entry(payload: EntryCreate, session: Session = Depends(get_session), 
     content = payload.content.strip()
     if not content:
         raise HTTPException(status_code=422, detail="Entry content cannot be blank.")
-    entry = JournalEntry(content=content, user_id=user.id)
+    dates = payload.model_dump(include={"journal_date"}, exclude_unset=True)
+    entry = JournalEntry(content=content, user_id=user.id, **dates)
     session.add(entry)
     session.commit()
     session.refresh(entry)
@@ -48,18 +49,22 @@ def get_entry(entry_id: UUID, session: Session = Depends(get_session), user: Use
 
 
 @router.patch("/{entry_id}", response_model=EntryResponse)
-def update_entry(entry_id: UUID, payload: EntryCreate,
+def update_entry(entry_id: UUID, payload: EntryUpdate,
                  session: Session = Depends(get_session), user: User = Depends(current_user)):
     entry = owned_entry(entry_id, session, user)
-    content = payload.content.strip()
-    if not content:
-        raise HTTPException(422, "Entry content cannot be blank.")
-    if entry.content != content:
-        entry.content = content
-        # Saved AI output describes the previous content and must be regenerated.
-        entry.ai_summary = None
-        entry.ai_reflection_question = None
-        entry.ai_summarized_at = None
+    updates = payload.model_dump(exclude_unset=True)
+    if "content" in updates:
+        content = updates["content"].strip()
+        if not content:
+            raise HTTPException(422, "Entry content cannot be blank.")
+        if entry.content != content:
+            entry.content = content
+            # Saved AI output describes the previous content and must be regenerated.
+            entry.ai_summary = None
+            entry.ai_reflection_question = None
+            entry.ai_summarized_at = None
+    if "journal_date" in updates:
+        entry.journal_date = updates["journal_date"]
     session.commit()
     session.refresh(entry)
     return entry
