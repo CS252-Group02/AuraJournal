@@ -37,6 +37,13 @@ class StreakResponse(BaseModel):
     current_streak: int
 
 
+class DashboardResponse(StreakResponse):
+    year: int
+    month: int
+    entry_count: int
+    active_days: int
+
+
 def month_counts(session, owner, year, month):
     start = date(year, month, 1)
     end = date(year, month, calendar.monthrange(year, month)[1])
@@ -59,3 +66,10 @@ def streak(session: Session = Depends(get_session), user: User = Depends(current
     return dict(as_of=as_of, timezone=ZONE, current_streak=current_streak(session, user.id, as_of))
 
 
+@router.get("/dashboard", response_model=DashboardResponse)
+def dashboard(year: int = Query(ge=1, le=9999), month: int = Query(ge=1, le=12),
+              session: Session = Depends(get_session), user: User = Depends(current_user),
+              as_of: date = Depends(today)):
+    _, _, counts = month_counts(session, user.id, year, month)
+    return dict(year=year, month=month, entry_count=sum(counts.values()), active_days=len(counts),
+                as_of=as_of, timezone=ZONE, current_streak=current_streak(session, user.id, as_of))
