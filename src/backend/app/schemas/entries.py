@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -13,6 +13,7 @@ class EntryCreate(BaseModel):
 class EntryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
+    journal_date: date
     id: UUID
     content: str
     ai_summary: str | None
