@@ -6,6 +6,7 @@ Start with the repository [README](../README.md) for prerequisites and startup.
 | --- | --- |
 | [Weekly recap](weekly-recap.md) | Factual weekly summaries, timezone boundaries, source links, API, and verification |
 | [Accounts and private journals](authentication.md) | Registration, login/logout, seven-day sessions, journal privacy, API, code walkthrough, troubleshooting, and Google sign-in status |
+| [Journal-management API handoff](journal-management.md) | Person 1 task status, private detail reads, date-aware partial edits, two-user CRUD tests, and the transcription dependency |
 | [Application flow](application-flow.md) | Frontend-to-backend request flow and test structure |
 | [Database migrations](database/migrations.md) | Fresh setup, existing database upgrades, revision history, and backup considerations |
 | [Week 7 Data & Security handoff (Vietnamese)](database/week-07-data.md) | D01–D08, PowerShell setup, repeatable sample journals, SQL checks and a runnable calendar and streak demo |
