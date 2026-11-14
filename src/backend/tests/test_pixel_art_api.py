@@ -314,6 +314,31 @@ def test_uncertain_commit_does_not_delete_referenced_file(pixel_app):
         app.state.session_factory = factory
 
 
+@pytest.mark.parametrize("change_text", [False, True])
+def test_date_edit_preserves_image_unless_text_also_changes(pixel_app, change_text):
+    app = pixel_app
+    entry = create(app)
+    generated = call(app, "POST", path(entry), json={})
+    assert generated.status_code == 201
+    content_url = generated.json()["image"]["content_url"]
+    payload = {"journal_date": "2024-02-29"}
+    if change_text:
+        payload["content"] = "A different experience."
+    updated = call(app, "PATCH", f"/api/entries/{entry['id']}", json=payload)
+    assert updated.status_code == 200
+    assert updated.json()["journal_date"] == "2024-02-29"
+    assert updated.json()["created_at"] == entry["created_at"]
+    image = call(app, "GET", content_url)
+    if change_text:
+        assert image.status_code == 404
+        assert_no_files(app)
+    else:
+        assert image.status_code == 200
+        assert image.content == png()
+        assert call(app, "GET", path(entry)).json()["image"] == generated.json()["image"]
+    app.state.pixellab_client.generate.assert_called_once()
+
+
 def test_locks_release_on_failure_without_leaking_into_pool(pixel_app):
     entry_id = uuid4()
     with pytest.raises(RuntimeError):

@@ -77,7 +77,7 @@ The MVP uses `Asia/Bangkok` (UTC+7) for journal days. `journal_date` is a requir
 
 Revision `0005` first adds a nullable column, fills it from `(created_at AT TIME ZONE 'Asia/Bangkok')::date`, then applies `NOT NULL` and the default `(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok')::date`. The old schema recorded no separate journal day, so the backfill assumes the local creation day. New ORM and direct SQL inserts that omit the date receive the current UTC+7 transaction date, regardless of the database session's timezone. Historical/test inserts should set `journal_date` explicitly.
 
-Creation timestamps stay unchanged when the journal date is edited. ORM updates refresh `updated_at`; direct SQL must set it explicitly. This migration does not add a timestamp trigger. The current HTTP entry payload still accepts only `content`; date selection in API requests/responses is the Backend integration step for B03. A future API should pass a supplied calendar date through without treating it as a timestamp.
+Creation timestamps stay unchanged when the journal date is edited. ORM updates refresh `updated_at`; direct SQL must set it explicitly. This migration does not add a timestamp trigger. HTTP creation now accepts an optional `journal_date` alongside `content`; PATCH accepts content, date, or both. Entry responses expose the calendar date without timezone conversion. See [journal management](../journal-management.md) for B03 validation and the remaining frontend/weekly integration work.
 
 After the model change, run migration `0005` before restarting the backend. To verify the local database in `psql`:
 

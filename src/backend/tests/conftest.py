@@ -5,9 +5,25 @@ from uuid import uuid4
 from alembic import command
 from alembic.config import Config
 import pytest
+import httpx
 from sqlalchemy import create_engine, text
 
 from app.database import make_engine
+
+
+@pytest.fixture(autouse=True)
+def block_external_http(monkeypatch):
+    """Provider calls must be fakes; ASGI/MockTransport and PostgreSQL still work."""
+    def blocked(*args, **kwargs):
+        # pytest's failure derives from BaseException, so SDK retry/error handlers
+        # cannot swallow it and accidentally make a provider-error test pass.
+        pytest.fail("Real HTTP is forbidden in automated tests. Inject a fake provider or MockTransport.")
+
+    async def blocked_async(*args, **kwargs):
+        blocked()
+
+    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", blocked)
+    monkeypatch.setattr(httpx.AsyncHTTPTransport, "handle_async_request", blocked_async)
 
 
 @pytest.fixture
