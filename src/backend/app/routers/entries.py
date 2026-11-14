@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -37,7 +37,7 @@ def list_entries(session: Session = Depends(get_session), user: User = Depends(c
 def owned_entry(entry_id: UUID, session: Session, user: User) -> JournalEntry:
     entry = session.scalar(select(JournalEntry).where(
         JournalEntry.id == entry_id, JournalEntry.user_id == user.id,
-    ))
+    ).with_for_update())
     if entry is None:
         raise HTTPException(404, "Journal entry was not found.")
     return entry
@@ -49,30 +49,35 @@ def get_entry(entry_id: UUID, session: Session = Depends(get_session), user: Use
 
 
 @router.patch("/{entry_id}", response_model=EntryResponse)
-def update_entry(entry_id: UUID, payload: EntryUpdate,
+def update_entry(entry_id: UUID, payload: EntryCreate, request: Request,
                  session: Session = Depends(get_session), user: User = Depends(current_user)):
     entry = owned_entry(entry_id, session, user)
-    updates = payload.model_dump(exclude_unset=True)
-    if "content" in updates:
-        content = updates["content"].strip()
-        if not content:
-            raise HTTPException(422, "Entry content cannot be blank.")
-        if entry.content != content:
-            entry.content = content
-            # Saved AI output describes the previous content and must be regenerated.
-            entry.ai_summary = None
-            entry.ai_reflection_question = None
-            entry.ai_summarized_at = None
-    if "journal_date" in updates:
-        entry.journal_date = updates["journal_date"]
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(422, "Entry content cannot be blank.")
+    old_image_key = None
+    if entry.content != content:
+        entry.content = content
+        # Saved AI output describes the previous content and must be regenerated.
+        entry.ai_summary = None
+        entry.ai_reflection_question = None
+        entry.ai_summarized_at = None
+        if entry.image is not None:
+            old_image_key = entry.image.image_url
+            session.delete(entry.image)
     session.commit()
     session.refresh(entry)
+    if old_image_key is not None:
+        request.app.state.image_storage.delete(old_image_key)
     return entry
 
 
 @router.delete("/{entry_id}", status_code=204)
-def delete_entry(entry_id: UUID, session: Session = Depends(get_session), user: User = Depends(current_user)):
+def delete_entry(entry_id: UUID, request: Request, session: Session = Depends(get_session), user: User = Depends(current_user)):
     entry = owned_entry(entry_id, session, user)
+    old_image_key = entry.image.image_url if entry.image is not None else None
     session.delete(entry)
     session.commit()
+    if old_image_key is not None:
+        request.app.state.image_storage.delete(old_image_key)
     return Response(status_code=204)

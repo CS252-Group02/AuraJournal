@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from uuid import UUID
 
 # Owner of the temporary unauthenticated journal flow; also seeded by migration 0002.
@@ -22,3 +23,16 @@ def groq_api_key() -> str | None:
 
 def groq_model() -> str:
     return os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b")
+
+
+def pixellab_enabled() -> bool:
+    return os.environ.get("PIXELLAB_ENABLED", "false").lower() == "true"
+
+
+def pixellab_api_key() -> str | None:
+    return os.environ.get("PIXELLAB_API_KEY")
+
+
+def journal_image_storage_dir() -> Path:
+    default = Path(__file__).resolve().parents[3] / "var" / "journal-images"
+    return Path(os.environ.get("JOURNAL_IMAGE_STORAGE_DIR", "").strip() or default)
