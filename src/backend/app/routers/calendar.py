@@ -31,6 +31,12 @@ class CalendarResponse(BaseModel):
     days: list[DayCount]
 
 
+class StreakResponse(BaseModel):
+    as_of: date
+    timezone: str
+    current_streak: int
+
+
 def month_counts(session, owner, year, month):
     start = date(year, month, 1)
     end = date(year, month, calendar.monthrange(year, month)[1])
@@ -45,5 +51,11 @@ def monthly_calendar(year: int = Query(ge=1, le=9999), month: int = Query(ge=1, 
         dict(date=start + timedelta(days=offset), count=counts.get(start + timedelta(days=offset), 0))
         for offset in range((end - start).days + 1)
     ])
+
+
+@router.get("/stats/streak", response_model=StreakResponse)
+def streak(session: Session = Depends(get_session), user: User = Depends(current_user),
+           as_of: date = Depends(today)):
+    return dict(as_of=as_of, timezone=ZONE, current_streak=current_streak(session, user.id, as_of))
 
 
