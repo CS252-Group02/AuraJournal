@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -32,6 +33,12 @@ def list_entries(session: Session = Depends(get_session), user: User = Depends(c
         .where(JournalEntry.user_id == user.id)
         .order_by(JournalEntry.created_at.desc(), JournalEntry.id.desc())
     ))
+
+
+@router.get("/by-date", response_model=list[EntryResponse])
+def entries_by_date(date: date, session: Session = Depends(get_session), user: User = Depends(current_user)):
+    from app.services.journal_history import entries_in_range
+    return entries_in_range(session, user.id, date, date)
 
 
 def owned_entry(entry_id: UUID, session: Session, user: User) -> JournalEntry:
