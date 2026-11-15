@@ -8,6 +8,14 @@ from app.services.ai_journal import (
     JournalSummaryError,
 )
 from app.services.ai_title import JournalTitle, JournalTitleGenerator
+from app.services.deepgram import (
+    DeepgramConfigurationError,
+    DeepgramError,
+    DeepgramInvalidResponseError,
+    DeepgramStreamingClient,
+    DeepgramTimeoutError,
+    DeepgramUnavailableError,
+)
 
 __all__ = [
     "AIInvalidResponseError",
@@ -19,4 +27,10 @@ __all__ = [
     "JournalSummaryError",
     "JournalTitle",
     "JournalTitleGenerator",
+    "DeepgramConfigurationError",
+    "DeepgramError",
+    "DeepgramInvalidResponseError",
+    "DeepgramStreamingClient",
+    "DeepgramTimeoutError",
+    "DeepgramUnavailableError",
 ]
