@@ -8,6 +8,7 @@ from argon2.exceptions import InvalidHashError, VerificationError
 from fastapi import Depends, HTTPException, Request, Response
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
+from starlette.requests import HTTPConnection
 
 from app.config import frontend_origin
 from app.database import get_session
@@ -31,7 +32,11 @@ def cookie_secure():
     return os.environ.get("AUTH_COOKIE_SECURE", "false").lower() == "true"
 
 
-def require_browser_request(request: Request):
+def require_browser_request(request: HTTPConnection):
+    if request.scope["type"] == "websocket":
+        # Browser WebSockets cannot send our custom HTTP CSRF header. Their
+        # route checks Origin and the session cookie before accepting instead.
+        return
     if request.method in {"GET", "HEAD", "OPTIONS"}:
         return
     if request.headers.get("origin") != frontend_origin() or request.headers.get("x-aurajournal-csrf") != "1":
@@ -51,15 +56,18 @@ def verify_password(password: str, stored_hash: str) -> bool:
         return False
 
 
-def current_user(request: Request, session: Session = Depends(get_session)) -> User:
-    token = request.cookies.get(COOKIE_NAME, "")
+def authenticated_session(session: Session, token: str) -> tuple[User, AuthSession]:
     record = session.get(AuthSession, digest(token)) if token else None
     if record is None or record.expires_at <= utcnow():
         raise HTTPException(401, "Please log in.")
     user = session.get(User, record.user_id)
     if user is None or user.password_hash.startswith("!"):
         raise HTTPException(401, "Please log in.")
-    return user
+    return user, record
+
+
+def current_user(request: Request, session: Session = Depends(get_session)) -> User:
+    return authenticated_session(session, request.cookies.get(COOKIE_NAME, ""))[0]
 
 
 def issue_session(session: Session, request: Request, response: Response, user: User):

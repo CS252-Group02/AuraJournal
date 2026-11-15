@@ -144,7 +144,7 @@ def test_silence_and_unconfirmed_text_are_not_counted_as_final(draft, retracted)
         normalizer.consume(result("late final", final=True))
 
 
-def test_adapter_integrates_with_a02_and_completes_after_final_results():
+def test_adapter_integrates_with_transport_and_completes_after_final_results():
     socket = FakeSocket(final_events=[result("Hôm nay.", final=True), {"type": "Metadata"}])
     socket.incoming.put_nowait(json.dumps({"type": "Metadata", "phase": "early"}))
     socket.incoming.put_nowait(json.dumps(result("Hôm", end=1)))

@@ -1,18 +1,22 @@
-# Deepgram streaming and transcript mapping — Week 7 A02–A04
+# Deepgram streaming
 
-A02 provides a reusable asynchronous Python service for streaming audio to
+The transport provides a reusable asynchronous Python service for streaming audio to
 Deepgram. It opens one provider WebSocket per take, sends original audio bytes,
 yields provider JSON events as they arrive, and releases the connection on
 completion, errors, or cancellation. It does not read or write the database,
 save audio, open a microphone, or automatically retry a billable connection.
 
-A03 adds per-take transcript normalization for the existing Record frontend:
+Per-take transcript normalization supports the existing Record frontend:
 interim revisions, immutable final segments, and a completion count. It consumes
-A02's raw events without changing the provider transport or enabling an endpoint.
+raw provider events without changing the transport.
 
-A04 adds `transcribe_audio()` to supervise sending/receiving, distinguish
-no-speech and incomplete results, return safe error envelopes, and clean up on
+The `transcribe_audio()` helper supervises sending/receiving, distinguishes
+no-speech and incomplete results, returns safe error envelopes, and cleans up on
 failure, cancellation, or early consumer exit.
+
+The authenticated browser WebSocket is available at `/api/transcriptions/live`.
+It bridges the existing Record protocol to these services. The application still does
+not upload/persist audio or save a journal automatically.
 
 This is the transport for the agreed live-transcript direction. The existing
 `external_api_tests/deepgram/test.py` remains an older file-transcription
@@ -48,14 +52,14 @@ independent stream. An optional connector can be injected for offline tests.
 
 | Method | Behavior |
 | --- | --- |
-| `transcribe_audio(audio_chunks, session_id=...)` | Recommended A04 entry point; yields segments then one complete/error event and owns task/connection cleanup. |
+| `transcribe_audio(audio_chunks, session_id=..., on_connected=...)` | Yields segments then one complete/error, owns cleanup, and optionally notifies the caller after the provider connection opens. |
 | `client.connect(mime_type="audio/webm;codecs=opus")` | Async context manager; authenticates to Deepgram with the backend key. |
 | `stream.send_audio(chunk)` | Sends nonempty `bytes` unchanged. Calls must follow source order. |
 | `stream.events()` | One async iterator per take; yields raw provider JSON objects, including `Results` and terminal `Metadata`. |
 | `stream.finish()` | Sends `CloseStream` once and waits for the concurrent reader to consume terminal metadata. No further audio is accepted. |
 | `stream.aclose()` | Idempotent cleanup/abort; also called automatically when leaving the context. |
 
-**When using the lower-level A02 interface, consume events concurrently with sending audio and calling `finish()`.**
+**When using the lower-level transport interface, consume events concurrently with sending audio and calling `finish()`.**
 `finish()` deliberately waits for the reader; it is not a replacement for reading
 the final transcript. A second reader is rejected. The caller must cancel and
 await its receiver task when its own producer fails or the take is abandoned.
@@ -79,7 +83,7 @@ async def transcribe(audio_chunks, handle_event):
 Use an async iterator of binary chunks and a unique server-generated session ID.
 Keep the event handler responsive and the source cancellable. The helper owns a
 bounded 16-event queue; it cancels and awaits both tasks when either fails,
-closes the input iterator if supported, and exits the provider context. B06 still
+closes the input iterator if supported, and exits the provider context. The WebSocket endpoint
 owns browser authentication and browser disconnect/Reset handling.
 
 Provider [`CloseStream`](https://developers.deepgram.com/docs/close-stream)
@@ -88,17 +92,17 @@ provider connection. The service waits for the metadata consumed by `events()`;
 sending the command alone is not a successful completion. An early provider
 disconnect is a failure, even with a normal WebSocket close code. An intentional
 transport close propagates cancellation rather than masquerading as a normal
-source end; it can never make A03 emit a false `complete`.
+source end; it can never make the normalizer emit a false `complete`.
 
 Defaults are 10 seconds to open/send, 12 seconds for the whole finish operation
 (including sending the command), and a bounded close handshake. The provider receive queue holds at most 16
 frames, with a 1 MiB message limit. There is no ordinary read timeout while
-recording because silence may produce no results. A04 separately allows 8 seconds
+recording because silence may produce no results. The session helper separately allows 8 seconds
 to receive the next audio chunk (configurable with `audio_timeout`). Silent audio
 chunks still count as activity; this is not an 8-second speech-recognition limit.
-B06–B07 own recording duration, audio-size limits, and authentication.
+The WebSocket endpoint owns recording duration, audio-size limits, and authentication.
 
-## Transcript normalization (A03)
+## Transcript normalization
 
 `normalize_transcript_events(stream.events(), session_id=...)` is the normal
 integration entry point. It replaces the raw reader in the example above and
@@ -144,7 +148,7 @@ user's already displayed text for manual review. No LLM correction is performed.
 
 An empty final retracts any corresponding interim guess rather than counting it
 as a spoken phrase. A silence-only take therefore completes with `final_count: 0`.
-After A02's raw iterator successfully exhausts, the adapter emits:
+After the provider's raw iterator successfully exhausts, the adapter emits:
 
 ```json
 {"type": "complete", "session_id": "take-1", "final_count": 1, "outcome": "transcribed"}
@@ -152,7 +156,7 @@ After A02's raw iterator successfully exhausts, the adapter emits:
 
 The count is the number of nonempty final segments sent to the browser, matching
 `transcriptState.js`. Metadata alone does not emit `complete`; the adapter waits
-for A02's successful end. Source errors, invalid results, cancellation, or early
+for a successful transport end. Source errors, invalid results, cancellation, or early
 closure never produce a successful completion event. Unconfirmed text at the end
 remains interim so the existing frontend can flag it for review.
 
@@ -160,7 +164,7 @@ The additive `outcome` field distinguishes `transcribed` (one or more finals and
 no pending text), `no_speech` (successful processing without any final or pending
 text), and `incomplete` (text remains unconfirmed, with or without final segments).
 It does not alter `final_count` or promote uncertain text. Existing frontend
-merging still works; B06 can use the outcome for more specific user messages.
+merging still works; the frontend can use the outcome for more specific user messages.
 
 For isolated reducers, `TranscriptNormalizer.consume(event)` returns a list of
 zero or more `segment` dictionaries, `.final_count` exposes the count, and
@@ -168,7 +172,7 @@ zero or more `segment` dictionaries, `.final_count` exposes the count, and
 successful source end; it is idempotent and prevents later `.consume()` calls.
 Do not reuse a normalizer across accounts or recording takes.
 
-## Safe errors and cancellation (A04)
+## Safe errors and cancellation
 
 `transcribe_audio()` yields exactly one terminal `complete` or `error` event for
 an ordinary completed/failed take. Cancellation propagates as `CancelledError`;
@@ -208,24 +212,87 @@ raise `RuntimeError`. These are not silently reclassified as provider failures.
 Raw provider events are private internal data and must not be forwarded wholesale
 to the browser or logged.
 
-## Remaining tasks
+## Outstanding verification
 
-The A02 transport, A03 normalization, and A04 service lifecycle/error policy are implemented:
+- Record live Vietnamese/English evaluation and actual browser behavior.
+- Expand validation/adversarial coverage and deployment limits beyond the current
+  format, protocol, byte-size, duration, and safe-error checks.
 
-- **A05:** record live Vietnamese/English evaluation and actual browser behavior.
-- **B06–B07:** add the authenticated browser WebSocket, Origin checks, limits,
-  protocol validation, cancellation, and integration with the A03 adapter.
+The frontend path remains disabled by default; enable it deliberately as below.
 
-No browser transcription endpoint is added or enabled by A02–A04. The frontend's
-current fixed `language: "vi"` and proposed protocol still need the later
-integration changes before setting `VITE_RECORD_TRANSCRIPTION_PATH`.
+## Browser WebSocket
+
+Set the backend `DEEPGRAM_API_KEY` and set this in your frontend `.env.local`:
+
+```dotenv
+VITE_RECORD_TRANSCRIPTION_PATH=/api/transcriptions/live
+```
+
+Restart the frontend after changing Vite environment variables. Keep
+`VITE_API_URL=http://localhost:8000` and the configured `FRONTEND_ORIGIN` consistent
+with the browser address. Use `ws://` locally and `wss://` behind HTTPS. The normal
+frontend adapter derives the WebSocket scheme from `VITE_API_URL`.
+
+The browser must already be logged in. Its existing session cookie is sent to
+the `/api/` path. The backend requires an exact configured `Origin`; missing or
+foreign origins, missing/expired/revoked sessions, and disabled accounts are
+rejected before accepting the connection or accessing Deepgram. It does not
+accept credentials in query parameters or client-selected user IDs. WebSockets
+use this cookie/Origin check rather than the HTTP JSON/CSRF-header dependency;
+HTTP endpoints retain their existing checks. CORS alone does not authenticate a
+WebSocket. See [FastAPI WebSockets](https://fastapi.tiangolo.com/advanced/websockets/).
+
+Session checks use short DB sessions in a thread pool, never a database connection
+held through recording. The session is checked before acceptance, before provider
+access, before successful completion, and every 30 seconds while connected (or
+at expiry if sooner). Revocation during a live take stops it on the next check
+with `auth_expired`; the existing frontend treats this as requiring login.
+
+Protocol sequence, with one server-generated ID for each connection:
+
+1. Backend sends `{"type":"ready","session_id":"...","accepted_mime_types":["audio/webm;codecs=opus"]}`.
+2. Frontend sends `{"type":"start","session_id":"...","mime_type":"audio/webm;codecs=opus","language":"multi"}`.
+3. Backend opens Deepgram and sends `{"type":"started","session_id":"..."}` only after it is ready.
+4. Frontend sends ordered binary audio chunks; backend sends normalized `segment` messages as results arrive.
+5. After sending the recorder's final chunk, frontend sends `{"type":"finish","session_id":"..."}`.
+6. Backend flushes Deepgram, sends final segments and `complete`, then closes normally.
+
+The current frontend's fixed `language: "vi"` is also accepted as a compatibility
+alias for the same agreed Vietnamese/English multilingual configuration; it does
+not switch the provider to Vietnamese-only. No frontend code change is required
+to begin integration. Proofreading and idempotent saving remain separate
+contracts: leave their optional settings disabled until implemented.
+
+Only the documented fields are accepted in start/finish controls. Audio before
+`started`, extra start/finish fields, a different session ID, a duplicate start,
+or messages after finish are invalid. The initial permission/start window is 60
+seconds, allowing time to answer the microphone prompt; the provider handshake
+uses an 8-second timeout within the frontend's 10-second start deadline.
+
+The endpoint enforces 1 MiB per binary chunk, 10 MiB total audio, 5 minutes after a valid
+start, and 4 KiB per control message. The session helper's 8-second input inactivity timeout
+still applies once the provider is connected. Limits produce `limit_exceeded`;
+malformed controls produce `invalid_request`. Unsupported MIME produces
+`invalid_audio`. Failed session revalidation produces `auth_expired` or
+`database_unavailable`, with no DB/provider details exposed.
+
+Normal completion closes with 1000. Invalid controls/audio/session state close
+with 1008; ordinary provider failures close with 1011 after the safe error event.
+Rejected upgrades may appear as a failed handshake rather than an accessible HTTP
+status in the browser. The current adapter probes `/api/auth/me` to distinguish
+expired authentication from ordinary connection failure.
+
+Closing/resetting the browser connection cancels provider opening, recording, or
+final-result waiting. The endpoint keeps a disconnect observer during the
+handshake and after finish, hands off the sole browser reader safely, and awaits
+all service/watch tasks during cleanup. It does not reconnect or retry audio.
 
 ## Offline verification
 
 From `src/backend`, with the virtual environment active:
 
 ```sh
-python -m pytest tests/test_transcription_session.py tests/test_transcription.py tests/test_deepgram_service.py tests/test_http_isolation.py -q
+python -m pytest tests/test_transcriptions_api.py tests/test_transcription_session.py tests/test_transcription.py tests/test_deepgram_service.py tests/test_http_isolation.py -q
 ```
 
 These tests inject a fake provider, need neither PostgreSQL nor a real API key,
@@ -234,7 +301,12 @@ provider connections. They verify provider configuration, binary order, concurre
 receive/finalization, failures, timeout, cancellation, and independent takes.
 Normalization tests also cover revisions, duplicate provider packets versus real
 repeated phrases, partial finals, cumulative overlaps, retracted guesses, Unicode,
-malformed responses, and A02-to-A03 completion/error behavior.
-The compact A04 tests cover silence versus empty audio, safe error codes, idle
+malformed responses, and transport-to-normalizer completion/error behavior.
+Session tests cover silence versus empty audio, safe error codes, idle
 input cancellation, timeout, task/iterator cancellation, and absence of leaked tasks.
-They do not establish live recognition quality or A05 completion.
+Endpoint tests exercise the actual FastAPI WebSocket route and shared session lookup
+rules with in-memory session rows and a fake provider. They check negotiation,
+binary order, final completion, rejected cookies/origins, revocation, malformed
+starts, size limits, and disconnects during opening/recording/final flush. These
+do not replace real PostgreSQL authentication or browser/microphone verification.
+They do not establish live recognition quality.

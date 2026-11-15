@@ -23,6 +23,8 @@ from app.routers.pixel_art import router as pixel_art_router
 from app.services.image_storage import ImageStorage
 from app.services.pixel_art import MomentExtractor
 from app.services.pixellab import PixelLabClient
+from app.routers.transcriptions import router as transcriptions_router
+from app.services import DeepgramStreamingClient
 
 
 def create_app(database_url: str | None = None) -> FastAPI:
@@ -41,6 +43,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
     app.state.journal_summarizer = JournalSummarizer()
     app.state.journal_title_generator = JournalTitleGenerator()
     app.state.weekly_recap_generator = WeeklyRecapGenerator()
+    app.state.deepgram_streaming_client = DeepgramStreamingClient(open_timeout=8)
     app.state.moment_extractor = MomentExtractor()
     app.state.pixellab_client = PixelLabClient()
     app.state.image_storage = ImageStorage(journal_image_storage_dir())
@@ -83,6 +86,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
     app.include_router(auth_router)
     app.include_router(reflections_router)
     app.include_router(pixel_art_router)
+    app.include_router(transcriptions_router)
     return app
 
 

@@ -1,4 +1,4 @@
-"""A03: reduce ordered, single-channel Deepgram events to the Record protocol."""
+"""Reduce ordered, single-channel Deepgram events to the Record protocol."""
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, replace
@@ -210,7 +210,7 @@ class TranscriptNormalizer:
         return segments
 
     def complete(self) -> TranscriptComplete:
-        """Call only after A02's event iterator has successfully exhausted.
+        """Call only after the provider event iterator has successfully exhausted.
 
         Remaining interim text stays unconfirmed for manual review. Metadata or
         speech_final alone must never promote it or finish the browser session.
@@ -226,9 +226,9 @@ class TranscriptNormalizer:
 async def normalize_transcript_events(
     events: AsyncIterator[dict], *, session_id: str,
 ) -> AsyncIterator[TranscriptSegment | TranscriptComplete]:
-    """Adapt A02 events for B06; source errors/cancellation never emit complete.
+    """Adapt provider events for the browser; errors/cancellation never emit complete.
 
-    This is the one reader for stream.events(). A02 still owns the provider
+    This is the one reader for stream.events(). The transport owns the provider
     connection; consume this concurrently with send_audio() and finish().
     """
     normalizer = TranscriptNormalizer(session_id)

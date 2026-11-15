@@ -1,7 +1,7 @@
-"""A04: supervise one cancellable take; B06 supplies authenticated audio chunks."""
+"""Supervise one cancellable take from an authenticated audio source."""
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 import math
 
 from app.services.deepgram import (
@@ -13,6 +13,7 @@ from app.services.transcription import TranscriptNormalizer, normalize_transcrip
 async def transcribe_audio(
     audio_chunks: AsyncIterator[bytes], *, session_id: str,
     client: DeepgramStreamingClient | None = None, audio_timeout: float = 8,
+    on_connected: Callable[[], Awaitable[None]] | None = None,
 ) -> AsyncIterator[dict]:
     """Yield segments then one complete/error; cancellation emits neither.
 
@@ -28,6 +29,8 @@ async def transcribe_audio(
     async def run():
         try:
             async with (client or DeepgramStreamingClient()).connect() as stream:
+                if on_connected is not None:
+                    await on_connected()
                 async def send():
                     received_audio = False
                     while True:
