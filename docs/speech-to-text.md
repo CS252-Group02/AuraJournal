@@ -1,4 +1,4 @@
-# Deepgram streaming and transcript mapping — Week 7 A02–A03
+# Deepgram streaming and transcript mapping — Week 7 A02–A04
 
 A02 provides a reusable asynchronous Python service for streaming audio to
 Deepgram. It opens one provider WebSocket per take, sends original audio bytes,
@@ -9,6 +9,10 @@ save audio, open a microphone, or automatically retry a billable connection.
 A03 adds per-take transcript normalization for the existing Record frontend:
 interim revisions, immutable final segments, and a completion count. It consumes
 A02's raw events without changing the provider transport or enabling an endpoint.
+
+A04 adds `transcribe_audio()` to supervise sending/receiving, distinguish
+no-speech and incomplete results, return safe error envelopes, and clean up on
+failure, cancellation, or early consumer exit.
 
 This is the transport for the agreed live-transcript direction. The existing
 `external_api_tests/deepgram/test.py` remains an older file-transcription
@@ -44,13 +48,14 @@ independent stream. An optional connector can be injected for offline tests.
 
 | Method | Behavior |
 | --- | --- |
+| `transcribe_audio(audio_chunks, session_id=...)` | Recommended A04 entry point; yields segments then one complete/error event and owns task/connection cleanup. |
 | `client.connect(mime_type="audio/webm;codecs=opus")` | Async context manager; authenticates to Deepgram with the backend key. |
 | `stream.send_audio(chunk)` | Sends nonempty `bytes` unchanged. Calls must follow source order. |
 | `stream.events()` | One async iterator per take; yields raw provider JSON objects, including `Results` and terminal `Metadata`. |
 | `stream.finish()` | Sends `CloseStream` once and waits for the concurrent reader to consume terminal metadata. No further audio is accepted. |
 | `stream.aclose()` | Idempotent cleanup/abort; also called automatically when leaving the context. |
 
-**Consume events concurrently with sending audio and calling `finish()`.**
+**When using the lower-level A02 interface, consume events concurrently with sending audio and calling `finish()`.**
 `finish()` deliberately waits for the reader; it is not a replacement for reading
 the final transcript. A second reader is rejected. The caller must cancel and
 await its receiver task when its own producer fails or the take is abandoned.
@@ -58,49 +63,40 @@ await its receiver task when its own producer fails or the take is abandoned.
 Integration pattern (Python 3.10+, not an automatically executed live test):
 
 ```python
-import asyncio
+from contextlib import aclosing
 
-from app.services import DeepgramStreamingClient, normalize_transcript_events
+from app.services import transcribe_audio
 
 
 async def transcribe(audio_chunks, handle_event):
-    async with DeepgramStreamingClient().connect() as stream:
-        async def receive():
-            async for event in normalize_transcript_events(
-                stream.events(), session_id="one-server-generated-id-per-take",
-            ):
-                await handle_event(event)  # Only normalized segment/complete events.
-
-        async def send():
-            async for chunk in audio_chunks:
-                await stream.send_audio(chunk)
-            await stream.finish()
-
-        tasks = [asyncio.create_task(send()), asyncio.create_task(receive())]
-        try:
-            await asyncio.gather(*tasks)
-        finally:
-            for task in tasks:
-                task.cancel()
-            await asyncio.gather(*tasks, return_exceptions=True)
+    async with aclosing(transcribe_audio(
+        audio_chunks, session_id="one-server-generated-id-per-take",
+    )) as events:
+        async for event in events:
+            await handle_event(event)  # Only segment, complete, or safe error events.
 ```
 
-Keep the event handler responsive. In B06, supervise producer and receiver so
-failure in either immediately cancels the other, including when the browser is
-idle. Do not use a slow producer that cannot be cancelled.
+Use an async iterator of binary chunks and a unique server-generated session ID.
+Keep the event handler responsive and the source cancellable. The helper owns a
+bounded 16-event queue; it cancels and awaits both tasks when either fails,
+closes the input iterator if supported, and exits the provider context. B06 still
+owns browser authentication and browser disconnect/Reset handling.
 
 Provider [`CloseStream`](https://developers.deepgram.com/docs/close-stream)
 flushes remaining audio, sends final results and metadata, and shuts down the
 provider connection. The service waits for the metadata consumed by `events()`;
 sending the command alone is not a successful completion. An early provider
-disconnect is a failure, even with a normal WebSocket close code. Empty transcript
-events remain raw events; deciding the application's no-speech outcome is A04.
+disconnect is a failure, even with a normal WebSocket close code. An intentional
+transport close propagates cancellation rather than masquerading as a normal
+source end; it can never make A03 emit a false `complete`.
 
 Defaults are 10 seconds to open/send, 12 seconds for the whole finish operation
 (including sending the command), and a bounded close handshake. The provider receive queue holds at most 16
 frames, with a 1 MiB message limit. There is no ordinary read timeout while
-recording because silence may produce no results. The caller owns recording
-duration, audio-size limits, idle policy, and authentication.
+recording because silence may produce no results. A04 separately allows 8 seconds
+to receive the next audio chunk (configurable with `audio_timeout`). Silent audio
+chunks still count as activity; this is not an 8-second speech-recognition limit.
+B06–B07 own recording duration, audio-size limits, and authentication.
 
 ## Transcript normalization (A03)
 
@@ -151,7 +147,7 @@ as a spoken phrase. A silence-only take therefore completes with `final_count: 0
 After A02's raw iterator successfully exhausts, the adapter emits:
 
 ```json
-{"type": "complete", "session_id": "take-1", "final_count": 1}
+{"type": "complete", "session_id": "take-1", "final_count": 1, "outcome": "transcribed"}
 ```
 
 The count is the number of nonempty final segments sent to the browser, matching
@@ -160,35 +156,67 @@ for A02's successful end. Source errors, invalid results, cancellation, or early
 closure never produce a successful completion event. Unconfirmed text at the end
 remains interim so the existing frontend can flag it for review.
 
+The additive `outcome` field distinguishes `transcribed` (one or more finals and
+no pending text), `no_speech` (successful processing without any final or pending
+text), and `incomplete` (text remains unconfirmed, with or without final segments).
+It does not alter `final_count` or promote uncertain text. Existing frontend
+merging still works; B06 can use the outcome for more specific user messages.
+
 For isolated reducers, `TranscriptNormalizer.consume(event)` returns a list of
 zero or more `segment` dictionaries, `.final_count` exposes the count, and
 `.complete()` returns the final envelope. Call `.complete()` only after a known
 successful source end; it is idempotent and prevents later `.consume()` calls.
 Do not reuse a normalizer across accounts or recording takes.
 
-## Errors and remaining tasks
+## Safe errors and cancellation (A04)
 
-All service errors derive from `DeepgramError` and use fixed messages without
-provider bodies, credentials, or submitted audio:
+`transcribe_audio()` yields exactly one terminal `complete` or `error` event for
+an ordinary completed/failed take. Cancellation propagates as `CancelledError`;
+explicit `aclose()` emits no terminal event. Use `aclosing()` as above so leaving
+an `async for` loop early also cancels/awaits its worker and releases resources.
+Already emitted segments remain usable for manual review; no automatic retry or
+database write occurs after failure or cancellation.
 
-- `DeepgramConfigurationError`: missing/invalid key or rejected credentials.
-- `DeepgramUnavailableError`: connection/provider failure or incomplete stream.
-- `DeepgramInvalidResponseError`: invalid provider JSON/envelope.
-- `DeepgramTimeoutError`: opening, sending, or finishing exceeded its deadline.
+All expected service errors derive from `DeepgramError`. Its `to_event(session_id)`
+method returns only a fixed public message and code, never arbitrary exception
+text, provider bodies, credentials, close reasons, or submitted audio:
 
-Invalid method arguments raise `ValueError`; invalid lifecycle operations raise
-`RuntimeError`. Cancellation propagates so callers can stop work. Raw events are
-private internal data; errors are sanitized, but successful event contents must
-not be forwarded wholesale to the browser or logged.
+| Code | Error class / situation |
+| --- | --- |
+| `invalid_audio` | `DeepgramInvalidAudioError`: no chunks, empty/nonbinary chunks, unsupported MIME, or provider `DATA-0000` decode failure. |
+| `not_configured` | `DeepgramConfigurationError`: missing/invalid key, or handshake 400/401/403. |
+| `rate_limited` | `DeepgramRateLimitedError`: provider handshake 429; no automatic retry. |
+| `timeout` | `DeepgramTimeoutError`: input/open/send/finish deadline, handshake 408/504, or provider `NET-0000/0001/0002`. |
+| `invalid_response` | `DeepgramInvalidResponseError`: invalid JSON, transcript shape, or unmappable overlapping timestamps. |
+| `provider_unavailable` | `DeepgramUnavailableError`: other provider/connection failures or early provider close. |
 
-The A02 transport and A03 normalization are implemented, with basic safeguards:
+For example: `{"type":"error","session_id":"take-1","code":"invalid_audio","message":"Audio is empty, unsupported, or could not be decoded. Please record again."}`.
+The codec itself is validated by Deepgram; the service does not pretend that each
+individual container chunk can be decoded or validated independently. See
+[Deepgram's decode/network errors](https://developers.deepgram.com/docs/stt-troubleshooting-websocket-data-and-net-errors).
 
-- **A04:** finalize application policy for silence, bad audio, retries, and errors.
+An empty recording is `invalid_audio`, while a valid stream with no recognized
+speech is `no_speech`; no provider error or timeout is classified as silence.
+During quiet recording continue sending actual audio chunks. If chunks stop for
+the input timeout, the session fails rather than being kept alive indefinitely.
+Opening, sending, finishing, and the close handshake are bounded. Concurrent
+closes share one shielded cleanup task; a failed close handshake aborts the TCP
+transport when available.
+
+Invalid programmer arguments still raise `ValueError`; invalid lifecycle calls
+raise `RuntimeError`. These are not silently reclassified as provider failures.
+Raw provider events are private internal data and must not be forwarded wholesale
+to the browser or logged.
+
+## Remaining tasks
+
+The A02 transport, A03 normalization, and A04 service lifecycle/error policy are implemented:
+
 - **A05:** record live Vietnamese/English evaluation and actual browser behavior.
 - **B06–B07:** add the authenticated browser WebSocket, Origin checks, limits,
   protocol validation, cancellation, and integration with the A03 adapter.
 
-No browser transcription endpoint is added or enabled by A02–A03. The frontend's
+No browser transcription endpoint is added or enabled by A02–A04. The frontend's
 current fixed `language: "vi"` and proposed protocol still need the later
 integration changes before setting `VITE_RECORD_TRANSCRIPTION_PATH`.
 
@@ -197,7 +225,7 @@ integration changes before setting `VITE_RECORD_TRANSCRIPTION_PATH`.
 From `src/backend`, with the virtual environment active:
 
 ```sh
-python -m pytest tests/test_transcription.py tests/test_deepgram_service.py tests/test_http_isolation.py -q
+python -m pytest tests/test_transcription_session.py tests/test_transcription.py tests/test_deepgram_service.py tests/test_http_isolation.py -q
 ```
 
 These tests inject a fake provider, need neither PostgreSQL nor a real API key,
@@ -207,4 +235,6 @@ receive/finalization, failures, timeout, cancellation, and independent takes.
 Normalization tests also cover revisions, duplicate provider packets versus real
 repeated phrases, partial finals, cumulative overlaps, retracted guesses, Unicode,
 malformed responses, and A02-to-A03 completion/error behavior.
+The compact A04 tests cover silence versus empty audio, safe error codes, idle
+input cancellation, timeout, task/iterator cancellation, and absence of leaked tasks.
 They do not establish live recognition quality or A05 completion.

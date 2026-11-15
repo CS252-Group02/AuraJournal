@@ -265,7 +265,8 @@ def test_finish_timeout_closes_socket_and_releases_receiver():
             receiver = asyncio.create_task(collect(stream))
             with pytest.raises(DeepgramTimeoutError, match="completion"):
                 await stream.finish()
-            assert await receiver == []
+            with pytest.raises(DeepgramTimeoutError, match="completion"):
+                await receiver
         assert socket.close_calls == 1
 
     asyncio.run(run())
@@ -285,7 +286,8 @@ def test_finish_deadline_includes_sending_the_close_command():
             receiver = asyncio.create_task(collect(stream))
             with pytest.raises(DeepgramTimeoutError, match="completion"):
                 await stream.finish()
-            assert await receiver == []
+            with pytest.raises(DeepgramTimeoutError, match="completion"):
+                await receiver
         assert socket.close_calls == 1
 
     asyncio.run(run())

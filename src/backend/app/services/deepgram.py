@@ -8,6 +8,7 @@ import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 import json
+import math
 from typing import Protocol
 from urllib.parse import urlencode
 
@@ -28,9 +29,18 @@ SUPPORTED_MIME_TYPES = ("audio/webm;codecs=opus",)
 class DeepgramError(RuntimeError):
     """Safe service error; never includes provider details or journal content."""
 
+    code = "provider_unavailable"
+    public_message = "Speech service is unavailable. Please try again later."
+
+    def to_event(self, session_id: str) -> dict:
+        # Never serialize str(self): a caller could have supplied private details.
+        return {"type": "error", "session_id": session_id,
+                "code": self.code, "message": self.public_message}
+
 
 class DeepgramConfigurationError(DeepgramError):
-    pass
+    code = "not_configured"
+    public_message = "Speech service is not configured correctly."
 
 
 class DeepgramUnavailableError(DeepgramError):
@@ -38,11 +48,32 @@ class DeepgramUnavailableError(DeepgramError):
 
 
 class DeepgramInvalidResponseError(DeepgramError):
-    pass
+    code = "invalid_response"
+    public_message = "Speech service returned an invalid transcript. Please try again."
 
 
 class DeepgramTimeoutError(DeepgramError):
-    pass
+    code = "timeout"
+    public_message = "Transcription timed out. Review your recording before trying again."
+
+
+class DeepgramInvalidAudioError(DeepgramError, ValueError):
+    code = "invalid_audio"
+    public_message = "Audio is empty, unsupported, or could not be decoded. Please record again."
+
+
+class DeepgramRateLimitedError(DeepgramUnavailableError):
+    code = "rate_limited"
+    public_message = "Speech service is busy. Please try again later."
+
+
+def provider_stream_error(code: str) -> DeepgramError:
+    """Map only known provider codes; never return the raw reason/description."""
+    if code.startswith("DATA-0000"):
+        return DeepgramInvalidAudioError("Audio could not be decoded.")
+    if code.startswith(("NET-0000", "NET-0001", "NET-0002")):
+        return DeepgramTimeoutError("Speech service timed out.")
+    return DeepgramUnavailableError("Speech service connection failed.")
 
 
 class _Socket(Protocol):
@@ -70,12 +101,15 @@ class DeepgramStream:
         self._reading_started = False
         self._completed = False
         self._receive_error: DeepgramError | None = None
+        self._close_task: asyncio.Task | None = None
 
     async def _send(self, message: str | bytes) -> None:
         try:
             await asyncio.wait_for(self._socket.send(message), self._send_timeout)
         except (TimeoutError, asyncio.TimeoutError):
             error = DeepgramTimeoutError("Speech service send timed out.")
+        except ConnectionClosed as closed:
+            error = provider_stream_error(closed.rcvd.reason if closed.rcvd else "")
         except (OSError, WebSocketException):
             error = DeepgramUnavailableError("Speech service connection failed.")
         else:
@@ -87,7 +121,7 @@ class DeepgramStream:
     async def send_audio(self, audio: bytes) -> None:
         """Send one nonempty chunk unchanged, without retries or conversion."""
         if not isinstance(audio, bytes) or not audio:
-            raise ValueError("Audio must be nonempty bytes.")
+            raise DeepgramInvalidAudioError("Audio must be nonempty bytes.")
         async with self._writes:
             if self._closed or self._finishing or self._done.is_set():
                 raise RuntimeError("This speech stream no longer accepts audio.")
@@ -107,10 +141,12 @@ class DeepgramStream:
             while True:
                 try:
                     raw = await self._socket.recv()
-                except ConnectionClosed:
+                except ConnectionClosed as closed:
                     if self._closed:
-                        return
-                    raise DeepgramUnavailableError("Speech stream ended before completion.") from None
+                        if self._receive_error is not None:
+                            raise self._receive_error from None
+                        raise asyncio.CancelledError
+                    raise provider_stream_error(closed.rcvd.reason if closed.rcvd else "") from None
                 except OSError:
                     raise DeepgramUnavailableError("Speech service connection failed.") from None
                 except WebSocketException:
@@ -124,7 +160,8 @@ class DeepgramStream:
                 except (ValueError, TypeError):
                     raise DeepgramInvalidResponseError("Speech service returned an invalid response.") from None
                 if event["type"] == "Error":
-                    raise DeepgramUnavailableError("Speech service could not transcribe the audio.")
+                    code = event.get("code", event.get("err_code", ""))
+                    raise provider_stream_error(code if isinstance(code, str) else "")
                 terminal = self._finishing and event["type"] == "Metadata"
                 if terminal:
                     self._completed = True
@@ -148,8 +185,9 @@ class DeepgramStream:
         try:
             await asyncio.wait_for(self._finish(), self._finish_timeout)
         except (TimeoutError, asyncio.TimeoutError):
+            self._receive_error = DeepgramTimeoutError("Speech service completion timed out.")
             await self.aclose()
-            raise DeepgramTimeoutError("Speech service completion timed out.") from None
+            raise self._receive_error from None
 
     async def _finish(self) -> None:
         async with self._writes:
@@ -166,15 +204,21 @@ class DeepgramStream:
 
     async def aclose(self) -> None:
         """Release the connection; safe after success, errors, and cancellation."""
-        if self._closed:
-            return
-        self._closed = True
-        self._done.set()
+        if self._close_task is None:
+            self._closed = True
+            self._done.set()
+            self._close_task = asyncio.create_task(self._close_socket())
+        # Concurrent closes share cleanup; cancelling one waiter cannot cancel it.
+        await asyncio.shield(self._close_task)
+
+    async def _close_socket(self) -> None:
         try:
             await asyncio.wait_for(self._socket.close(), 3)
         except (TimeoutError, asyncio.TimeoutError, OSError, WebSocketException):
-            # Cleanup must not hide the original service/cancellation error.
-            pass
+            # A failed close handshake must not leave a live TCP transport behind.
+            transport = getattr(self._socket, "transport", None)
+            if transport is not None:
+                transport.abort()
 
 
 class DeepgramStreamingClient:
@@ -187,8 +231,8 @@ class DeepgramStreamingClient:
     ):
         self._api_key = api_key
         self._connector = connector
-        if any(value <= 0 for value in (open_timeout, send_timeout, finish_timeout)):
-            raise ValueError("Speech service timeouts must be positive.")
+        if any(not math.isfinite(value) or value <= 0 for value in (open_timeout, send_timeout, finish_timeout)):
+            raise ValueError("Speech service timeouts must be positive and finite.")
         self._open_timeout = open_timeout
         self._send_timeout = send_timeout
         self._finish_timeout = finish_timeout
@@ -197,7 +241,7 @@ class DeepgramStreamingClient:
     async def connect(self, *, mime_type: str = SUPPORTED_MIME_TYPES[0]) -> AsyncIterator[DeepgramStream]:
         """Open one WebM/Opus stream. Missing credentials never open a socket."""
         if mime_type not in SUPPORTED_MIME_TYPES:
-            raise ValueError("Unsupported streaming audio format.")
+            raise DeepgramInvalidAudioError("Unsupported streaming audio format.")
         key = deepgram_api_key() if self._api_key is None else self._api_key
         if not isinstance(key, str) or not key.strip() or "\r" in key or "\n" in key:
             raise DeepgramConfigurationError("DEEPGRAM_API_KEY is not configured correctly.")
@@ -212,8 +256,12 @@ class DeepgramStreamingClient:
         except (TimeoutError, asyncio.TimeoutError):
             raise DeepgramTimeoutError("Speech service connection timed out.") from None
         except InvalidStatus as error:
-            if error.response.status_code in {401, 403}:
-                raise DeepgramConfigurationError("Speech service credentials were rejected.") from None
+            if error.response.status_code in {400, 401, 403}:
+                raise DeepgramConfigurationError("Speech service credentials or settings were rejected.") from None
+            if error.response.status_code == 429:
+                raise DeepgramRateLimitedError("Speech service rate limit reached.") from None
+            if error.response.status_code in {408, 504}:
+                raise DeepgramTimeoutError("Speech service connection timed out.") from None
             raise DeepgramUnavailableError("Speech service is unavailable.") from None
         except (OSError, WebSocketException):
             raise DeepgramUnavailableError("Speech service is unavailable.") from None

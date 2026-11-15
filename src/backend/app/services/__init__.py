@@ -12,6 +12,8 @@ from app.services.deepgram import (
     DeepgramConfigurationError,
     DeepgramError,
     DeepgramInvalidResponseError,
+    DeepgramInvalidAudioError,
+    DeepgramRateLimitedError,
     DeepgramStreamingClient,
     DeepgramTimeoutError,
     DeepgramUnavailableError,
@@ -22,6 +24,7 @@ from app.services.transcription import (
     TranscriptSegment,
     normalize_transcript_events,
 )
+from app.services.transcription_session import transcribe_audio
 
 __all__ = [
     "AIInvalidResponseError",
@@ -36,6 +39,8 @@ __all__ = [
     "DeepgramConfigurationError",
     "DeepgramError",
     "DeepgramInvalidResponseError",
+    "DeepgramInvalidAudioError",
+    "DeepgramRateLimitedError",
     "DeepgramStreamingClient",
     "DeepgramTimeoutError",
     "DeepgramUnavailableError",
@@ -43,4 +48,5 @@ __all__ = [
     "TranscriptNormalizer",
     "TranscriptSegment",
     "normalize_transcript_events",
+    "transcribe_audio",
 ]

@@ -49,7 +49,8 @@ def test_interim_updates_finalization_and_duplicate_packets():
     for late in (result("Hôm nay.", end=3, final=True), result("different", end=3, final=True),
                  result("late interim", end=2.5)):
         assert normalizer.consume(late) == []
-    assert normalizer.complete() == {"type": "complete", "session_id": "take-1", "final_count": 1}
+    assert normalizer.complete() == {"type": "complete", "session_id": "take-1",
+                                     "final_count": 1, "outcome": "transcribed"}
 
 
 def test_real_repeated_phrases_are_kept():
@@ -164,7 +165,8 @@ def test_adapter_integrates_with_a02_and_completes_after_final_results():
             await stream.finish()
             await receiver
         assert emitted == [segment("Hôm"), segment("Hôm nay.", revision=1, final=True),
-                           {"type": "complete", "session_id": "take-1", "final_count": 1}]
+                           {"type": "complete", "session_id": "take-1",
+                            "final_count": 1, "outcome": "transcribed"}]
 
     asyncio.run(run())
 

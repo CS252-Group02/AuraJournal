@@ -5,7 +5,7 @@ from dataclasses import dataclass, replace
 import math
 from typing import Literal, TypedDict
 
-from app.services.deepgram import DeepgramInvalidResponseError, DeepgramUnavailableError
+from app.services.deepgram import DeepgramInvalidResponseError, provider_stream_error
 
 
 # Provider timestamps can differ slightly at the same audio boundary.
@@ -26,6 +26,7 @@ class TranscriptComplete(TypedDict):
     type: Literal["complete"]
     session_id: str
     final_count: int
+    outcome: Literal["transcribed", "no_speech", "incomplete"]
 
 
 @dataclass(frozen=True, repr=False)
@@ -172,7 +173,8 @@ class TranscriptNormalizer:
         if not isinstance(event, dict) or not isinstance(event.get("type"), str):
             raise _invalid_response()
         if event["type"] == "Error":
-            raise DeepgramUnavailableError("Speech service could not transcribe the audio.")
+            code = event.get("code", event.get("err_code", ""))
+            raise provider_stream_error(code if isinstance(code, str) else "")
         if event["type"] != "Results":
             return []  # Metadata, pause detection, and future non-result events.
         result = _read_result(event)
@@ -214,7 +216,11 @@ class TranscriptNormalizer:
         speech_final alone must never promote it or finish the browser session.
         """
         self._finished = True
-        return {"type": "complete", "session_id": self._session_id, "final_count": self._final_count}
+        outcome = "incomplete" if self._pending and self._pending.result.text else (
+            "transcribed" if self._final_count else "no_speech"
+        )
+        return {"type": "complete", "session_id": self._session_id,
+                "final_count": self._final_count, "outcome": outcome}
 
 
 async def normalize_transcript_events(
