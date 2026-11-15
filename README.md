@@ -163,13 +163,14 @@ npm start
 
 `npm start` installs npm dependencies when needed, then runs the backend and frontend together with `[backend]` and `[frontend]` log labels. Press Ctrl+C to stop both. The launcher uses `.venv`'s Python when available; otherwise it uses `python3` on Linux/macOS or `python` on Windows. Make sure the Python backend dependencies and `.env` are set up as described above. Open `http://localhost:5173` when Vite is ready. The API provides `POST /api/entries` with `{"content":"..."}` and `GET /api/entries`.
 
-## Speech-to-text service (A02)
+## Speech-to-text service (A02–A03)
 
-The reusable asynchronous Deepgram streaming service is available for backend
-integration. Set backend `DEEPGRAM_API_KEY`; see the [service guide](docs/speech-to-text.md)
-for WebM/Opus input, concurrent audio/event handling, and offline tests. Browser
-WebSocket endpoints and transcript normalization remain A03–A05/B06–B07 work;
-this service alone does not enable live transcription on the Record page.
+The reusable asynchronous Deepgram streaming service and transcript normalizer
+are available for backend integration. Set backend `DEEPGRAM_API_KEY`; see the
+[service guide](docs/speech-to-text.md) for WebM/Opus input, interim/final segment
+mapping, concurrent audio/event handling, and offline tests. Browser WebSocket
+endpoints and live evaluation remain A04–A05/B06–B07 work; these services alone
+do not enable live transcription on the Record page.
 
 ## AI title suggestions
 

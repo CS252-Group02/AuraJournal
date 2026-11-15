@@ -16,6 +16,12 @@ from app.services.deepgram import (
     DeepgramTimeoutError,
     DeepgramUnavailableError,
 )
+from app.services.transcription import (
+    TranscriptComplete,
+    TranscriptNormalizer,
+    TranscriptSegment,
+    normalize_transcript_events,
+)
 
 __all__ = [
     "AIInvalidResponseError",
@@ -33,4 +39,8 @@ __all__ = [
     "DeepgramStreamingClient",
     "DeepgramTimeoutError",
     "DeepgramUnavailableError",
+    "TranscriptComplete",
+    "TranscriptNormalizer",
+    "TranscriptSegment",
+    "normalize_transcript_events",
 ]

@@ -1,4 +1,4 @@
-"""A02: asynchronous Deepgram transport; application transcript mapping is A03.
+"""A02 transport; A03 application mapping lives in services.transcription.
 
 Read events concurrently with sending audio and calling finish(). Each context
 owns one provider connection, with no automatic retries or audio persistence.

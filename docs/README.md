@@ -4,7 +4,7 @@ Start with the repository [README](../README.md) for prerequisites and startup.
 
 | Guide | Contents |
 | --- | --- |
-| [Speech-to-text streaming service](speech-to-text.md) | A02 Deepgram service, configuration, async integration, offline tests, and remaining A03–A05/B06–B07 work |
+| [Speech-to-text streaming service](speech-to-text.md) | A02–A03 Deepgram transport and transcript normalization, async integration, offline tests, and remaining A04–A05/B06–B07 work |
 | [Weekly recap](weekly-recap.md) | Factual weekly summaries, timezone boundaries, source links, API, and verification |
 | [Accounts and private journals](authentication.md) | Registration, login/logout, seven-day sessions, journal privacy, API, code walkthrough, troubleshooting, and Google sign-in status |
 | [Journal-management API handoff](journal-management.md) | Person 1 task status, private detail reads, date-aware partial edits, two-user CRUD tests, and the transcription dependency |
