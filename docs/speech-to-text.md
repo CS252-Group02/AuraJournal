@@ -195,8 +195,12 @@ text, provider bodies, credentials, close reasons, or submitted audio:
 | `provider_unavailable` | `DeepgramUnavailableError`: other provider/connection failures or early provider close. |
 
 For example: `{"type":"error","session_id":"take-1","code":"invalid_audio","message":"Audio is empty, unsupported, or could not be decoded. Please record again."}`.
-The codec itself is validated by Deepgram; the service does not pretend that each
-individual container chunk can be decoded or validated independently. See
+The endpoint checks the initial EBML/WebM signature, buffering a split prefix
+without changing chunk order. A missing, truncated, or mismatching prefix is
+`invalid_audio`; no mismatching prefix is forwarded to Deepgram. This signature
+is an initial container-family check, not proof of a valid WebM/Opus track. Full
+codec/content decoding remains with Deepgram, and later chunks are not expected
+to contain independent file headers. See
 [Deepgram's decode/network errors](https://developers.deepgram.com/docs/stt-troubleshooting-websocket-data-and-net-errors).
 
 An empty recording is `invalid_audio`, while a valid stream with no recognized
@@ -215,8 +219,6 @@ to the browser or logged.
 ## Outstanding verification
 
 - Record live Vietnamese/English evaluation and actual browser behavior.
-- Expand validation/adversarial coverage and deployment limits beyond the current
-  format, protocol, byte-size, duration, and safe-error checks.
 
 The frontend path remains disabled by default; enable it deliberately as below.
 
@@ -263,21 +265,30 @@ not switch the provider to Vietnamese-only. No frontend code change is required
 to begin integration. Proofreading and idempotent saving remain separate
 contracts: leave their optional settings disabled until implemented.
 
-Only the documented fields are accepted in start/finish controls. Audio before
+Only the documented string fields are accepted in start/finish controls. Invalid
+JSON, duplicate keys, non-finite numbers, deeply nested payloads, and non-string
+values are rejected without echoing input or parser errors. Audio before
 `started`, extra start/finish fields, a different session ID, a duplicate start,
 or messages after finish are invalid. The initial permission/start window is 60
 seconds, allowing time to answer the microphone prompt; the provider handshake
 uses an 8-second timeout within the frontend's 10-second start deadline.
 
 The endpoint enforces 1 MiB per binary chunk, 10 MiB total audio, 5 minutes after a valid
-start, and 4 KiB per control message. The session helper's 8-second input inactivity timeout
-still applies once the provider is connected. Limits produce `limit_exceeded`;
+start, and 4 KiB per control message measured as UTF-8 bytes. Empty binary chunks
+are rejected. A fixed one-second window allows at most 64 audio/finish messages
+after start, accommodating the recorder's normal four chunks per second and its
+startup buffer while bounding tiny-message floods. The session helper's 8-second
+input timeout still applies while waiting for each validated chunk, including a
+complete initial signature. Limits produce `limit_exceeded`;
 malformed controls produce `invalid_request`. Unsupported MIME produces
 `invalid_audio`. Failed session revalidation produces `auth_expired` or
 `database_unavailable`, with no DB/provider details exposed.
 
 Normal completion closes with 1000. Invalid controls/audio/session state close
-with 1008; ordinary provider failures close with 1011 after the safe error event.
+with 1008; provider, database, and response-timeout failures close with 1011 after
+the safe error event. Sending a browser response has a 5-second deadline; closing
+the browser socket has a 2-second deadline, so a slow client cannot hold cleanup
+indefinitely.
 Rejected upgrades may appear as a failed handshake rather than an accessible HTTP
 status in the browser. The current adapter probes `/api/auth/me` to distinguish
 expired authentication from ordinary connection failure.
@@ -287,12 +298,30 @@ final-result waiting. The endpoint keeps a disconnect observer during the
 handshake and after finish, hands off the sole browser reader safely, and awaits
 all service/watch tasks during cleanup. It does not reconnect or retry audio.
 
+### Server transport limits
+
+The normal backend launcher selects Uvicorn's `websockets` transport with a 1 MiB
+message limit, a four-message receive queue, and per-message compression disabled.
+This bounds buffering before the application receives a message; application
+checks alone cannot prevent a server's default larger receive buffer.
+
+For a direct launch from `src/backend`, use the same options:
+
+```sh
+python -m uvicorn app.main:app --env-file ../../.env --ws websockets --ws-max-size 1048576 --ws-max-queue 4 --ws-per-message-deflate false
+```
+
+Transport-level oversized messages close with 1009 before the endpoint can send
+a JSON error. Other application validation failures send the documented safe
+error envelope before closing. These per-connection limits do not impose a
+cross-worker account quota or global provider concurrency limit.
+
 ## Offline verification
 
 From `src/backend`, with the virtual environment active:
 
 ```sh
-python -m pytest tests/test_transcriptions_api.py tests/test_transcription_session.py tests/test_transcription.py tests/test_deepgram_service.py tests/test_http_isolation.py -q
+python -m pytest tests/test_transcription_validation.py tests/test_transcriptions_api.py tests/test_transcription_session.py tests/test_transcription.py tests/test_deepgram_service.py tests/test_http_isolation.py -q
 ```
 
 These tests inject a fake provider, need neither PostgreSQL nor a real API key,
@@ -310,3 +339,9 @@ binary order, final completion, rejected cookies/origins, revocation, malformed
 starts, size limits, and disconnects during opening/recording/final flush. These
 do not replace real PostgreSQL authentication or browser/microphone verification.
 They do not establish live recognition quality.
+
+Validation tests cover malformed controls, duplicate JSON keys, oversized UTF-8
+controls, empty/wrong/truncated audio headers, header splits, exact byte limits,
+message floods, wrong protocol phases, deadlines, slow replies, and safe database
+failures. The Uvicorn transport was also checked on loopback with a message over
+1 MiB; it closed with 1009 without opening a provider connection.

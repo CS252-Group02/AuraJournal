@@ -173,7 +173,8 @@ and offline tests. The backend exposes the authenticated WebSocket at
 `/api/transcriptions/live`. Set frontend
 `VITE_RECORD_TRANSCRIPTION_PATH=/api/transcriptions/live` locally and restart Vite
 to integrate the existing Record flow. The path remains disabled by default.
-Further validation and live Vietnamese/English evaluation remain outstanding.
+Format/protocol validation and bounded streaming limits are implemented. Live
+Vietnamese/English evaluation remains outstanding.
 
 ## AI title suggestions
 

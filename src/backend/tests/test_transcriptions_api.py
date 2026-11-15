@@ -19,6 +19,7 @@ from test_transcription import result
 
 PATH = "/api/transcriptions/live"
 ORIGIN = {"Origin": "http://localhost:5173"}
+WEBM_HEADER = b"\x1a\x45\xdf\xa3"
 
 
 @pytest.fixture
@@ -69,14 +70,14 @@ def test_cookie_authenticated_stream_negotiates_and_returns_final_transcript(set
         start(ws, ready, language=language)
         assert ws.receive_json() == {"type": "started", "session_id": ready["session_id"]}
         assert not sessions  # No database connection is held while recording.
-        ws.send_bytes(b"header")
+        ws.send_bytes(WEBM_HEADER)
         ws.send_bytes(b"last audio")
         ws.send_json({"type": "finish", "session_id": ready["session_id"]})
         final, complete = ws.receive_json(), ws.receive_json()
         assert final["text"] == "Hôm nay." and final["is_final"] is True
         assert complete == {"type": "complete", "session_id": ready["session_id"],
                             "final_count": 1, "outcome": "transcribed"}
-    assert provider.sent == [b"header", b"last audio", json.dumps({"type": "CloseStream"})]
+    assert provider.sent == [WEBM_HEADER, b"last audio", json.dumps({"type": "CloseStream"})]
     assert provider.close_calls == 1 and len(connector.calls) == 1
 
 
@@ -174,7 +175,7 @@ def test_disconnect_cancels_handshake_or_final_flush(setup, phase):
         start(ws, ready)
         if phase == "finishing":
             assert ws.receive_json()["type"] == "started"
-            ws.send_bytes(b"audio")
+            ws.send_bytes(WEBM_HEADER)
             ws.send_json({"type": "finish", "session_id": ready["session_id"]})
         assert reached.wait(2)
     assert cancelled.is_set() if phase == "connecting" else provider.close_calls == 1

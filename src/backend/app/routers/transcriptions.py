@@ -3,6 +3,7 @@
 import asyncio
 from contextlib import aclosing, suppress
 import json
+from time import monotonic
 from uuid import uuid4
 
 from anyio import CancelScope
@@ -20,7 +21,12 @@ START_TIMEOUT = 60  # Allow time for the browser's microphone permission prompt.
 MAX_RECORDING_SECONDS = 300
 MAX_AUDIO_BYTES = 10 * 1024 * 1024
 MAX_CHUNK_BYTES = 1024 * 1024
+MAX_CONTROL_BYTES = 4096
+MAX_MESSAGES_PER_SECOND = 64
 AUTH_RECHECK_SECONDS = 30
+SEND_TIMEOUT = 5
+CLOSE_TIMEOUT = 2
+WEBM_SIGNATURE = b"\x1a\x45\xdf\xa3"
 
 
 class ProtocolError(DeepgramError):
@@ -63,17 +69,45 @@ async def _message(websocket):
     return message
 
 
+async def _send(websocket, event):
+    try:
+        await asyncio.wait_for(websocket.send_json(event), SEND_TIMEOUT)
+    except (TimeoutError, asyncio.TimeoutError):
+        raise DeepgramTimeoutError("Recording response timed out.") from None
+
+
+def _close_code(code):
+    return 1008 if code in {"invalid_request", "invalid_audio", "limit_exceeded", "auth_expired"} else 1011
+
+
+def _unique_object(pairs):
+    data = {}
+    for key, value in pairs:
+        if key in data:
+            raise ValueError
+        data[key] = value
+    return data
+
+
+def _reject_constant(value):
+    raise ValueError
+
+
 def _control(message, session_id, kind):
     text = message.get("text")
     try:
-        if not isinstance(text, str) or len(text.encode("utf-8")) > 4096:
+        if not isinstance(text, str):
             raise ValueError
-        data = json.loads(text)
+        if len(text.encode("utf-8")) > MAX_CONTROL_BYTES:
+            raise RecordingLimitError()
+        data = json.loads(text, object_pairs_hook=_unique_object, parse_constant=_reject_constant)
         fields = {"type", "session_id", "mime_type", "language"} if kind == "start" else {"type", "session_id"}
-        if not isinstance(data, dict) or set(data) != fields or data["type"] != kind or data["session_id"] != session_id:
+        if (not isinstance(data, dict) or set(data) != fields
+                or any(not isinstance(value, str) for value in data.values())
+                or data["type"] != kind or data["session_id"] != session_id):
             raise ValueError
         return data
-    except (ValueError, TypeError, UnicodeError):
+    except (ValueError, TypeError, UnicodeError, RecursionError):
         raise ProtocolError() from None
 
 
@@ -94,22 +128,47 @@ async def _record(websocket, session_id, owner, token):
 
     async def chunks():
         total = 0
+        prefix, buffered = bytearray(), []
+        window_start, messages = monotonic(), 0
         while True:
             message = await _message(websocket)
+            now = monotonic()
+            if now - window_start >= 1:
+                window_start, messages = now, 0
+            messages += 1
+            if messages > MAX_MESSAGES_PER_SECOND:
+                raise RecordingLimitError()
             data = message.get("bytes")
             if data is None:
                 _control(message, session_id, "finish")
+                if prefix and len(prefix) < len(WEBM_SIGNATURE):
+                    raise DeepgramInvalidAudioError("Recording header is incomplete.")
                 finished_input.set()
                 return
+            if not isinstance(data, bytes) or not data:
+                raise DeepgramInvalidAudioError("Audio must be nonempty bytes.")
             if len(data) > MAX_CHUNK_BYTES or total + len(data) > MAX_AUDIO_BYTES:
                 raise RecordingLimitError()
             total += len(data)
-            yield data
+            if len(prefix) < len(WEBM_SIGNATURE):
+                buffered.append(data)
+                prefix.extend(data[:len(WEBM_SIGNATURE) - len(prefix)])
+                if not WEBM_SIGNATURE.startswith(prefix):
+                    raise DeepgramInvalidAudioError("Recording header is not supported.")
+                if len(prefix) < len(WEBM_SIGNATURE):
+                    continue
+                # The container header may span multiple chunks. Preserve all
+                # original bytes and ordering once the signature is confirmed.
+                for chunk in buffered:
+                    yield chunk
+                buffered.clear()
+            else:
+                yield data
 
     async def started():
         upstream_ready.set()
         await reader_handoff.wait()
-        await websocket.send_json({"type": "started", "session_id": session_id})
+        await _send(websocket, {"type": "started", "session_id": session_id})
 
     async def relay():
         async with aclosing(transcribe_audio(
@@ -119,9 +178,9 @@ async def _record(websocket, session_id, owner, token):
             async for event in events:
                 if event["type"] == "complete":
                     await _verify_owner(websocket, token, owner)
-                await websocket.send_json(event)
+                await _send(websocket, event)
                 if event["type"] == "error":
-                    return 1008 if event["code"] in {"invalid_request", "invalid_audio", "limit_exceeded"} else 1011
+                    return _close_code(event["code"])
         return 1000
 
     async def watch_disconnect():
@@ -186,8 +245,8 @@ async def live_transcription(websocket: WebSocket):
 
     code, tasks, error_event = 1000, [], None
     try:
-        await websocket.send_json({"type": "ready", "session_id": session_id,
-                                   "accepted_mime_types": list(SUPPORTED_MIME_TYPES)})
+        await _send(websocket, {"type": "ready", "session_id": session_id,
+                               "accepted_mime_types": list(SUPPORTED_MIME_TYPES)})
         tasks = [asyncio.create_task(_record(websocket, session_id, owner, token)), asyncio.create_task(watch_auth())]
         done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
         if tasks[1] in done:
@@ -196,7 +255,7 @@ async def live_transcription(websocket: WebSocket):
     except WebSocketDisconnect:
         pass
     except DeepgramError as error:
-        code = 1008
+        code = _close_code(error.code)
         error_event = error.to_event(session_id)
     except SQLAlchemyError:
         code = 1011
@@ -211,6 +270,6 @@ async def live_transcription(websocket: WebSocket):
             await asyncio.gather(*tasks, return_exceptions=True)
             if error_event is not None:
                 with suppress(WebSocketDisconnect, RuntimeError, OSError):
-                    await websocket.send_json(error_event)
-            with suppress(WebSocketDisconnect, RuntimeError, OSError):
-                await websocket.close(code=code)
+                    await _send(websocket, error_event)
+            with suppress(WebSocketDisconnect, RuntimeError, OSError, TimeoutError, asyncio.TimeoutError):
+                await asyncio.wait_for(websocket.close(code=code), CLOSE_TIMEOUT)
