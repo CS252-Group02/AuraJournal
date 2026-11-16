@@ -4,12 +4,20 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import ValidationError
+from sqlalchemy import func
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.auth import current_user
 from app.database import get_session
-from app.models import User
-from app.schemas.weekly import WeeklyReflectionContent, WeeklyReflectionRequest, WeeklyReflectionResponse
+from app.models import User, WeeklyReflection
+from app.schemas.weekly import (
+    ReflectionPeriodStart,
+    SavedWeeklyReflectionResponse,
+    WeeklyReflectionContent,
+    WeeklyReflectionRequest,
+    WeeklyReflectionResponse,
+)
 from app.services import AIInvalidResponseError, AIServiceNotConfiguredError, AIServiceUnavailableError
 from app.services.journal_history import entries_in_range
 from app.services.weekly_reflection import (
@@ -66,4 +74,28 @@ def generate_weekly_reflection(
 
     if snapshot != _source_snapshot(session, user_id, start, end):
         raise HTTPException(409, "Your journals changed during generation. Generate the reflection again.")
+    statement = insert(WeeklyReflection).values(
+        user_id=user_id, period_start=start, summary=result.summary, questions=result.questions,
+    ).on_conflict_do_update(
+        index_elements=[WeeklyReflection.user_id, WeeklyReflection.period_start],
+        set_={"summary": result.summary, "questions": result.questions, "updated_at": func.now()},
+    )
+    session.execute(statement)
+    session.commit()
     return WeeklyReflectionResponse(**response, summary=result.summary, questions=result.questions)
+
+
+@router.get("/{period_start}", response_model=SavedWeeklyReflectionResponse)
+def get_weekly_reflection(
+    period_start: ReflectionPeriodStart,
+    session: Session = Depends(get_session),
+    user: User = Depends(current_user),
+) -> SavedWeeklyReflectionResponse:
+    reflection = session.get(WeeklyReflection, (user.id, period_start))
+    if reflection is None:
+        raise HTTPException(404, "Weekly reflection was not found.")
+    return SavedWeeklyReflectionResponse(
+        period_start=reflection.period_start, period_end=reflection.period_start + timedelta(days=6),
+        summary=reflection.summary, questions=reflection.questions,
+        created_at=reflection.created_at, updated_at=reflection.updated_at,
+    )

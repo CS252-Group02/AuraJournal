@@ -4,7 +4,7 @@ from typing import Annotated
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
 
 class WeeklyRecapRequest(BaseModel):
@@ -51,19 +51,21 @@ class WeeklyRecapResponse(BaseModel):
     highlights: list[WeeklyEvent]
 
 
+def _complete_reflection_period(value):
+    if isinstance(value, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        value = date.fromisoformat(value)
+    if (not isinstance(value, date) or isinstance(value, datetime)
+            or value > date.max - timedelta(days=6)):
+        raise ValueError("Choose a YYYY-MM-DD start date with a complete seven-day range.")
+    return value
+
+
+ReflectionPeriodStart = Annotated[date, BeforeValidator(_complete_reflection_period)]
+
+
 class WeeklyReflectionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    period_start: date
-
-    @field_validator("period_start", mode="before")
-    @classmethod
-    def complete_period(cls, value):
-        if isinstance(value, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
-            value = date.fromisoformat(value)
-        if (not isinstance(value, date) or isinstance(value, datetime)
-                or value > date.max - timedelta(days=6)):
-            raise ValueError("Choose a YYYY-MM-DD start date with a complete seven-day range.")
-        return value
+    period_start: ReflectionPeriodStart
 
 
 ReflectionSummary = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2400)]
@@ -74,6 +76,13 @@ class WeeklyReflectionContent(BaseModel):
     model_config = ConfigDict(extra="forbid")
     summary: ReflectionSummary
     questions: list[ReflectionQuestion] = Field(min_length=2, max_length=2)
+
+
+class SavedWeeklyReflectionResponse(WeeklyReflectionContent):
+    period_start: date
+    period_end: date
+    created_at: datetime
+    updated_at: datetime
 
 
 class WeeklyReflectionResponse(BaseModel):
