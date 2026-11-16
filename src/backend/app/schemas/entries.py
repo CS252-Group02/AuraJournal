@@ -46,7 +46,6 @@ class EntryUpdate(_EntryWrite):
 class EntryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    journal_date: date
     id: UUID
     content: str
     journal_date: date
