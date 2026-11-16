@@ -28,7 +28,11 @@ function fixture(overrides = {}) {
   const session = {
     open: async () => ({ acceptedMimeTypes: ['audio/webm;codecs=opus'] }),
     start: async () => {}, push: blob => { sent.push(blob); order.push('audio'); },
-    finish: async () => { order.push('finish'); return { final_count: segmentCount }; }, close() {},
+    finish: async () => {
+      order.push('finish');
+      return { final_count: segmentCount, outcome: transcriptText(flow.getSnapshot().transcript).interimTranscript.trim()
+        ? 'incomplete' : segmentCount ? 'transcribed' : 'no_speech' };
+    }, close() {},
     ...overrides.session,
   };
   const services = {
@@ -85,7 +89,7 @@ test('Stop sends final audio, waits for final results, proofreads once, then sav
   assert.equal(f.order.at(-1), 'finish');
   f.emit(result('a', 0, 'Hôm nay tôi gặp Nguyễn Minh Anh', true, 1));
   f.emit(result('b', 1, 'và chúng tôi cùng ôn bài'));
-  completion.resolve({ final_count: 2 }); await stopping;
+  completion.resolve({ final_count: 2, outcome: 'transcribed' }); await stopping;
   assert.equal(f.flow.getSnapshot().phase, 'review');
   assert.equal(f.proofreads.length, 1);
   assert.equal(f.saves.length, 0);
@@ -159,7 +163,7 @@ test('disconnect/finalization failure preserves confirmed text and unconfirmed p
 });
 
 test('missing final segments and completion timeout fall back to review', async () => {
-  for (const finish of [async () => ({ final_count: 99 }), async () => { throw new Error('Final results timed out'); }]) {
+  for (const finish of [async () => ({ final_count: 99, outcome: 'transcribed' }), async () => { throw new Error('Final results timed out'); }]) {
     const f = fixture({ session: { finish } });
     await f.flow.start(); f.emit(result('a', 0, 'Kept'));
     await f.flow.stop();
@@ -279,18 +283,206 @@ test('Reset, unmount, account change and late responses cannot update another ta
 
 function socketFixture(options = {}) {
   let socket, timerId = 0;
-  const timers = new Map(), messages = [], failures = [], segments = [];
+  const timers = new Map(), delays = new Map(), messages = [], failures = [], segments = [];
   class Socket extends EventTarget {
     constructor() { super(); socket = this; this.readyState = 1; this.bufferedAmount = 0; }
     send(value) { messages.push(value); }
     close() { this.readyState = 3; }
     emit(value) { this.dispatchEvent(Object.assign(new Event('message'), { data: JSON.stringify(value) })); }
   }
-  const session = createTranscriptionSession({ url: 'ws://test/api/transcription', Socket,
+  const session = createTranscriptionSession({ url: 'ws://test/api/transcriptions/live', Socket,
     onSegment: value => segments.push(value), onFailure: error => failures.push(error),
-    schedule: callback => { timers.set(++timerId, callback); return timerId; }, cancel: id => timers.delete(id), ...options });
-  return { session, get socket() { return socket; }, timers, messages, failures, segments };
+    schedule: (callback, delay) => { timers.set(++timerId, callback); delays.set(timerId, delay); return timerId; },
+    cancel: id => { timers.delete(id); delays.delete(id); }, ...options });
+  return { session, get socket() { return socket; }, timers, delays, messages, failures, segments };
 }
+
+function liveFixture(services = {}) {
+  let wire;
+  const f = fixture({ services: { proofreadAvailable: false,
+    createSession: callbacks => { wire = socketFixture(callbacks); return wire.session; }, ...services } });
+  return { f, get wire() { return wire; } };
+}
+
+test('Stop during provider opening keeps header/body/tail queued, then finishes once after started', async () => {
+  const h = liveFixture(), { f } = h;
+  const starting = f.flow.start(), w = h.wire;
+  w.socket.emit({ type: 'ready', session_id: 's', accepted_mime_types: ['audio/webm;codecs=opus'] });
+  await tick();
+  assert.equal(f.flow.getSnapshot().phase, 'recording');
+  f.device.chunk(new Uint8Array([0x1a, 0x45, 0xdf, 0xa3]));
+  f.device.chunk('body');
+  const stopping = f.flow.stop();
+  assert.equal(f.flow.stop(), stopping);
+  await tick();
+  assert.equal(f.track.readyState, 'ended');
+  assert.equal(f.flow.getSnapshot().phase, 'finalizing');
+  assert.equal(w.messages.length, 1); // Only start; no audio/finish before started.
+  assert.deepEqual(JSON.parse(w.messages[0]), { type: 'start', session_id: 's', mime_type: 'audio/webm;codecs=opus', language: 'vi' });
+  w.socket.emit({ type: 'started', session_id: 's' });
+  await starting; await tick();
+  const audio = new Blob(w.messages.filter(message => message instanceof Blob));
+  assert.deepEqual(new Uint8Array(await audio.arrayBuffer()).slice(0, 4), new Uint8Array([0x1a, 0x45, 0xdf, 0xa3]));
+  assert.equal(await audio.slice(4).text(), 'bodylast-audio');
+  assert.deepEqual(JSON.parse(w.messages.at(-1)), { type: 'finish', session_id: 's' });
+  assert.deepEqual([...w.delays.values()], [30000]);
+  w.socket.emit({ type: 'segment', session_id: 's', ...result('a', 0, 'Hôm nay', false) });
+  w.socket.emit({ type: 'segment', session_id: 's', ...result('a', 0, 'Hôm nay I am happy.', true, 1) });
+  w.socket.emit({ type: 'complete', session_id: 's', final_count: 1, outcome: 'transcribed' });
+  await stopping;
+  assert.equal(f.flow.getSnapshot().editorText, 'Hôm nay I am happy.');
+  assert.equal(f.flow.getSnapshot().incomplete, false);
+  assert.ok(f.flow.getSnapshot().capture.url);
+  assert.equal(f.mediaRequests, 1);
+  assert.equal(f.proofreads.length, 0);
+  assert.equal(f.saves.length, 0);
+  assert.equal(w.timers.size, 0);
+  assert.equal(w.socket.readyState, 3);
+  f.cleanup();
+});
+
+test('provider opening failure during Stop keeps local audio and the specific recovery message', async () => {
+  const h = liveFixture(), { f } = h;
+  const starting = f.flow.start(), w = h.wire;
+  w.socket.emit({ type: 'ready', session_id: 's', accepted_mime_types: ['audio/webm;codecs=opus'] });
+  await tick();
+  const stopping = f.flow.stop();
+  w.socket.emit({ type: 'error', session_id: 's', code: 'not_configured', message: 'private-provider-details' });
+  await Promise.all([starting, stopping]);
+  assert.equal(f.flow.getSnapshot().phase, 'review');
+  assert.equal(f.flow.getSnapshot().incomplete, true);
+  assert.match(f.flow.getSnapshot().warning, /not configured/);
+  assert.doesNotMatch(f.flow.getSnapshot().warning, /private-provider|cancelled/);
+  assert.ok(f.flow.getSnapshot().capture.url);
+  assert.equal(w.messages.length, 1);
+  assert.equal(w.timers.size, 0);
+  assert.equal(f.saves.length, 0);
+  f.cleanup();
+});
+
+test('Reset and unmount cancel opening, recording and finalization without late updates', async () => {
+  for (const phase of ['ready', 'started', 'recording', 'complete']) {
+    for (const unmount of [false, true]) {
+      const h = liveFixture(), { f } = h;
+      const starting = f.flow.start(), w = h.wire;
+      if (phase !== 'ready') {
+        w.socket.emit({ type: 'ready', session_id: 's', accepted_mime_types: ['audio/webm;codecs=opus'] });
+        await tick();
+      }
+      if (['recording', 'complete'].includes(phase)) {
+        w.socket.emit({ type: 'started', session_id: 's' }); await starting;
+        f.device.chunk('header');
+      }
+      const stopping = phase === 'complete' ? f.flow.stop() : Promise.resolve();
+      await tick();
+      if (unmount) f.cleanup(); else f.flow.reset();
+      await Promise.all([starting, stopping]);
+      w.socket.emit({ type: 'started', session_id: 's' });
+      w.socket.emit({ type: 'segment', session_id: 's', ...result('late', 0, 'Discarded private text') });
+      w.socket.emit({ type: 'complete', session_id: 's', final_count: 1, outcome: 'transcribed' });
+      assert.equal(f.flow.getSnapshot().phase, 'ready');
+      assert.equal(f.flow.getSnapshot().editorText, '');
+      assert.equal(f.flow.getSnapshot().capture.blob, null);
+      assert.equal(w.timers.size, 0);
+      assert.equal(w.socket.readyState, 3);
+      assert.equal(f.saves.length, 0);
+      if (phase !== 'ready') assert.equal(f.track.readyState, 'ended');
+      if (!unmount) f.cleanup();
+    }
+  }
+});
+
+test('backend no_speech and incomplete outcomes enter manual review without AI or automatic Save', async () => {
+  for (const outcome of ['no_speech', 'incomplete']) {
+    const f = fixture({ session: { finish: async () => ({ final_count: outcome === 'incomplete' ? 1 : 0, outcome }) } });
+    await f.flow.start();
+    if (outcome === 'incomplete') {
+      f.emit(result('a', 0, 'Confirmed'));
+      f.emit(result('b', 1, 'Unconfirmed tail', false));
+    } else {
+      f.emit(result('a', 0, 'Retracted guess', false));
+      f.emit(result('a', 0, '', false, 1));
+    }
+    await f.flow.stop();
+    assert.equal(f.flow.getSnapshot().phase, 'review');
+    assert.equal(f.flow.getSnapshot().incomplete, outcome === 'incomplete');
+    assert.equal(f.flow.getSnapshot().editorText, outcome === 'incomplete' ? 'Confirmed' : '');
+    assert.equal(f.flow.getSnapshot().unconfirmedText, outcome === 'incomplete' ? 'Unconfirmed tail' : '');
+    assert.equal(f.proofreads.length, 0);
+    assert.equal(f.saves.length, 0);
+    f.flow.edit('Manually reviewed text'); await f.flow.save();
+    assert.equal(f.saves[0].content, 'Manually reviewed text');
+    f.cleanup();
+  }
+});
+
+test('missing or contradictory completion outcomes preserve confirmed text as incomplete', async () => {
+  for (const outcome of [undefined, 'unknown', 'no_speech', 'incomplete']) {
+    const f = fixture({ session: { finish: async () => ({ final_count: 1, outcome }) } });
+    await f.flow.start(); f.emit(result('a', 0, 'Kept')); await f.flow.stop();
+    assert.equal(f.flow.getSnapshot().editorText, 'Kept');
+    assert.equal(f.flow.getSnapshot().incomplete, true);
+    assert.match(f.flow.getSnapshot().warning, /completion/);
+    assert.equal(f.proofreads.length, 0);
+    assert.equal(f.saves.length, 0);
+    f.cleanup();
+  }
+});
+
+test('backend failures have fixed actionable messages and never echo provider details', async () => {
+  const messages = { not_configured: /not configured/, rate_limited: /busy/, timeout: /timed out/,
+    invalid_audio: /decode/, invalid_response: /invalid transcript/, provider_unavailable: /unavailable/,
+    limit_exceeded: /duration or audio-size limit/, invalid_request: /reset/, auth_expired: /log in/,
+    database_unavailable: /verified/, unknown: /could not finish/, constructor: /could not finish/ };
+  for (const [code, message] of Object.entries(messages)) {
+    const w = socketFixture(), opening = w.session.open();
+    w.socket.emit({ type: 'ready', session_id: 's', accepted_mime_types: ['audio/webm;codecs=opus'] }); await opening;
+    const starting = w.session.start('audio/webm;codecs=opus');
+    w.socket.emit({ type: 'error', session_id: 's', code, message: 'private-provider-details' });
+    await assert.rejects(starting, message);
+    assert.equal(w.failures[0].code, code);
+    assert.doesNotMatch(w.failures[0].message, /private-provider/);
+    assert.equal(w.timers.size, 0);
+    assert.equal(w.socket.readyState, 3);
+  }
+});
+
+test('expired live authentication calls the existing unauthorized handler once', async () => {
+  let unauthorized = 0;
+  const h = liveFixture({ unauthorized: () => unauthorized++ }), { f } = h;
+  const starting = f.flow.start(), w = h.wire;
+  w.socket.emit({ type: 'ready', session_id: 's', accepted_mime_types: ['audio/webm;codecs=opus'] });
+  await tick();
+  w.socket.emit({ type: 'error', session_id: 's', code: 'auth_expired' });
+  await starting;
+  assert.equal(unauthorized, 1);
+  f.cleanup(); // AuthProvider/PrivatePage normally unmount on the unauthorized event.
+  assert.equal(f.track.readyState, 'ended');
+  assert.equal(w.timers.size, 0);
+});
+
+test('transport-level oversized audio closes with actionable local recovery', async () => {
+  const w = socketFixture(), opening = w.session.open();
+  w.socket.emit({ type: 'ready', session_id: 's', accepted_mime_types: ['audio/webm;codecs=opus'] }); await opening;
+  w.socket.dispatchEvent(Object.assign(new Event('close'), { code: 1009 }));
+  assert.match(w.failures[0].message, /audio chunk exceeded/);
+  assert.equal(w.timers.size, 0);
+});
+
+test('malformed completion counts/outcomes fail and clear all finalization timers', async () => {
+  for (const fields of [{ final_count: 0 }, { final_count: -1, outcome: 'no_speech' },
+    { final_count: 0.5, outcome: 'transcribed' }, { final_count: 0, outcome: 'unknown' }]) {
+    const w = socketFixture(), opening = w.session.open();
+    w.socket.emit({ type: 'ready', session_id: 's', accepted_mime_types: ['audio/webm;codecs=opus'] }); await opening;
+    const starting = w.session.start('audio/webm;codecs=opus');
+    w.socket.emit({ type: 'started', session_id: 's' }); await starting;
+    const finishing = w.session.finish();
+    w.socket.emit({ type: 'complete', session_id: 's', ...fields });
+    await assert.rejects(finishing, /Invalid transcription completion/);
+    assert.equal(w.timers.size, 0);
+    assert.equal(w.socket.readyState, 3);
+  }
+});
 
 test('WebSocket adapter preserves header/tail order and finish follows the last audio frame', async () => {
   const f = socketFixture(); const opening = f.session.open();
@@ -308,7 +500,7 @@ test('WebSocket adapter preserves header/tail order and finish follows the last 
   f.socket.emit({ type: 'error', session_id: 'old', code: 'auth_expired' });
   assert.equal(f.failures.length, 0);
   f.socket.emit({ type: 'segment', session_id: 's', ...result('a', 0, 'final') });
-  f.socket.emit({ type: 'complete', session_id: 's', final_count: 1 });
+  f.socket.emit({ type: 'complete', session_id: 's', final_count: 1, outcome: 'transcribed' });
   assert.equal((await finished).final_count, 1);
   assert.equal(f.segments.length, 1);
   assert.equal(f.timers.size, 0);

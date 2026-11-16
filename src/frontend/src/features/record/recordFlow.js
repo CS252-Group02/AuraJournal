@@ -10,7 +10,7 @@ export function createRecordFlow({ recorder, services, schedule = setTimeout, ca
 }) {
   let state = initial(), snapshot = { ...state, capture: recorder.getSnapshot(), transcriptionActive: false };
   let generation = 0, authEpoch, attached = false, transport = null, transportFailed = false;
-  let unsubscribeChunks, pendingAbort, stopTask, saveAttempt;
+  let unsubscribeChunks, pendingAbort, startupTask, stopTask, saveAttempt;
   const listeners = new Set();
   const current = (token) => attached && token === generation && authEpoch === services.getAuthEpoch();
   function publish(value = {}) {
@@ -25,7 +25,7 @@ export function createRecordFlow({ recorder, services, schedule = setTimeout, ca
   function reset() {
     ++generation;
     pendingAbort?.abort(); pendingAbort = null;
-    disconnect(); stopTask = null; saveAttempt = null; transportFailed = false;
+    disconnect(); startupTask = null; stopTask = null; saveAttempt = null; transportFailed = false;
     recorder.reset();
     publish(initial());
   }
@@ -49,15 +49,16 @@ export function createRecordFlow({ recorder, services, schedule = setTimeout, ca
     publish({ transcript: mergeSegment(state.transcript, event) });
   }
   function streamFailure(error, token) {
-    if (!current(token) || !['connecting', 'recording', 'finalizing'].includes(state.phase)) return;
+    if (!current(token) || transportFailed || !['connecting', 'recording', 'finalizing'].includes(state.phase)) return;
     transportFailed = true;
+    transport?.close();
     publish({ warning: error.message || 'Live transcription failed. Your audio is still recorded locally.' });
     if (error.code === 'unauthorized' || error.code === 'auth_expired') services.unauthorized?.();
   }
   async function start({ localOnly = false } = {}) {
     if (!attached || !['ready', 'error'].includes(state.phase) || recorder.getSnapshot().blob) return;
     const token = ++generation;
-    authEpoch = services.getAuthEpoch(); transportFailed = false; saveAttempt = null;
+    authEpoch = services.getAuthEpoch(); transportFailed = false; startupTask = null; saveAttempt = null;
     publish({ ...initial(), phase: 'connecting' });
     const live = services.transcriptionAvailable && !localOnly;
     try {
@@ -75,11 +76,17 @@ export function createRecordFlow({ recorder, services, schedule = setTimeout, ca
       await recorder.start({ allowedMimeTypes: negotiation?.acceptedMimeTypes });
       if (!current(token)) return;
       if (recorder.getSnapshot().status !== 'recording') throw new Error(recorder.getSnapshot().error || 'Recording could not start.');
-      publish({ phase: 'recording', warning: live ? state.warning : 'Live transcription is unavailable. Record locally, then write or correct your journal below.' });
-      if (live) {
-        try { await transport.start(recorder.getSnapshot().mimeType); }
-        catch (error) { streamFailure(error, token); }
+      // Install the handshake task before publishing a phase that permits Stop.
+      // Chunks (including an immediate Stop's tail) remain queued until started.
+      if (live && !transportFailed) {
+        startupTask = (async () => {
+          try { await transport.start(recorder.getSnapshot().mimeType); }
+          catch (error) { streamFailure(error, token); }
+        })();
       }
+      const startup = startupTask;
+      publish({ phase: 'recording', warning: live ? state.warning : 'Live transcription is unavailable. Record locally, then write or correct your journal below.' });
+      await startup;
     } catch (error) {
       if (!current(token)) return;
       disconnect();
@@ -99,8 +106,14 @@ export function createRecordFlow({ recorder, services, schedule = setTimeout, ca
       try {
         const result = await transport.finish();
         if (!current(token)) return;
-        if (result.final_count !== transcriptText(state.transcript).finalCount) throw new Error('Some final transcription results are missing.');
-        complete = !capture.error && !transcriptText(state.transcript).interimTranscript.trim();
+        const text = transcriptText(state.transcript);
+        if (result.final_count !== text.finalCount) throw new Error('Some final transcription results are missing.');
+        const interim = Boolean(text.interimTranscript.trim());
+        if (!['transcribed', 'no_speech', 'incomplete'].includes(result.outcome) ||
+            (result.outcome === 'transcribed' && (!text.finalCount || interim)) ||
+            (result.outcome === 'no_speech' && (text.finalCount || interim)) ||
+            (result.outcome === 'incomplete' && !interim)) throw new Error('The transcription completion does not match the received text. Review your audio before saving.');
+        complete = !capture.error && result.outcome !== 'incomplete';
         if (!complete && !capture.error) publish({ warning: 'The last phrase was not confirmed. Review it against your audio before saving.' });
       } catch (error) {
         if (!current(token)) return;
@@ -112,7 +125,7 @@ export function createRecordFlow({ recorder, services, schedule = setTimeout, ca
     const text = transcriptText(state.transcript).finalizedTranscript;
     publish({ originalTranscript: text, incomplete: !complete });
     if (!complete) {
-      enterReview({ incomplete: true, warning: capture.error || state.warning || 'Transcription is incomplete. Listen to your recording and review the text manually.' });
+      enterReview({ incomplete: true, warning: [capture.error, state.warning].filter(Boolean).join(' ') || 'Transcription is incomplete. Listen to your recording and review the text manually.' });
       return;
     }
     if (!validContent(text)) {
@@ -138,9 +151,11 @@ export function createRecordFlow({ recorder, services, schedule = setTimeout, ca
     if (state.phase === 'finalizing') return stopTask;
     if (state.phase !== 'recording') return Promise.resolve();
     const token = generation;
+    const startup = startupTask;
     publish({ phase: 'finalizing', error: '' });
     stopTask = (async () => {
       const capture = await recorder.stop(); // Includes the final dataavailable event.
+      await startup; // Release the microphone first; finish only after started.
       await finalize(token, capture);
     })();
     return stopTask;

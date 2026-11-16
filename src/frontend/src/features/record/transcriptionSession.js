@@ -1,8 +1,20 @@
-// Adapter for the proposed application protocol. No endpoint is enabled by default.
-// The backend must normalize provider-specific events into this contract.
+const ERROR_MESSAGES = {
+  not_configured: 'Live transcription is not configured. Record locally or try again later.',
+  rate_limited: 'The speech service is busy. Review your local recording or try again later.',
+  timeout: 'Live transcription timed out. Review your audio and confirmed text before saving.',
+  invalid_audio: 'The speech service could not decode this audio. Review your local recording or record again.',
+  invalid_response: 'The speech service returned an invalid transcript. Review your audio and confirmed text before saving.',
+  provider_unavailable: 'The speech service is unavailable. Review your local recording or try again later.',
+  limit_exceeded: 'Live transcription reached its duration or audio-size limit. Review your local recording and confirmed text.',
+  invalid_request: 'Live transcription could not process this recording. Review your audio or reset and try again.',
+  auth_expired: 'Your session expired. Please log in again.',
+  database_unavailable: 'Your session could not be verified. Try again when AuraJournal is available.',
+};
+
+// One take using the backend's authenticated /api/transcriptions/live protocol.
 export function createTranscriptionSession({ url, onSegment, onFailure,
   Socket = globalThis.WebSocket, schedule = setTimeout, cancel = clearTimeout,
-  connectTimeout = 10000, finalTimeout = 15000, maxBufferedBytes = 1024 * 1024,
+  connectTimeout = 10000, finalTimeout = 30000, maxBufferedBytes = 1024 * 1024,
 }) {
   let socket, sessionId, ready, accepted = [], closed = false, started = false;
   let queue = [], queuedBytes = 0;
@@ -36,7 +48,9 @@ export function createTranscriptionSession({ url, onSegment, onFailure,
     close(error); onFailure?.(error);
   }
   const connectionError = () => fail(new Error('Live transcription is unavailable. Your local audio is still available.'));
-  const disconnected = () => fail(new Error('Live transcription disconnected. Stop to review the confirmed text and your audio.'));
+  const disconnected = (event) => fail(new Error(event.code === 1009
+    ? 'An audio chunk exceeded the speech service limit. Review your local recording and confirmed text.'
+    : 'Live transcription disconnected. Stop to review the confirmed text and your audio.'));
   function send(message) {
     if (closed || socket?.readyState !== 1) throw new Error('The transcription connection is closed.');
     socket.send(JSON.stringify({ ...message, session_id: sessionId }));
@@ -66,7 +80,8 @@ export function createTranscriptionSession({ url, onSegment, onFailure,
       }
       if (message.type === 'error') {
         if (sessionId && message.session_id !== sessionId) return;
-        const error = new Error('The transcription service could not finish this recording.');
+        const error = new Error(Object.hasOwn(ERROR_MESSAGES, message.code) ? ERROR_MESSAGES[message.code]
+          : 'The transcription service could not finish this recording. Review your local audio and confirmed text.');
         error.code = message.code;
         fail(error); return;
       }
@@ -74,7 +89,8 @@ export function createTranscriptionSession({ url, onSegment, onFailure,
       if (message.type === 'started') { started = true; settle('started'); drain(); }
       else if (message.type === 'segment') onSegment(message);
       else if (message.type === 'complete') {
-        if (!waiters.has('complete') || !Number.isSafeInteger(message.final_count) || message.final_count < 0) throw new Error('Invalid transcription completion.');
+        if (!waiters.has('complete') || !Number.isSafeInteger(message.final_count) || message.final_count < 0 ||
+            !['transcribed', 'no_speech', 'incomplete'].includes(message.outcome)) throw new Error('Invalid transcription completion.');
         settle('complete', message); close();
       }
     } catch (error) { fail(error); }

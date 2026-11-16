@@ -81,6 +81,71 @@ def test_cookie_authenticated_stream_negotiates_and_returns_final_transcript(set
     assert provider.close_calls == 1 and len(connector.calls) == 1
 
 
+def test_live_interims_replace_one_segment_before_the_final_flush(setup):
+    client, provider, _, _, _ = setup
+    original_send = provider.send
+
+    async def send(message):
+        await original_send(message)
+        if message == WEBM_HEADER:
+            for event in [result("Hôm", end=1), result("Hôm nay", end=2)]:
+                provider.incoming.put_nowait(json.dumps(event))
+
+    provider.send = send
+    with client.websocket_connect(PATH, headers=ORIGIN.copy()) as ws:
+        ready = ws.receive_json()
+        start(ws, ready)
+        assert ws.receive_json()["type"] == "started"
+        ws.send_bytes(WEBM_HEADER)
+        first, second = ws.receive_json(), ws.receive_json()
+        ws.send_bytes(b"tail")
+        ws.send_json({"type": "finish", "session_id": ready["session_id"]})
+        final, complete = ws.receive_json(), ws.receive_json()
+        assert [event["text"] for event in (first, second, final)] == ["Hôm", "Hôm nay", "Hôm nay."]
+        assert [event["revision"] for event in (first, second, final)] == [0, 1, 2]
+        assert [event["is_final"] for event in (first, second, final)] == [False, False, True]
+        for event in (first, second, final):
+            assert event["session_id"] == ready["session_id"]
+            assert event["segment_id"] == "segment-1" and event["order"] == 0
+        assert complete == {"type": "complete", "session_id": ready["session_id"],
+                            "final_count": 1, "outcome": "transcribed"}
+    assert provider.sent == [WEBM_HEADER, b"tail", json.dumps({"type": "CloseStream"})]
+    assert provider.close_calls == 1
+
+
+@pytest.mark.parametrize("kind", ["silence", "retracted", "incomplete"])
+def test_route_completion_distinguishes_silence_retractions_and_unconfirmed_text(setup, kind):
+    client, provider, _, _, _ = setup
+    if kind == "silence":
+        provider.final_events = [result("", final=True), {"type": "Metadata"}]
+        count, outcome = 0, "no_speech"
+    elif kind == "retracted":
+        provider.final_events = [result("A guess"), result("", final=True), {"type": "Metadata"}]
+        count, outcome = 0, "no_speech"
+    else:
+        provider.final_events = [result("Confirmed.", final=True),
+                                 result("Unconfirmed tail", start=3, end=5), {"type": "Metadata"}]
+        count, outcome = 1, "incomplete"
+    with client.websocket_connect(PATH, headers=ORIGIN.copy()) as ws:
+        ready = ws.receive_json()
+        start(ws, ready)
+        assert ws.receive_json()["type"] == "started"
+        ws.send_bytes(WEBM_HEADER)
+        ws.send_json({"type": "finish", "session_id": ready["session_id"]})
+        segments = []
+        while (event := ws.receive_json())["type"] == "segment":
+            segments.append(event)
+        assert event == {"type": "complete", "session_id": ready["session_id"],
+                         "final_count": count, "outcome": outcome}
+        assert sum(segment["is_final"] for segment in segments) == count
+        if kind == "retracted":
+            assert [segment["text"] for segment in segments] == ["A guess", ""]
+        elif kind == "incomplete":
+            assert segments[-1]["text"] == "Unconfirmed tail" and not segments[-1]["is_final"]
+        assert ws.receive()["code"] == 1000
+    assert provider.close_calls == 1
+
+
 @pytest.mark.parametrize("failure", ["origin", "missing_cookie", "expired", "disabled", "revoked"])
 def test_invalid_origin_or_account_is_rejected_before_provider_access(setup, failure):
     client, _, connector, rows, _ = setup
