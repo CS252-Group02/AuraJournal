@@ -10,6 +10,7 @@ import { currentStreak, groupEntriesByDay } from '../features/calendar/calendarM
 import JournalCard from '../features/journal/JournalCard.jsx';
 import { useJournalEntries } from '../features/journal/useJournalEntries.js';
 import { dailyReflection } from '../features/journal/homeContent.js';
+import { useNavigationGuard } from '../components/layout/navigation.js';
 
 function Companion() {
   return <aside className="home-companion" aria-label="A gentle reminder">
@@ -46,11 +47,16 @@ function HomeContent({ user, logout }) {
     setWriting(false); setContent(''); setFailure('');
     writeButton.current?.focus();
   }
+  function confirmLeave() {
+    return !saving.current && (!content.trim() || window.confirm('Leave this page and discard your unsaved journal draft?'));
+  }
+  const guardedByShell = useNavigationGuard(confirmLeave);
   function protectDraft(event) {
+    if (guardedByShell) return;
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     const link = event.target.closest('a');
     if (!link || link.target === '_blank' || link.getAttribute('href') === '/') return;
-    if (saving.current || (content.trim() && !window.confirm('Leave this page and discard your unsaved journal draft?'))) event.preventDefault();
+    if (!confirmLeave()) event.preventDefault();
   }
   async function submitEntry(event) {
     event.preventDefault();

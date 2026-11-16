@@ -9,6 +9,7 @@ import HistoryPage from './pages/HistoryPage.jsx';
 import EntryPage from './pages/EntryPage.jsx';
 import ReflectionPage from './pages/ReflectionPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
+import AppShell from './components/layout/AppShell.jsx';
 import './styles/index.css';
 import { AuthProvider, GuestPage, PrivatePage } from './auth/Auth.jsx';
 
@@ -17,63 +18,16 @@ createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          <Route path="/dashboard" element={<PrivatePage><DashboardPage /></PrivatePage>} />
-          <Route
-            path="/"
-            element={
-              <PrivatePage>
-                <JournalPage />
-              </PrivatePage>
-            }
-          />
-          <Route
-            path="/login"
-            element={
-              <GuestPage>
-                <LoginPage />
-              </GuestPage>
-            }
-          />
-          <Route
-            path="/register"
-            element={
-              <GuestPage>
-                <RegisterPage />
-              </GuestPage>
-            }
-          />
-          <Route
-            path="/record"
-            element={
-              <PrivatePage>
-                <RecordPage />
-              </PrivatePage>
-            }
-          />
-          <Route
-            path="/history"
-            element={
-              <PrivatePage>
-                <HistoryPage />
-              </PrivatePage>
-            }
-          />
-          <Route
-            path="/journal/:id"
-            element={
-              <PrivatePage>
-                <EntryPage />
-              </PrivatePage>
-            }
-          />
-          <Route
-            path="/reflection"
-            element={
-              <PrivatePage>
-                <ReflectionPage />
-              </PrivatePage>
-            }
-          />
+          <Route element={<PrivatePage><AppShell /></PrivatePage>}>
+            <Route index element={<JournalPage />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/history" element={<HistoryPage />} />
+            <Route path="/journal/:id" element={<EntryPage />} />
+            <Route path="/reflection" element={<ReflectionPage />} />
+            <Route path="/record" element={<RecordPage />} />
+          </Route>
+          <Route path="/login" element={<GuestPage><LoginPage /></GuestPage>} />
+          <Route path="/register" element={<GuestPage><RegisterPage /></GuestPage>} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>
