@@ -2,7 +2,7 @@
 
 AuraJournal uses PostgreSQL 14+ and Alembic. Start PostgreSQL and install `src/backend/requirements.txt` in your virtual environment first. Alembic reads the repository-root `.env`; an exported `DATABASE_URL` takes precedence. Commands below run from `src/backend`, with the virtual environment active.
 
-The current head is **0007**. The history below lists the schema changes. See [authentication](../authentication.md) for account setup.
+The current head is **0008**. The history below lists the schema changes. See [authentication](../authentication.md) for account setup.
 
 ## Fresh database
 
@@ -18,7 +18,7 @@ The current revision should be marked `(head)`. Return to the repository root an
 ## Version history
 
 ```text
-<base> → 0001 → 0002 → 0003 → 0004 → 0005 → 0006 → 0007 (head)
+<base> → 0001 → 0002 → 0003 → 0004 → 0005 → 0006 → 0007 → 0008 (head)
 ```
 
 - `0001_legacy_entries.py`: the initial journal table with integer IDs, content, and creation time.
@@ -122,3 +122,7 @@ python -m alembic revision --autogenerate -m "describe schema change"
 Review the generated operations and data conversion carefully before running `python -m alembic upgrade head`. Commit migration files with their corresponding model changes. Keep already-shared/applied migrations unchanged and add a new revision for each subsequent change. Back up data before schema changes.
 
 See [development users](../development-users.md) for the temporary owner and additional test users.
+
+## Security update
+
+Migration `0008_security_limits.py` follows `0007` and adds shared request budgets and independent login indexes. New registrations require 15–128 characters; existing passwords remain valid for login. See [security rollout](../security-hardening.md) for independent account/IP limits, AI quotas, database roles, and deployment requirements.

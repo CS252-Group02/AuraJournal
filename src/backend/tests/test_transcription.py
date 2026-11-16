@@ -194,5 +194,3 @@ def test_adapter_failure_closes_source_without_emitting_complete(invalid_result)
     asyncio.run(run())
     assert emitted == [segment("Draft")]
     assert source_closed == [True]
-
-

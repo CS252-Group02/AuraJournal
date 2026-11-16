@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth import current_user
+from app.limits import ai_budget
 from app.database import get_session
 from app.models import JournalEntry, User
 from app.schemas.ai import JournalSummaryResponse
@@ -24,7 +25,8 @@ def get_journal_summarizer(request: Request) -> JournalSummarizer:
     return request.app.state.journal_summarizer
 
 
-@router.post("/{entry_id}/summary", response_model=JournalSummaryResponse)
+@router.post("/{entry_id}/summary", response_model=JournalSummaryResponse,
+             dependencies=[Depends(ai_budget)])
 def summarize_entry(
     entry_id: UUID,
     session: Session = Depends(get_session),

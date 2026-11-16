@@ -44,7 +44,7 @@ def test_two_registered_users_have_independent_persistent_journal_lifecycles(mig
             clients = [alice, bob]
             users, entries = [], []
             for index, client in enumerate(clients):
-                credentials = {"email": f"person{index}@example.com", "password": "test-password"}
+                credentials = {"email": f"person{index}@example.com", "password": "test-password-long"}
                 registered = await client.post("/api/auth/register", json=credentials)
                 assert registered.status_code == 201
                 users.append(registered.json())

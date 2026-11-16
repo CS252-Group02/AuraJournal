@@ -49,7 +49,7 @@ def application_for(engine):
 def app(migrated_engine):
     application = application_for(migrated_engine)
     response = asyncio.run(request(application, "POST", "/api/auth/register", json={
-        "email": "api@example.com", "password": "test-password",
+        "email": "api@example.com", "password": "test-password-long",
     }))
     assert response.status_code == 201
     application.auth_cookies = dict(response.cookies)
@@ -299,9 +299,10 @@ def test_suggest_title_authenticates_without_reading_or_writing_journals(app):
     assert response.status_code == 200
     assert response.json() == {"suggested_title": "A Project Finally Completed"}
     generate.assert_called_once_with("Today I finally completed my project.")
-    # Only the existing cookie/session and user lookups may access PostgreSQL.
-    assert len(statements) == 2
-    assert all(statement.lstrip().upper().startswith("SELECT") for statement in statements)
+    # Auth lookups, budgets, and concurrency locks may use PostgreSQL.
+    # Only budget records may be mutated; journal content is never accessed.
+    writes = [s for s in statements if not s.lstrip().upper().startswith("SELECT")]
+    assert writes and all("rate_limit_buckets" in s for s in writes)
     assert all("journal_entries" not in statement for statement in statements)
     assert asyncio.run(request(app, "GET", "/api/entries")).json() == before
 
