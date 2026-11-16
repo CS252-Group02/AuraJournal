@@ -8,8 +8,8 @@
 | B02 | Implemented: GET `/api/entries/{entry_id}` uses the existing owner filter and returns the same 404 for foreign and missing entries. |
 | B03 | Implemented: optional calendar dates at creation, content/date/both in partial PATCH, and `journal_date` in all entry responses. |
 | B04 | Existing owner-only deletion returns 204 and cascades linked records. |
-| B05 | Implemented: two independently registered/logged-in accounts exercise private create/list/detail/edit/delete, ownership spoof rejection, session persistence across app recreation, and unchanged foreign entries. Both accounts take the owner role. |
-| B10 | Existing title, summary, and weekly-recap endpoints are tested with mocked providers. Real HTTPX network transports now fail the test immediately, including when an SDK would otherwise swallow connection errors. Transcription coverage is blocked until an authenticated transcription endpoint and its contract land. |
+| B05 | Implemented: two independently registered/logged-in accounts exercise private create/list/detail/date-only edit/combined edit/delete, selected-date reads, ownership spoof rejection, persistence across app recreation, and unchanged foreign entries and saved weekly reflections. Both accounts take the owner role. |
+| B10 | Title, summary, weekly-recap, saved-reflection, pixel-art, and live-transcription tests use fake providers. Real HTTPX and provider WebSocket connections fail tests immediately. The transcription endpoint and its offline tests have now landed; see [speech-to-text](speech-to-text.md). Live recognition quality remains separate verification. |
 
 ## Journal reads
 
@@ -83,15 +83,67 @@ cover invalid sessions, date boundaries/validation, unchanged edits, persisted A
 invalidation, browser preflights, and cascading deletion. No live provider
 credentials or paid requests are needed.
 
-Verified on Windows after integrating main's pixel-art changes: **368 backend tests passed**, **69 frontend
+Earlier verification after integrating main's pixel-art changes: **368 backend tests passed**, **69 frontend
 tests passed**, and the production build passed. Backend tests emitted one
 dependency deprecation warning from Starlette/AnyIO. Tests used isolated schemas
 in `aurajournal_test`; the local application database was not migrated or reset.
 
+### Current-schema CRUD verification (W8)
+
+Base revision: `0332943`, including the W8-D1 date/reflection data handoff. The
+existing private routes already work with schema head `0007`; this task extends
+integration coverage without adding endpoints, migrations, or changing ordering.
+
+The two-account lifecycle now checks entries sharing a date, owner-only list and
+detail reads, and `/api/entries/by-date`. A date-only edit moves a leap-day entry
+from `2024-02-29` to `2024-03-01`; the old day becomes empty for that owner while
+the other account's entry stays on leap day. Combined edits, app recreation,
+deletion, and matching foreign/missing-ID 404s are also exercised. Each account
+has a distinct saved weekly reflection for the same period; CRUD preserves both
+snapshots and never returns the other account's snapshot.
+
+Use the project's declared dependencies before verification. The local Conda
+environment initially had unsupported `websockets 17.3`; all 62 selected tests
+stopped in fixture setup before any API assertions. Installing the existing
+requirements restored `websockets 15.0.1` (and Pillow `12.3.0`) without weakening
+the network guard or changing dependency declarations.
+
+With the intended Python environment active, install from the repository root:
+
+```powershell
+python -m pip install -r src/backend/requirements.txt
+```
+
+Set `TEST_DATABASE_URL` to a disposable PostgreSQL database as described in the
+[repository test setup](../README.md#tests). Then run from `src/backend`:
+
+```powershell
+python -m pytest tests/test_journal_lifecycle.py tests/test_entry_reads.py tests/test_entry_dates_api.py tests/test_entry_mutations.py tests/test_calendar_api.py tests/test_weekly_reflections_api.py tests/test_pixel_art_api.py -q
+python -m pytest tests -q
+```
+
+On Windows with Python `3.11.18`, the expanded two-user lifecycle passed both
+owner roles (**2 passed**), and the selected journal/calendar/reflection/pixel-art
+regression suite passed (**135 passed in 93.63 seconds**). All provider calls
+were faked; test data stayed in isolated schemas in `aurajournal_test`.
+
+The full backend suite was attempted but did not finish: it stalled at
+the unchanged Deepgram test
+`test_finish_timeout_closes_socket_and_releases_receiver`. Running
+`tests/test_deepgram_service.py` separately reproduced the stall at that test;
+the preceding 25 cases passed, and a 20-second faulthandler dump showed the event
+loop waiting inside its `asyncio.run`. Both stalled runs were stopped. Neither
+the Deepgram service nor its tests changed in this task, and the full suite must
+not be reported as passing. This remains a separate transcription follow-up.
+
+Verification is limited to the current schema. Historical upgrade testing stays
+with the existing migration tests. The application database is not migrated or
+reset; no frontend integration or AI generator work is included.
+
 ## Tests without provider charges
 
-`tests/conftest.py` blocks real HTTPX sync and async network transports for every
-backend test. Use injected fake AI services, `httpx.MockTransport`, or in-process
+`tests/conftest.py` blocks real HTTPX sync/async transports and provider WebSocket
+connections for every backend test. Use injected fake AI services, `httpx.MockTransport`, or in-process
 ASGI clients. PostgreSQL connections are unaffected; database tests still require
 the disposable `aurajournal_test` database and create/drop isolated schemas.
 
@@ -104,8 +156,9 @@ The integrated pixel-art provider and endpoint tests also use fakes/MockTranspor
 the same HTTP guard applies to PixelLab calls. Date-only and combined text/date
 edits are checked against real local image storage with fake generated PNGs.
 
-B10 is **partially complete**, not fully complete or silently skipped: there is no
-audio-upload/transcription endpoint in the current backend. Once it lands, add
-tests for authenticated uploads, accepted formats/limits, silence, invalid audio,
-provider failures, and normalized responses using a fake provider and fictional
-audio fixtures. Do not introduce a dummy endpoint to claim that coverage exists.
+Live transcription is now exposed through the authenticated
+`/api/transcriptions/live` WebSocket, with offline tests for authentication,
+formats/limits, silence, invalid audio, provider failures, and normalized events.
+It is a streaming protocol, not a multipart upload endpoint. Real Vietnamese and
+English recording evaluation remains pending; offline passing tests do not
+establish recognition quality. See the [speech-to-text guide](speech-to-text.md).
