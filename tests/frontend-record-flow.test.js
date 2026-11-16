@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createRecordFlow } from '../src/frontend/src/features/record/recordFlow.js';
 import { createAudioRecorder } from '../src/frontend/src/features/record/audioRecorder.js';
-import { createTranscript, mergeSegment, transcriptText, contentLength, validContent } from '../src/frontend/src/features/record/transcriptState.js';
+import { createTranscript, mergeSegment, transcriptSegments, transcriptText, contentLength, validContent } from '../src/frontend/src/features/record/transcriptState.js';
 import { createTranscriptionSession } from '../src/frontend/src/features/record/transcriptionSession.js';
 
 const deferred = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
@@ -72,6 +72,23 @@ test('Unicode validation counts code points and retains over-limit content for m
   assert.ok(validContent('😀'.repeat(5000)));
   assert.ok(!validContent(' '.repeat(10)));
   assert.ok(!validContent('a'.repeat(5001)));
+});
+
+test('segment selection preserves text output through partial finals, retractions and late segments', () => {
+  let state = createTranscript();
+  const apply = event => { state = mergeSegment(state, event); return transcriptSegments(state); };
+  const draft = result('a', 0, 'Hôm nay tôi đọc sách', false);
+  assert.equal(apply(draft).interim.text, draft.text);
+  apply(result('a', 0, ' Hôm nay ', true, 1));
+  const suffix = result('b', 1, 'tôi đọc sách', false);
+  assert.equal(apply(suffix).interim.text, suffix.text);
+  assert.deepEqual(transcriptText(state), { finalizedTranscript: 'Hôm nay', interimTranscript: suffix.text, finalCount: 1 });
+  apply(result('b', 1, '', false, 1));
+  assert.equal(transcriptText(state).interimTranscript, '');
+  apply(result('c', 2, ' Đọc sách. ', true));
+  assert.equal(transcriptSegments(state).interim, undefined);
+  assert.equal(transcriptText(state).finalizedTranscript, 'Hôm nay Đọc sách.');
+  assert.equal(apply(result('b', 1, 'stale interim', false, 2)).interim, undefined);
 });
 
 test('Stop sends final audio, waits for final results, proofreads once, then saves current edited text explicitly', async () => {

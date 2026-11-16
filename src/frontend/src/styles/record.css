@@ -261,6 +261,36 @@ html:has(.record-page) { scrollbar-gutter: stable; }
 .record-page .record-transcript p { margin: 12px 0; line-height: 1.6; }
 .record-interim, .record-transcript-hint { color: #52695d; }
 .record-interim { font-style: italic; }
+.record-live { padding-inline-end: 3px; }
+.record-live-segment {
+  color: inherit;
+  opacity: .72;
+  transition: opacity 200ms ease-out;
+}
+.record-live-segment[data-final="true"] { opacity: 1; }
+.record-live-word {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  vertical-align: baseline;
+}
+.record-live-word.has-caret::after {
+  content: '';
+  position: absolute;
+  inset-inline-end: -2px;
+  top: .15em;
+  width: 2px;
+  height: 1em;
+  background: #8b7fa3;
+  animation: record-caret-blink 900ms ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes record-caret-blink { 0%, 100% { opacity: .35; } 50% { opacity: .9; } }
+@media (prefers-reduced-motion: reduce) {
+  .record-live-segment { transition: none; }
+  .record-live-word.has-caret::after { animation: none; opacity: .7; }
+}
 .record-duration { font-size: 14px; color: #344e42; }
 .record-duration span { font-variant-numeric: tabular-nums; }
 .record-page .record-phase-title {
@@ -444,7 +474,7 @@ html:has(.record-page) { scrollbar-gutter: stable; }
 .record-page:is([data-record-phase="review"], [data-record-phase="saving"]) .record-editor {
   min-height: clamp(200px, 35svh, 400px);
 }
-.record-page[data-record-phase="recording"] .record-live {
+.record-page:is([data-record-phase="recording"], [data-record-phase="finalizing"]) .record-live {
   height: clamp(180px, 35svh, 420px);
 }
 .record-page .record-original { max-height: 35svh; overflow-y: auto; }

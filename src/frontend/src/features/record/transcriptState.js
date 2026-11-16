@@ -18,11 +18,16 @@ export function mergeSegment(state, event) {
   return { segments: { ...state.segments, [event.segment_id]: { ...event } } };
 }
 
-export function transcriptText(state) {
+export function transcriptSegments(state) {
   const ordered = Object.values(state.segments).sort((a, b) => a.order - b.order);
   const finals = ordered.filter(segment => segment.is_final);
   const lastFinalOrder = finals.at(-1)?.order ?? -1;
   const interim = ordered.filter(segment => !segment.is_final && segment.order > lastFinalOrder).at(-1);
+  return { finals, interim };
+}
+
+export function transcriptText(state) {
+  const { finals, interim } = transcriptSegments(state);
   return {
     finalizedTranscript: finals.map(segment => segment.text.trim()).filter(Boolean).join(' '),
     interimTranscript: interim?.text || '',
