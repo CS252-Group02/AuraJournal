@@ -50,7 +50,6 @@ class EntryResponse(BaseModel):
     content: str
     journal_date: date
     ai_summary: str | None
-    ai_reflection_questions: list[str] | None
     ai_summarized_at: datetime | None
     created_at: datetime
     updated_at: datetime

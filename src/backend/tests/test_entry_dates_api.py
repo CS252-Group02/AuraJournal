@@ -48,7 +48,7 @@ def test_date_only_edit_preserves_text_summary_and_creation_timestamp(app):
     assert updated["content"] == entry["content"]
     assert updated["created_at"] == entry["created_at"]
     assert updated["ai_summary"] == "Still describes the text"
-    assert updated["ai_reflection_question"] == "What was useful?"
+    assert "ai_reflection_question" not in updated
     assert datetime.fromisoformat(updated["ai_summarized_at"].replace("Z", "+00:00")) == old_time
     assert datetime.fromisoformat(updated["updated_at"].replace("Z", "+00:00")) > old_time
     restarted = application_for(app.state.engine)
@@ -72,7 +72,7 @@ def test_combined_update_changes_date_and_invalidates_old_ai_output(app):
     assert updated["content"] == "Revised"
     assert updated["journal_date"] == "2025-12-31"
     assert updated["created_at"] == entry["created_at"]
-    assert all(updated[key] is None for key in ("ai_summary", "ai_reflection_question", "ai_summarized_at"))
+    assert all(updated[key] is None for key in ("ai_summary", "ai_summarized_at"))
     with Session(app.state.engine) as session:
         assert session.get(JournalEntry, UUID(entry["id"])).user_id == app.user_id
 

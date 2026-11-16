@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from sqlalchemy import Date, DateTime, ForeignKey, Index, Text, text
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAt, UpdatedAt
@@ -33,7 +32,7 @@ class JournalEntry(CreatedAt, UpdatedAt, Base):
         server_default=text("(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok')::date"),
     )
     ai_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
-    ai_reflection_questions: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    ai_reflection_question: Mapped[str | None] = mapped_column(Text, nullable=True)
     ai_summarized_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

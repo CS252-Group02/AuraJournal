@@ -57,13 +57,12 @@ def summarize_entry(
 
     summarized_at = datetime.now(timezone.utc)
     entry.ai_summary = result.summary
-    entry.ai_reflection_questions = result.reflection_questions
+    entry.ai_reflection_question = None
     entry.ai_summarized_at = summarized_at
     session.commit()
 
     return JournalSummaryResponse(
         entry_id=entry.id,
         summary=result.summary,
-        reflection_questions=result.reflection_questions,
         summarized_at=summarized_at,
     )

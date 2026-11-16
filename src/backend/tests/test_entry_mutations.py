@@ -51,7 +51,7 @@ def test_edit_persists_and_invalidates_previous_summary(app):
     assert entry["id"] == original["id"]
     assert entry["created_at"] == original["created_at"]
     assert datetime.fromisoformat(entry["updated_at"].replace("Z", "+00:00")) > old_time
-    assert all(entry[key] is None for key in ("ai_summary", "ai_reflection_question", "ai_summarized_at"))
+    assert all(entry[key] is None for key in ("ai_summary", "ai_summarized_at"))
     restarted = application_for(app.state.engine)
     restarted.auth_cookies = app.auth_cookies
     assert asyncio.run(request(restarted, "GET", "/api/entries")).json() == [entry]

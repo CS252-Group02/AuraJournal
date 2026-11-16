@@ -43,6 +43,6 @@ export function entryTone(id = '') {
 export function matchesSearch(entry, query) {
   const needle = query.trim().toLowerCase();
   if (!needle) return true;
-  return [entry.content, entry.ai_summary, ...(entry.ai_reflection_questions ?? [])]
+  return [entry.content, entry.ai_summary]
     .some((value) => value?.toLowerCase().includes(needle));
 }

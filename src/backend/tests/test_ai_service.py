@@ -39,16 +39,13 @@ def client_for(completions):
 
 def test_summary_returns_validated_json_and_expected_request():
     completions = FakeCompletions(
-        ' {"summary":"  A calm day.  ",'
-        '"reflection_question":" What felt meaningful? "} '
+        ' {"summary":"  A calm day.  "} '
     )
     summarizer = JournalSummarizer(client=client_for(completions), model="test-model")
 
     result = summarizer.summarize("  Today was calm.  ")
 
-    assert result == JournalSummary(
-        summary="A calm day.", reflection_question="What felt meaningful?"
-    )
+    assert result == JournalSummary(summary="A calm day.")
     request = completions.calls[0]
     assert request["model"] == "test-model"
     assert request["messages"][1]["content"] == "Today was calm."
@@ -79,9 +76,9 @@ def test_missing_api_key_is_controlled(monkeypatch):
     None,
     "",
     "not json",
-    '{"summary":"Only one field"}',
-    '{"summary":" ","reflection_question":"Question?"}',
-    '{"summary":"Summary","reflection_question":"Question?","extra":true}',
+    '{}',
+    '{"summary":" "}',
+    '{"summary":"Summary","reflection_question":"Question?"}',
 ])
 def test_invalid_provider_responses_are_controlled(content):
     summarizer = JournalSummarizer(client=client_for(FakeCompletions(content)))
@@ -112,7 +109,7 @@ def test_authentication_error_is_reported_as_not_configured():
 
 @pytest.mark.parametrize("service,method,schema,prompt,content", [
     (JournalSummarizer, "summarize", JournalSummary, SUMMARY_PROMPT,
-     '{"summary":"A calm day.","reflection_question":"What felt meaningful?"}'),
+     '{"summary":"A calm day."}'),
     (JournalTitleGenerator, "generate", JournalTitle, TITLE_PROMPT,
      '{"suggested_title":"A Calm Day at Home"}'),
 ])

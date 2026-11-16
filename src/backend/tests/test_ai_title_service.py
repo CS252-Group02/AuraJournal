@@ -114,7 +114,7 @@ def test_missing_api_key_is_controlled_without_client_creation(monkeypatch, key)
 
 @pytest.mark.parametrize("service,method,content", [
     (JournalTitleGenerator, "generate", '{"suggested_title":"A Day in Review"}'),
-    (JournalSummarizer, "summarize", '{"summary":"A calm day.","reflection_question":"Why?"}'),
+    (JournalSummarizer, "summarize", '{"summary":"A calm day."}'),
 ])
 def test_environment_configuration_and_lazy_client_reuse(monkeypatch, service, method, content):
     monkeypatch.setenv("GROQ_API_KEY", "test-key")

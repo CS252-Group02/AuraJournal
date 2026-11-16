@@ -169,14 +169,8 @@ def test_generate_and_overwrite_journal_summary(app):
     created = asyncio.run(request(app, "POST", "/api/entries", json={
         "content": "Today I finished an important assignment.",
     })).json()
-    first = JournalSummary(
-        summary="The writer completed an important assignment.",
-        reflection_question="What helped you finish it?",
-    )
-    second = JournalSummary(
-        summary="An important assignment was completed today.",
-        reflection_question="How do you feel after completing it?",
-    )
+    first = JournalSummary(summary="The writer completed an important assignment.")
+    second = JournalSummary(summary="An important assignment was completed today.")
     summarizer = FakeSummarizer(first, second)
     app.state.journal_summarizer = summarizer
 
@@ -195,7 +189,7 @@ def test_generate_and_overwrite_journal_summary(app):
 
     listed = asyncio.run(request(app, "GET", "/api/entries")).json()
     assert listed[0]["ai_summary"] == second.summary
-    assert listed[0]["ai_reflection_question"] == second.reflection_question
+    assert "ai_reflection_question" not in listed[0]
     listed_at = datetime.fromisoformat(listed[0]["ai_summarized_at"].replace("Z", "+00:00"))
     response_at = datetime.fromisoformat(
         second_response.json()["summarized_at"].replace("Z", "+00:00")
@@ -204,7 +198,7 @@ def test_generate_and_overwrite_journal_summary(app):
     with Session(app.state.engine) as session:
         entry = session.get(JournalEntry, uuid.UUID(created["id"]))
         assert entry.ai_summary == second.summary
-        assert entry.ai_reflection_question == second.reflection_question
+        assert entry.ai_reflection_question is None
         assert entry.ai_summarized_at is not None
 
 
