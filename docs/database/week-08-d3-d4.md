@@ -39,13 +39,14 @@ keyword omits the text filter. Optional dates include both boundaries and use
 `journal_date`. An inverted interval raises `ValueError`.
 
 Backend can call this helper with the authenticated owner's ID. The existing
-`GET /api/entries` also accepts `q`, `start` and `end`, for example
-`/api/entries?q=Python&start=2026-11-01&end=2026-11-30`.
-Filtered results use journal date, creation timestamp and ID descending.
-Requests without filter parameters retain the existing creation-time ordering.
-The response remains a list of entry objects. No matches return `[]`.
-Invalid dates, inverted intervals, null characters and keywords longer than
-5,000 characters return 422. Anonymous requests return 401.
+`GET /api/entries` accepts `q`, inclusive `start` and `end`, `sort=newest|oldest`,
+and an optional positive `limit`, for example
+`/api/entries?q=Python&start=2026-11-01&end=2026-11-30&sort=oldest&limit=20`.
+Results sort by journal date, creation timestamp and ID in the requested
+direction. The default is newest first. The response remains a list of entry
+objects. No matches return `[]`. Invalid dates, inverted intervals, invalid
+sort/limit values, null characters and keywords longer than 5,000 characters
+return 422. Anonymous requests return 401.
 
 ### Supporting index
 
@@ -95,8 +96,8 @@ await fetch('http://localhost:8000/api/entries?' + new URLSearchParams({q: 'pyth
 }).then(response => response.json())
 ```
 
-Add `start` and `end` in YYYY-MM-DD form to test date limits. Sign in as a
-second user and repeat to verify account isolation. The saved-entry screen
+Add `start` and `end` in YYYY-MM-DD form, then try `sort=oldest&limit=1`. Sign in
+as a second user and repeat to verify account isolation. The saved-entry screen
 can use these query parameters when its search controls are implemented.
 
 To run data and API tests, set `TEST_DATABASE_URL` to a disposable PostgreSQL
