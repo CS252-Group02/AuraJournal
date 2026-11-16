@@ -2,12 +2,13 @@ from datetime import date, timedelta
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import delete, insert
+from sqlalchemy import delete, insert, inspect, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import DEVELOPMENT_USER_ID
 from app.models import User, WeeklyReflection
+from conftest import migrate
 
 
 START = date(2026, 10, 29)
@@ -57,3 +58,39 @@ def test_a_user_has_one_reflection_per_start_date(migrated_engine):
         conn.execute(insert(WeeklyReflection).values(values))
     with pytest.raises(IntegrityError), migrated_engine.begin() as conn:
         conn.execute(insert(WeeklyReflection).values(values))
+
+
+def test_reflection_migration_round_trip_preserves_journals(isolated_engine):
+    migrate(isolated_engine, "0005")
+    entry_id = uuid4()
+    with isolated_engine.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO journal_entries (id, user_id, content, journal_date)
+            VALUES (:id, :owner, 'Preserved journal', :day)
+        """), {"id": entry_id, "owner": DEVELOPMENT_USER_ID, "day": START})
+        original = conn.execute(text("SELECT * FROM journal_entries WHERE id = :id"),
+                                {"id": entry_id}).mappings().one()
+
+    migrate(isolated_engine, "0006")
+    with isolated_engine.begin() as conn:
+        conn.execute(insert(WeeklyReflection).values(
+            user_id=DEVELOPMENT_USER_ID, period_start=START,
+            summary="Saved reflection", questions=QUESTIONS,
+        ))
+    migrate(isolated_engine)
+    migrate(isolated_engine)
+    with Session(isolated_engine) as session:
+        saved = session.get(WeeklyReflection, (DEVELOPMENT_USER_ID, START))
+        assert saved.summary == "Saved reflection"
+        assert saved.questions == QUESTIONS
+
+    migrate(isolated_engine, "0005", downgrade=True)
+    assert "weekly_reflections" not in inspect(isolated_engine).get_table_names()
+    with isolated_engine.connect() as conn:
+        assert conn.execute(text("SELECT * FROM journal_entries WHERE id = :id"),
+                            {"id": entry_id}).mappings().one() == original
+
+    migrate(isolated_engine)
+    with Session(isolated_engine) as session:
+        # Downgrade intentionally drops saved reflections; re-upgrade cannot recover them.
+        assert session.get(WeeklyReflection, (DEVELOPMENT_USER_ID, START)) is None
