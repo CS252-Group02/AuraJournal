@@ -1,5 +1,6 @@
 """Bound JSON bodies before parsing, including bodies without Content-Length."""
 from starlette.responses import JSONResponse
+from app.upload_policy import is_audio_upload
 
 
 class RequestSizeLimit:
@@ -7,7 +8,9 @@ class RequestSizeLimit:
         self.app, self.maximum = app, maximum
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] != "http":
+        # The authenticated upload handler bounds its own stream before provider
+        # access. Do not prebuffer audio or relax limits on any other route.
+        if scope["type"] != "http" or is_audio_upload(scope):
             return await self.app(scope, receive, send)
         chunks, size = [], 0
         while True:
