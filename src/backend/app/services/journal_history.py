@@ -42,6 +42,32 @@ def daily_entry_counts(
     return {journal_day: count for journal_day, count in session.execute(query)}
 
 
+def search_entries(
+    session: Session, user_id: UUID, keyword: str = "",
+    start: date | None = None, end: date | None = None,
+) -> list[JournalEntry]:
+    """Literal, case-insensitive content search with inclusive optional dates.
+
+    Whitespace-only keywords omit the text filter. Accents are preserved.
+    """
+    if start is not None and end is not None and start > end:
+        raise ValueError("The start date must be on or before the end date.")
+    keyword = keyword.strip()
+    if "\x00" in keyword:
+        raise ValueError("The keyword cannot contain a null character.")
+    query = select(JournalEntry).where(JournalEntry.user_id == user_id)
+    if keyword:
+        query = query.where(JournalEntry.content.icontains(keyword, autoescape=True))
+    if start is not None:
+        query = query.where(JournalEntry.journal_date >= start)
+    if end is not None:
+        query = query.where(JournalEntry.journal_date <= end)
+    query = query.order_by(
+        JournalEntry.journal_date.desc(), JournalEntry.created_at.desc(), JournalEntry.id.desc(),
+    )
+    return list(session.scalars(query))
+
+
 def current_streak(session: Session, user_id: UUID, as_of: date) -> int:
     """Count consecutive journal days through as_of, allowing today to be unfinished."""
     # Each step tests one earlier calendar day using the owner/date index.
