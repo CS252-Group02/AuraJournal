@@ -43,8 +43,10 @@ Backend can call this helper with the authenticated owner's ID. The existing
 and an optional positive `limit`, for example
 `/api/entries?q=Python&start=2026-11-01&end=2026-11-30&sort=oldest&limit=20`.
 Results sort by journal date, creation timestamp and ID in the requested
-direction. The default is newest first. The response remains a list of entry
-objects. No matches return `[]`. Invalid dates, inverted intervals, invalid
+direction. When `sort` is omitted, unfiltered requests keep creation-time
+descending order and filtered requests keep their existing journal-date
+descending order. The response remains a list of entry objects. No matches return
+`[]`. Invalid dates, inverted intervals, invalid
 sort/limit values, null characters and keywords longer than 5,000 characters
 return 422. Anonymous requests return 401.
 

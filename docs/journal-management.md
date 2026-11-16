@@ -15,7 +15,9 @@
 
 Both GET `/api/entries` and GET `/api/entries/{entry_id}` require a valid account
 session. The list supports `q`, `start`, `end`, `sort`, and `limit`, and defaults
-to `journal_date DESC, created_at DESC, id DESC`. The detail endpoint returns one `EntryResponse`, never
+to creation time descending for unfiltered requests. Filtered requests preserve
+journal-date descending order; explicit `sort` values use journal-date order in
+the requested direction. The detail endpoint returns one `EntryResponse`, never
 an owner ID or account credentials. Missing/foreign resources both return 404;
 anonymous, invalid, expired, revoked, and disabled sessions return 401. Invalid
 UUIDs return 422. Private responses use `Cache-Control: no-store`.

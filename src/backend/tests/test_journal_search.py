@@ -72,7 +72,7 @@ def test_api_combines_filters_and_uses_journal_date_order(searchable):
         session.commit()
     original = asyncio.run(request(app, "GET", "/api/entries")).json()
     filtered = asyncio.run(request(app, "GET", "/api/entries?q=")).json()
-    assert [UUID(e["id"]).int for e in original] == [1, 3, 2]
+    assert [UUID(e["id"]).int for e in original] == [3, 2, 1]
     assert [UUID(e["id"]).int for e in filtered] == [1, 3, 2]
 
 
@@ -84,6 +84,9 @@ def test_api_sort_and_limit_are_applied_after_filters(searchable):
     oldest = asyncio.run(request(app, "GET", "/api/entries", params={
         "sort": "oldest", "limit": 2,
     }))
+    default_limited = asyncio.run(request(app, "GET", "/api/entries", params={
+        "limit": 2,
+    }))
     combined = asyncio.run(request(app, "GET", "/api/entries", params={
         "q": "sale", "start": "2027-01-01", "end": "2027-01-02",
         "sort": "oldest", "limit": 1,
@@ -91,6 +94,7 @@ def test_api_sort_and_limit_are_applied_after_filters(searchable):
 
     assert [UUID(entry["id"]).int for entry in newest.json()] == [3, 2]
     assert [UUID(entry["id"]).int for entry in oldest.json()] == [1, 2]
+    assert [UUID(entry["id"]).int for entry in default_limited.json()] == [3, 2]
     assert [UUID(entry["id"]).int for entry in combined.json()] == [2]
 
 
