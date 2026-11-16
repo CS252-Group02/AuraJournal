@@ -1,5 +1,5 @@
 export default function RecordButton({ model, onReset }) {
-  const { phase, capture, error, warning, flow, capabilities, elapsedSeconds } = model;
+  const { phase, capture, error, warning, flow, capabilities, elapsedSeconds, transcriptionActive } = model;
   const captureLayout = ['ready', 'connecting', 'recording', 'error'].includes(phase);
   const duration = `${String(Math.floor(elapsedSeconds / 60)).padStart(2, '0')}:${String(elapsedSeconds % 60).padStart(2, '0')}`;
   const recording = phase === 'recording' && capture.status === 'recording';
@@ -9,10 +9,12 @@ export default function RecordButton({ model, onReset }) {
     : phase === 'connecting' ? 'Connecting…' : phase === 'finalizing' ? 'Finalizing…' : 'Record';
   const message = {
     ready: capabilities.transcriptionAvailable
-      ? 'Audio is sent to the speech service while recording. Final text may be sent for AI proofreading. Your journal is saved only when you choose Save journal.'
-      : 'Record locally and write your journal after stopping. Live transcription and automatic proofreading are not connected yet.',
+      ? `Audio is sent for live transcription. Stop well before five minutes to allow finalization.${capabilities.proofreadAvailable ? ' Final text may be sent for AI proofreading.' : ''} Your journal is saved only when you choose Save journal.`
+      : 'Record locally and write your journal after stopping. Your journal is saved only when you choose Save journal.',
     connecting: 'Preparing your recording…',
-    recording: 'Recording… Select Stop when you are finished.',
+    recording: transcriptionActive
+      ? 'Recording… Stop well before five minutes; the live limit includes finalization.'
+      : 'Recording locally… Select Stop to review your audio and write your journal.',
     finalizing: 'Finishing audio and waiting for final speech results…',
     proofreading: 'Proofreading the confirmed transcript…',
     review: 'Review your draft below. Your changes are the version that will be saved.',

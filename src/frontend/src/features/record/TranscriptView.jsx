@@ -7,33 +7,55 @@ export default function TranscriptView({ model }) {
   const { phase, transcript, editorText, originalTranscript, unconfirmedText, proposedDraft,
     incomplete, capture, saveUnknown, savedEntry, capabilities, flow } = model;
   const { finalizedTranscript, interimTranscript } = transcriptText(transcript);
-  const area = useRef(null), editor = useRef(null), following = useRef(true);
+  const area = useRef(null), editor = useRef(null), following = useRef(true), programmaticScroll = useRef(false);
   const [showLatest, setShowLatest] = useState(false);
   const review = ['review', 'saving', 'saved'].includes(phase);
   const count = contentLength(editorText);
   useEffect(() => {
     if (phase === 'ready' || phase === 'connecting') {
       following.current = true;
+      programmaticScroll.current = true;
       setShowLatest(false);
-      if (area.current) area.current.scrollTop = 0;
+      area.current?.scrollTo({ top: 0, behavior: 'instant' });
     }
   }, [phase]);
   useEffect(() => {
-    if (area.current && following.current) area.current.scrollTop = area.current.scrollHeight;
+    if (following.current) scrollToLatest();
   }, [finalizedTranscript, interimTranscript]);
   useEffect(() => { if (phase === 'review') editor.current?.focus({ preventScroll: true }); }, [phase]);
   function followLatest() {
     following.current = true; setShowLatest(false);
-    area.current.scrollTop = area.current.scrollHeight;
+    scrollToLatest();
+  }
+  function scrollToLatest() {
+    if (!area.current) return;
+    programmaticScroll.current = true;
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    area.current.scrollTo({ top: area.current.scrollHeight, behavior: reducedMotion ? 'instant' : 'smooth' });
+  }
+  function pauseFollowing() {
+    const el = area.current;
+    // Cancel an in-flight smooth scroll before wheel/touch/keyboard/scrollbar input.
+    programmaticScroll.current = false;
+    following.current = false;
+    el.scrollTo({ top: el.scrollTop, behavior: 'instant' });
+    setShowLatest(el.scrollHeight > el.clientHeight);
   }
   return (
     <section className="record-transcript" aria-label={review ? 'Review your journal' : 'Live transcript'}>
       {!review && (
         <>
           <div className="record-live" ref={area} role="region" aria-label="Live transcript" tabIndex={0}
+            onWheel={pauseFollowing} onTouchStart={pauseFollowing} onPointerDown={pauseFollowing}
+            onKeyDown={event => {
+              if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) pauseFollowing();
+            }}
             onScroll={() => {
+              if (programmaticScroll.current) return;
               const el = area.current;
-              following.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+              // A late event from a cancelled smooth scroll must not resume following.
+              // Once paused, only the explicit Follow latest action resumes it.
+              if (el.scrollHeight - el.scrollTop - el.clientHeight >= 48) following.current = false;
               setShowLatest(!following.current);
             }}>
             <span aria-live="polite" aria-atomic="false">{finalizedTranscript}</span>
