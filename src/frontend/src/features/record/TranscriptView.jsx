@@ -1,27 +1,42 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { contentLength, transcriptText, validContent } from './transcriptState.js';
+import { contentLength, transcriptSegments, transcriptText, validContent } from './transcriptState.js';
 import AudioPlayback from './AudioPlayback.jsx';
+import LiveTranscriptText from './LiveTranscriptText.jsx';
+import { createTranscriptScroll } from './transcriptScroll.js';
 
 export default function TranscriptView({ model }) {
   const { phase, transcript, editorText, originalTranscript, unconfirmedText, proposedDraft,
     incomplete, capture, saveUnknown, savedEntry, capabilities, flow } = model;
   const { finalizedTranscript, interimTranscript } = transcriptText(transcript);
+  const segments = useMemo(() => transcriptSegments(transcript), [transcript]);
+  const [scroller] = useState(() => createTranscriptScroll());
   const area = useRef(null), editor = useRef(null), following = useRef(true), programmaticScroll = useRef(false);
   const [showLatest, setShowLatest] = useState(false);
   const review = ['review', 'saving', 'saved'].includes(phase);
   const count = contentLength(editorText);
   useEffect(() => {
+    const query = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    const update = () => {
+      scroller.cancel();
+      if (query.matches && following.current && area.current) scroller.follow(area.current, true);
+    };
+    query?.addEventListener('change', update);
+    return () => { query?.removeEventListener('change', update); scroller.cancel(); };
+  }, [scroller]);
+  useEffect(() => {
     if (phase === 'ready' || phase === 'connecting') {
+      scroller.cancel();
       following.current = true;
       programmaticScroll.current = true;
       setShowLatest(false);
       area.current?.scrollTo({ top: 0, behavior: 'instant' });
     }
-  }, [phase]);
-  useEffect(() => {
-    if (following.current) scrollToLatest();
-  }, [finalizedTranscript, interimTranscript]);
+    if (review) scroller.cancel();
+  }, [phase, review, scroller]);
+  useLayoutEffect(() => {
+    if (following.current && !review) scrollToLatest();
+  }, [finalizedTranscript, interimTranscript, phase, review]);
   useEffect(() => { if (phase === 'review') editor.current?.focus({ preventScroll: true }); }, [phase]);
   function followLatest() {
     following.current = true; setShowLatest(false);
@@ -31,20 +46,21 @@ export default function TranscriptView({ model }) {
     if (!area.current) return;
     programmaticScroll.current = true;
     const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
-    area.current.scrollTo({ top: area.current.scrollHeight, behavior: reducedMotion ? 'instant' : 'smooth' });
+    scroller.follow(area.current, Boolean(reducedMotion));
   }
   function pauseFollowing() {
     const el = area.current;
     // Cancel an in-flight smooth scroll before wheel/touch/keyboard/scrollbar input.
     programmaticScroll.current = false;
     following.current = false;
-    el.scrollTo({ top: el.scrollTop, behavior: 'instant' });
+    scroller.cancel();
     setShowLatest(el.scrollHeight > el.clientHeight);
   }
   return (
     <section className="record-transcript" aria-label={review ? 'Review your journal' : 'Live transcript'}>
       {!review && (
         <>
+          <span className="visually-hidden" aria-live="polite" aria-atomic="false">{finalizedTranscript}</span>
           <div className="record-live" ref={area} role="region" aria-label="Live transcript" tabIndex={0}
             onWheel={pauseFollowing} onTouchStart={pauseFollowing} onPointerDown={pauseFollowing}
             onKeyDown={event => {
@@ -58,8 +74,8 @@ export default function TranscriptView({ model }) {
               if (el.scrollHeight - el.scrollTop - el.clientHeight >= 48) following.current = false;
               setShowLatest(!following.current);
             }}>
-            <span aria-live="polite" aria-atomic="false">{finalizedTranscript}</span>
-            {interimTranscript && <span className="record-interim"><span className="visually-hidden">Unconfirmed: </span>{finalizedTranscript ? ' ' : ''}{interimTranscript}</span>}
+            <LiveTranscriptText {...segments} animate={phase === 'recording' && model.transcriptionActive}
+              caret={phase === 'recording' && model.transcriptionActive} />
             {!finalizedTranscript && !interimTranscript && <p className="record-transcript-hint">
               {phase === 'recording' && model.transcriptionActive ? 'Listening for your words…'
                 : phase === 'recording' ? 'Live transcription is unavailable. Your audio is still recording; stop to review and write your journal.'
