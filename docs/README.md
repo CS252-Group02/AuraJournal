@@ -6,6 +6,7 @@ Start with the repository [README](../README.md) for prerequisites and startup.
 | --- | --- |
 | [Speech-to-text streaming service and API](speech-to-text.md) | Provider transport, transcript normalization, authenticated WebSocket protocol, frontend configuration, and offline tests |
 | [Weekly recap](weekly-recap.md) | Factual weekly summaries, timezone boundaries, source links, API, and verification |
+| [Entry reflections](entry-reflections.md) | Per-entry short reflections, regeneration, and API response |
 | [Calendar and streak](calendar-and-streak.md) | Per-user endpoints, streak rules, repeatable sample demo, and verification |
 | [Weekly reflections](weekly-reflections.md) | Date-based seven-day summaries with two questions, private saving/reading, and generator integration contract |
 | [Accounts and private journals](authentication.md) | Registration, login/logout, seven-day sessions, journal privacy, API, code walkthrough, troubleshooting, and Google sign-in status |

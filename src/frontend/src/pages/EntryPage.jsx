@@ -32,14 +32,22 @@ function Reflection({ entry, onSummarize, state }) {
       <aside className="entry-note" aria-labelledby="note-heading">
         <span className="aj-kicker" id="note-heading">A note to myself ✦</span>
         <p className="entry-note-summary">{entry.ai_summary}</p>
-        {entry.ai_reflection_question && <p className="entry-note-question">{entry.ai_reflection_question}</p>}
+        <button
+          type="button"
+          className="aj-btn aj-btn-quiet"
+          onClick={onSummarize}
+          disabled={state.busy}
+        >
+          {state.busy ? 'Refreshing…' : 'Regenerate reflection'}
+        </button>
+        {state.error && <p className="aj-error" role="alert">{state.error}</p>}
       </aside>
     );
   }
   return (
     <aside className="entry-note entry-note-empty" aria-labelledby="note-heading">
       <span className="aj-kicker" id="note-heading">A note to myself ✦</span>
-      <p>Let AuraJournal gather this entry into a short reflection and a gentle question.</p>
+      <p>Let AuraJournal gather this entry into a short reflection.</p>
       <button type="button" className="aj-btn" onClick={onSummarize} disabled={state.busy}>
         {state.busy ? 'Reflecting…' : 'Reflect on this entry'}
       </button>
@@ -103,7 +111,12 @@ export default function EntryPage() {
     setSummary({ busy: true, error: '' });
     try {
       const result = await api(`/api/entries/${entry.id}/summary`, { method: 'POST', body: {} });
-      replaceEntry({ ...entry, ai_summary: result.summary, ai_reflection_question: result.reflection_question, ai_summarized_at: result.summarized_at });
+      replaceEntry({
+        ...entry,
+        ai_summary: result.summary,
+        ai_reflection_question: null,
+        ai_summarized_at: result.summarized_at,
+      });
       setSummary({ busy: false, error: '' });
     } catch (problem) {
       setSummary({ busy: false, error: summaryError(problem) });

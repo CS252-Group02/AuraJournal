@@ -1,6 +1,6 @@
 # Database setup and migrations
 
-AuraJournal uses PostgreSQL 14+ and Alembic. Start PostgreSQL and install `src/backend/requirements.txt` in your virtual environment first. Alembic reads the repository-root `.env`; an exported `DATABASE_URL` takes precedence. Commands below run from `src/backend`, with the virtual environment active.
+AuraJournal uses PostgreSQL 14+ and Alembic. For local development, `npm start` creates `.venv`, installs `src/backend/requirements.txt` when needed, and applies migrations before launching the app. Alembic reads the repository-root `.env`; an exported `DATABASE_URL` takes precedence. Manual Alembic commands below run from `src/backend` with `.venv`'s Python.
 
 The current head is **0008**. The history below lists the schema changes. See [authentication](../authentication.md) for account setup.
 
@@ -13,7 +13,7 @@ python -m alembic upgrade head
 python -m alembic current
 ```
 
-The current revision should be marked `(head)`. Return to the repository root and run `npm start`. The backend does not modify tables at startup.
+The current revision should be marked `(head)`. Return to the repository root and run `npm start`; it applies the upgrade before launching either app. The database must be reachable and configured in `.env`.
 
 ## Version history
 
@@ -33,7 +33,7 @@ An empty database runs the complete chain with `python -m alembic upgrade head`.
 
 ## Existing database
 
-For an existing tracked database, back up its data and run `python -m alembic upgrade head` before starting the updated application. Confirm `python -m alembic current` shows the revision marked `(head)`. Re-running the command at head preserves existing dates.
+For an existing tracked database, back up its data before running the updated application. `npm start` applies `python -m alembic upgrade head` automatically. Confirm `python -m alembic current` shows the revision marked `(head)`. Re-running at head preserves existing dates.
 
 A database already recorded at `0001` only needs `python -m alembic upgrade head`, after a backup.
 
@@ -69,7 +69,7 @@ Stamping only records that the initial schema already exists; it does not create
 
 The upgrade preserves entry content and creation times, generates new UUIDs, initializes `updated_at` from `created_at`, and assigns existing entries to the development user. Original numeric IDs are not retained. Migration `0002` refuses a downgrade because it cannot recover those IDs; restore a pre-migration backup to return to the initial schema.
 
-Migrations are an explicit setup/deployment step, not part of `npm start`.
+Local `npm start` applies migrations automatically. Production deployments should run migrations as a reviewed, explicit deployment step.
 
 ## Journal dates and timestamps
 

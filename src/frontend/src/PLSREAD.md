@@ -241,8 +241,9 @@ npm run test:frontend
 git diff --check
 ```
 
-Use `npm run dev` for frontend-only development or `npm start` after backend
-setup to run both services. See the [frontend README](../README.md) for setup.
+Use `npm run dev` for frontend-only development or `npm start` to prepare the
+Python backend, apply local database migrations, and run both services. See the
+[frontend README](../README.md) for setup.
 
 - Confirm imports/assets resolve and dependency direction stays clear.
 - Cover changed behavior with meaningful targeted tests. Existing frontend tests

@@ -122,9 +122,6 @@ From the repository root, create your own local environment and config files.
 **Linux/macOS:**
 
 ```sh
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r src/backend/requirements.txt
 cp .env.example .env
 cp src/frontend/.env.example src/frontend/.env.local
 ```
@@ -132,22 +129,20 @@ cp src/frontend/.env.example src/frontend/.env.local
 **Windows PowerShell:**
 
 ```powershell
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r src/backend/requirements.txt
 Copy-Item .env.example .env
 Copy-Item src/frontend/.env.example src/frontend/.env.local
 ```
 
 Update `.env` if your PostgreSQL credentials differ. The virtual environment and local env files are not shared or committed.
 
-Before starting the app, apply database migrations. With the virtual environment active, run from `src/backend`:
-
-```sh
-python -m alembic upgrade head
-```
-
-An empty database runs the complete Alembic history, including journal dates and weekly reflection storage. Check for `(head)` in the output of `alembic current`. **If your database already has the original journal table without migration tracking, follow the backup and baseline-stamp instructions in [database setup](docs/database/migrations.md) first.** Back up a tracked database before running `upgrade head`. Return to the repository root afterward. The app does not create tables at startup.
+On the first `npm start`, the launcher creates `.venv`, installs the Python
+requirements, and applies database migrations before starting either app. It
+reinstalls requirements when `src/backend/requirements.txt` changes. PostgreSQL
+must be running, and `.env` must contain the app database configuration. **If
+your database already has the original journal table without migration
+tracking, follow the backup and baseline-stamp instructions in
+[database setup](docs/database/migrations.md) before starting.** Back up an
+existing tracked database before its first automatic upgrade.
 
 Entries now store a required `journal_date` using the MVP's UTC+7 calendar (`Asia/Bangkok`). Existing entries use their local creation day; new entries default to the current local day. See [journal dates and timestamps](docs/database/migrations.md#journal-dates-and-timestamps) for migration behavior and Backend date-selection integration.
 
@@ -161,7 +156,11 @@ PostgreSQL must be running before you start the app. From the repository root, r
 npm start
 ```
 
-`npm start` installs npm dependencies when needed, then runs the backend and frontend together with `[backend]` and `[frontend]` log labels. Press Ctrl+C to stop both. The launcher uses `.venv`'s Python when available; otherwise it uses `python3` on Linux/macOS or `python` on Windows. Make sure the Python backend dependencies and `.env` are set up as described above. Open `http://localhost:5173` when Vite is ready. The API provides `POST /api/entries` with `{"content":"..."}` and `GET /api/entries`.
+`npm start` installs npm dependencies when needed, prepares the Python
+environment, applies database migrations, then runs the backend and frontend
+together with `[backend]` and `[frontend]` log labels. Press Ctrl+C to stop both.
+Open `http://localhost:5173` when Vite is ready. The API provides
+`POST /api/entries` with `{"content":"..."}` and `GET /api/entries`.
 
 ## Live speech-to-text
 
