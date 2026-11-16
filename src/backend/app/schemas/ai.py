@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 class JournalSummaryResponse(BaseModel):
     entry_id: UUID
     summary: str
-    reflection_question: str
+    reflection_questions: list[str]
     summarized_at: datetime
 
 

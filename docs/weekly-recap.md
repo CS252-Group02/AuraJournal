@@ -9,7 +9,7 @@ questions, coach the user, or overwrite journal text.
 
 Empty weeks do not call AI. The seven-day strip links to recorded entries; its
 colored tiles are navigation, not generated pixel art. Image generation remains
-separate work. Entry-level summary/questions are unchanged by this feature.
+separate work. Entry-level summaries and questions are separate; see [entry reflections](entry-reflections.md).
 
 ## API and privacy
 

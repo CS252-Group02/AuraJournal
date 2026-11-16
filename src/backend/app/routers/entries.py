@@ -69,7 +69,7 @@ def update_entry(entry_id: UUID, payload: EntryUpdate, request: Request,
             entry.content = content
             # Saved AI output describes the previous content and must be regenerated.
             entry.ai_summary = None
-            entry.ai_reflection_question = None
+            entry.ai_reflection_questions = None
             entry.ai_summarized_at = None
             if entry.image is not None:
                 old_image_key = entry.image.image_url
