@@ -312,3 +312,7 @@ backend tests.
 
 The [security rules](docs/security-rules.md) include broader deployment and product
 requirements; implementing authentication does not certify all those requirements.
+
+## Security hardening
+
+See [backend/database security rollout](docs/security-hardening.md) for migration `0008`, authentication budgets, password policy, runtime roles, and production setup. PostgreSQL authentication rules require the documented operator rollout.

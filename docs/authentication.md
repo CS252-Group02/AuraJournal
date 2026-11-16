@@ -178,3 +178,7 @@ In the browser, register account A, save an entry, refresh, and verify it remain
 Log out, register account B, and verify B has no A entries. Log back into A and
 verify its journal returns. No password hashes, session tokens, or journal bodies
 should appear in server logs or frontend error details.
+
+## Security update
+
+Migration `0008_security_limits.py` follows `0007` and adds shared request budgets and independent login indexes. New registrations require 15–128 characters; existing passwords remain valid for login. See [security rollout](security-hardening.md) for independent account/IP limits, AI quotas, database roles, and deployment requirements.

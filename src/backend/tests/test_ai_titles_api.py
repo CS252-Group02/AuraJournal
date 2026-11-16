@@ -8,6 +8,7 @@ import pytest
 from groq import APIConnectionError, RateLimitError
 
 from app.auth import current_user
+from app.limits import ai_budget
 from app.database import get_session
 from app.main import create_app
 from app.schemas.ai import JournalTitleResponse
@@ -33,6 +34,7 @@ def title_app(monkeypatch):
 
     # Authenticate independently so any database use by title generation fails.
     application.dependency_overrides[current_user] = lambda: SimpleNamespace(id="test-user")
+    application.dependency_overrides[ai_budget] = lambda: None
 
     def forbid_database(*args, **kwargs):
         raise AssertionError("Title generation must not access the database.")

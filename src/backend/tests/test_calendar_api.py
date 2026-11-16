@@ -54,3 +54,25 @@ def test_invalid_parameters(app, path):
     '/api/dashboard?year=2026&month=11', '/api/entries/by-date?date=2026-11-01'])
 def test_login_required(app, path):
     assert get(application_for(app.state.engine), path).status_code == 401
+
+
+def test_backdated_edits_and_deletes_refresh_calendar_and_streak(app):
+    app.dependency_overrides[today] = lambda: date(2024, 3, 1)
+    ids = []
+    for day in ['2024-02-28', '2024-02-29', '2024-03-01']:
+        response = asyncio.run(request(app, 'POST', '/api/entries',
+                                       json={'content': 'Backdated', 'journal_date': day}))
+        assert response.status_code == 201
+        ids.append(response.json()['id'])
+    assert get(app, '/api/stats/streak').json()['current_streak'] == 3
+    assert get(app, '/api/calendar?year=2024&month=2').json()['days'][-2:] == [
+        {'date': '2024-02-28', 'count': 1}, {'date': '2024-02-29', 'count': 1}]
+    moved = asyncio.run(request(app, 'PATCH', f'/api/entries/{ids[1]}',
+                                json={'journal_date': '2024-03-01'}))
+    assert moved.status_code == 200
+    assert get(app, '/api/stats/streak').json()['current_streak'] == 1
+    assert get(app, '/api/calendar?year=2024&month=2').json()['days'][-1]['count'] == 0
+    assert get(app, '/api/calendar?year=2024&month=3').json()['days'][0]['count'] == 2
+    for entry_id in ids[1:]:
+        assert asyncio.run(request(app, 'DELETE', f'/api/entries/{entry_id}', json={})).status_code == 204
+    assert get(app, '/api/stats/streak').json()['current_streak'] == 0

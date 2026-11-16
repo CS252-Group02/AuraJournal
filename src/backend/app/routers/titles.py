@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.auth import current_user
+from app.limits import ai_budget
 from app.schemas.ai import JournalTitleRequest, JournalTitleResponse
 from app.services import (
     AIInvalidResponseError,
@@ -11,7 +12,7 @@ from app.services import (
 )
 
 router = APIRouter(
-    prefix="/api/ai", tags=["AI journal titles"], dependencies=[Depends(current_user)]
+    prefix="/api/ai", tags=["AI journal titles"], dependencies=[Depends(ai_budget)]
 )
 
 

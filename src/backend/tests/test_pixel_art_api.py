@@ -100,6 +100,26 @@ def test_ownership_and_authentication(pixel_app, method, suffix):
     app.state.pixellab_client.generate.assert_not_called()
 
 
+def test_recent_images_use_authenticated_owner_and_private_content_urls(pixel_app):
+    app = pixel_app
+    entry = create(app)
+    generated = call(app, "POST", path(entry), json={})
+    assert generated.status_code == 201
+    url = "/api/entries/pixel-art/recent?as_of=" + entry["journal_date"]
+    response = call(app, "GET", url)
+    assert response.status_code == 200
+    assert response.json() == [{
+        "journal_date": entry["journal_date"], "entry_id": entry["id"],
+        "image": generated.json()["image"],
+    }]
+    assert response.headers["cache-control"] == "no-store"
+    anonymous = application_for(app.state.engine)
+    assert call(anonymous, "GET", url).status_code == 401
+    assert call(app, "GET", "/api/entries/pixel-art/recent?as_of=invalid").status_code == 422
+    assert call(app, "DELETE", "/api/entries/" + entry["id"], json={}).status_code == 204
+    assert call(app, "GET", url).json() == []
+
+
 @pytest.mark.parametrize("payload", [{"user_id": str(uuid4())}, {"prompt": "client scene"}, {"force": True}])
 def test_generation_accepts_no_client_identity_or_prompt(pixel_app, payload):
     entry = create(pixel_app)

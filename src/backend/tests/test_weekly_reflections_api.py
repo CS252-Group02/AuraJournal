@@ -234,7 +234,7 @@ def test_saved_reads_are_private_and_period_specific(app, generator, saved_refle
     other = application_for(app.state.engine)
     assert read(other).status_code == 401
     registered = asyncio.run(request(other, "POST", "/api/auth/register", json={
-        "email": "saved-other@example.com", "password": "test-password",
+        "email": "saved-other@example.com", "password": "test-password-long",
     }))
     assert registered.status_code == 201
     other.auth_cookies = dict(registered.cookies)
