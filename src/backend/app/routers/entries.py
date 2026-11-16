@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
@@ -30,17 +31,22 @@ def create_entry(payload: EntryCreate, session: Session = Depends(get_session), 
 @router.get("", response_model=list[EntryResponse])
 def list_entries(q: str | None = Query(default=None, max_length=5000),
                  start: date | None = None, end: date | None = None,
+                 sort: Literal["newest", "oldest"] | None = None,
+                 limit: int | None = Query(default=None, ge=1),
                  session: Session = Depends(get_session), user: User = Depends(current_user)):
-    if q is not None or start is not None or end is not None:
-        try:
-            return search_entries(session, user.id, q or "", start, end)
-        except ValueError as error:
-            raise HTTPException(422, str(error)) from error
-    return list(session.scalars(
-        select(JournalEntry)
-        .where(JournalEntry.user_id == user.id)
-        .order_by(JournalEntry.created_at.desc(), JournalEntry.id.desc())
-    ))
+    if sort is None and q is None and start is None and end is None:
+        query = (
+            select(JournalEntry)
+            .where(JournalEntry.user_id == user.id)
+            .order_by(JournalEntry.created_at.desc(), JournalEntry.id.desc())
+        )
+        if limit is not None:
+            query = query.limit(limit)
+        return list(session.scalars(query))
+    try:
+        return search_entries(session, user.id, q or "", start, end, sort or "newest", limit)
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error
 
 
 @router.get("/by-date", response_model=list[EntryResponse])

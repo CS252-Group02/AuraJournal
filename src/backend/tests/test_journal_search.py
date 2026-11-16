@@ -55,7 +55,7 @@ def test_optional_inclusive_dates_and_invalid_range(searchable):
             search_entries(session, owner, start=end, end=start)
 
 
-def test_api_combines_filters_and_keeps_existing_unfiltered_order(searchable):
+def test_api_combines_filters_and_uses_journal_date_order(searchable):
     app = searchable
     response = asyncio.run(request(app, "GET", "/api/entries", params={
         "q": "sale", "start": "2027-01-01", "end": "2027-01-01",
@@ -76,9 +76,46 @@ def test_api_combines_filters_and_keeps_existing_unfiltered_order(searchable):
     assert [UUID(e["id"]).int for e in filtered] == [1, 3, 2]
 
 
+def test_api_sort_and_limit_are_applied_after_filters(searchable):
+    app = searchable
+    newest = asyncio.run(request(app, "GET", "/api/entries", params={
+        "sort": "newest", "limit": 2,
+    }))
+    oldest = asyncio.run(request(app, "GET", "/api/entries", params={
+        "sort": "oldest", "limit": 2,
+    }))
+    default_limited = asyncio.run(request(app, "GET", "/api/entries", params={
+        "limit": 2,
+    }))
+    combined = asyncio.run(request(app, "GET", "/api/entries", params={
+        "q": "sale", "start": "2027-01-01", "end": "2027-01-02",
+        "sort": "oldest", "limit": 1,
+    }))
+
+    assert [UUID(entry["id"]).int for entry in newest.json()] == [3, 2]
+    assert [UUID(entry["id"]).int for entry in oldest.json()] == [1, 2]
+    assert [UUID(entry["id"]).int for entry in default_limited.json()] == [3, 2]
+    assert [UUID(entry["id"]).int for entry in combined.json()] == [2]
+
+
+def test_api_sort_ties_are_deterministic(searchable):
+    with Session(searchable.state.engine) as session:
+        session.add(JournalEntry(
+            id=UUID(int=4), user_id=searchable.user_id, content="Same day",
+            journal_date=date(2027, 1, 2),
+            created_at=datetime(2027, 1, 3, tzinfo=timezone.utc),
+        ))
+        session.commit()
+
+    newest = asyncio.run(request(searchable, "GET", "/api/entries", params={"sort": "newest"}))
+    oldest = asyncio.run(request(searchable, "GET", "/api/entries", params={"sort": "oldest"}))
+    assert [UUID(entry["id"]).int for entry in newest.json()] == [4, 3, 2, 1]
+    assert [UUID(entry["id"]).int for entry in oldest.json()] == [1, 2, 3, 4]
+
+
 @pytest.mark.parametrize("params", [
     {"start": "invalid"}, {"start": "2027-01-02", "end": "2027-01-01"},
-    {"q": chr(0)}, {"q": "a" * 5001},
+    {"q": chr(0)}, {"q": "a" * 5001}, {"sort": "random"}, {"limit": "0"},
 ])
 def test_api_rejects_invalid_filters(searchable, params):
     assert asyncio.run(request(searchable, "GET", "/api/entries", params=params)).status_code == 422
