@@ -5,21 +5,16 @@ changes, and how journal access is restricted to the signed-in account.
 
 ## Quick start
 
-Start PostgreSQL and activate your Python environment (`.venv` or your
-`AuraJournal` Conda environment). From the repository root:
+Start PostgreSQL. From the repository root, run:
 
-```powershell
-python -m pip install -r src/backend/requirements.txt
-python -m alembic -c src/backend/alembic.ini upgrade head
-python -m alembic -c src/backend/alembic.ini current
+```sh
 npm start
 ```
 
-The output of `alembic current` should show the current revision marked `(head)`.
-Using `-c` lets Alembic find its configuration from the repository root. Without
-`-c`, run Alembic commands from `src/backend`.
-
-Migration is an explicit step; starting the app does not apply it.
+The launcher creates `.venv`, installs backend requirements when needed, and
+applies database migrations before starting the app. Make sure the repository
+root `.env` is configured. For production, run migrations as an explicit
+deployment step instead of using this development launcher.
 
 Open `http://localhost:5173/register` and create an email/password account. Email
 is trimmed and lowercased; passwords are 8–128 characters and are never trimmed.

@@ -284,7 +284,7 @@ Run from the repository root:
 
 ```sh
 npm run dev             # Frontend only, normally http://localhost:5173
-npm start               # Frontend and backend; requires backend setup
+npm start               # Prepares Python, migrates the local database, runs both
 npm run build           # Production build in src/frontend/dist/
 npm run test:frontend   # Existing API/session regression tests
 ```
