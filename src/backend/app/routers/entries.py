@@ -1,7 +1,7 @@
 from datetime import date
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -9,6 +9,7 @@ from app.database import get_session
 from app.auth import current_user
 from app.models import JournalEntry, User
 from app.schemas.entries import EntryCreate, EntryResponse, EntryUpdate
+from app.services.journal_history import search_entries
 
 router = APIRouter(prefix="/api/entries", tags=["entries"])
 
@@ -27,7 +28,14 @@ def create_entry(payload: EntryCreate, session: Session = Depends(get_session), 
 
 
 @router.get("", response_model=list[EntryResponse])
-def list_entries(session: Session = Depends(get_session), user: User = Depends(current_user)):
+def list_entries(q: str | None = Query(default=None, max_length=5000),
+                 start: date | None = None, end: date | None = None,
+                 session: Session = Depends(get_session), user: User = Depends(current_user)):
+    if q is not None or start is not None or end is not None:
+        try:
+            return search_entries(session, user.id, q or "", start, end)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
     return list(session.scalars(
         select(JournalEntry)
         .where(JournalEntry.user_id == user.id)

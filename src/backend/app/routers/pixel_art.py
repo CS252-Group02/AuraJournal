@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -8,11 +9,12 @@ from sqlalchemy.orm import Session
 from app.auth import current_user
 from app.database import get_session
 from app.models import JournalEntry, JournalImage, User
-from app.schemas.pixel_art import PixelArtMetadata, PixelArtRequest, PixelArtResponse
+from app.schemas.pixel_art import PixelArtMetadata, PixelArtRequest, PixelArtResponse, DatedPixelArt
 from app.services._groq import (
     AIInvalidResponseError, AIServiceNotConfiguredError, AIServiceUnavailableError, EmptyJournalError,
 )
 from app.services.image_lifecycle import generation_locks
+from app.services.journal_images import attach_image, recent_journal_images
 from app.services.pixel_art import build_pixel_art_prompt
 from app.services.pixellab import PixelArtError, PixelArtRateLimited
 
@@ -77,9 +79,7 @@ def generate_pixel_art(entry_id: UUID, payload: PixelArtRequest, request: Reques
                         if entry.image is not None:
                             raise HTTPException(409, "Journal entry already has an image.")
                         key = state.image_storage.save(entry_id, image_id, data)
-                        image = JournalImage(id=image_id, entry_id=entry_id, image_url=key, file_format="png")
-                        write_session.add(image)
-                        write_session.flush()
+                        image = attach_image(write_session, user_id, entry_id, image_id, key)
                         result = metadata(image)
                         result.representation = moment.kind
                         write_session.commit()
@@ -109,6 +109,15 @@ def generate_pixel_art(entry_id: UUID, payload: PixelArtRequest, request: Reques
         raise HTTPException(503, "AI image service is unavailable. Please try again later.") from error
     except PixelArtError as error:
         raise service_error(error) from error
+
+
+@router.get("/pixel-art/recent", response_model=list[DatedPixelArt])
+def recent_pixel_art(as_of: date, user: User = Depends(current_user),
+                     session: Session = Depends(get_session)):
+    return [
+        DatedPixelArt(journal_date=day, entry_id=image.entry_id, image=metadata(image).image)
+        for day, image in recent_journal_images(session, user.id, as_of)
+    ]
 
 
 @router.get("/{entry_id}/pixel-art", response_model=PixelArtResponse, response_model_exclude_none=True)

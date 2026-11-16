@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
@@ -22,3 +22,9 @@ class PixelArtResponse(BaseModel):
     entry_id: UUID
     image: PixelArtMetadata
     representation: Literal["grounded", "symbolic"] | None = None
+
+
+class DatedPixelArt(BaseModel):
+    journal_date: date
+    entry_id: UUID
+    image: PixelArtMetadata
