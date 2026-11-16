@@ -108,11 +108,21 @@ def test_ambiguous_overlap_is_rejected_without_changing_confirmed_text(words):
     assert normalizer.final_count == 1
 
 
-@pytest.mark.parametrize("text", ["  Hôm nay  I’m happy! 😀  ", "😀" * 5001])
+@pytest.mark.parametrize("text", ["  Hôm nay  I’m happy! 😀  ", "😀" * 5001], ids=["unicode", "long-unicode"])
 def test_text_is_preserved_without_silent_truncation(text):
     assert TranscriptNormalizer("take-1").consume(result(text, final=True)) == [
         segment(text.strip(), final=True),
     ]
+
+
+def test_provisional_word_end_can_extend_past_interim_window_but_not_final():
+    # Real Nova-3 interim: window ends at 1.0134375, last word ends at 1.04.
+    normalizer = TranscriptNormalizer("take-1")
+    raw = result("today i finished my", end=1.0134375, words=[word("my", 0.96, 1.04)])
+    assert normalizer.consume(raw)[0]["text"] == "today i finished my"
+    with pytest.raises(DeepgramInvalidResponseError):
+        normalizer.consume(raw | {"is_final": True})
+    assert normalizer.consume(result("today i finished my assignment", final=True, end=2.17))[0]["is_final"]
 
 
 @pytest.mark.parametrize("raw", [
