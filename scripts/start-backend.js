@@ -39,7 +39,9 @@ if (process.argv.includes('--check')) {
 
 const backend = spawn(
   python,
-  ['-m', 'uvicorn', 'app.main:app', '--reload', '--env-file', '../../.env'],
+  ['-m', 'uvicorn', 'app.main:app', '--reload', '--env-file', '../../.env',
+    '--ws', 'websockets', '--ws-max-size', '1048576', '--ws-max-queue', '4',
+    '--ws-per-message-deflate', 'false'],
   { cwd: join(root, 'src', 'backend'), stdio: 'inherit' },
 );
 

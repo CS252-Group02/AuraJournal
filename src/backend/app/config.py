@@ -25,6 +25,10 @@ def groq_model() -> str:
     return os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b")
 
 
+def deepgram_api_key() -> str | None:
+    return os.environ.get("DEEPGRAM_API_KEY")
+
+
 def pixellab_enabled() -> bool:
     return os.environ.get("PIXELLAB_ENABLED", "false").lower() == "true"
 

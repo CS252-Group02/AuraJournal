@@ -163,11 +163,30 @@ npm start
 
 `npm start` installs npm dependencies when needed, then runs the backend and frontend together with `[backend]` and `[frontend]` log labels. Press Ctrl+C to stop both. The launcher uses `.venv`'s Python when available; otherwise it uses `python3` on Linux/macOS or `python` on Windows. Make sure the Python backend dependencies and `.env` are set up as described above. Open `http://localhost:5173` when Vite is ready. The API provides `POST /api/entries` with `{"content":"..."}` and `GET /api/entries`.
 
+## Live speech-to-text
+
+The reusable asynchronous Deepgram streaming service, transcript normalizer, and
+`transcribe_audio()` session helper are available for backend integration. Set
+backend `DEEPGRAM_API_KEY`; see the [service guide](docs/speech-to-text.md) for
+WebM/Opus input, interim/final segments, no-speech outcomes, safe errors, cleanup,
+and offline tests. The backend exposes the authenticated WebSocket at
+`/api/transcriptions/live`. Set frontend
+`VITE_RECORD_TRANSCRIPTION_PATH=/api/transcriptions/live` locally and restart Vite
+to integrate the existing Record flow. The path remains disabled by default.
+Format/protocol validation and bounded streaming limits are implemented. Live
+Vietnamese/English evaluation remains outstanding.
+
 ## AI title suggestions
 
 Weekly recaps are available on `/reflection`: choose a week and select **Generate
 weekly recap** for a factual account of its events. This is separate from
 entry-level reflection questions. See [weekly recap API and behavior](docs/weekly-recap.md).
+
+The backend also provides `POST /api/weekly-reflections` for a selected seven-day
+period and a summary with exactly two questions. Successful generation saves the
+result; `GET /api/weekly-reflections/{period_start}` reads it without calling AI.
+Nonempty generation requests return `503` until the reflection AI generator is
+connected. See [weekly reflection integration](docs/weekly-reflections.md).
 
 `POST /api/ai/suggest-title` accepts journal text directly and returns one short
 title. It does not look up or save journal entries and rejects `entry_id` or any

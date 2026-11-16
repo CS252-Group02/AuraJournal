@@ -2,6 +2,7 @@ import asyncio
 
 import httpx
 import pytest
+from websockets.asyncio.client import connect
 
 
 def test_sync_provider_http_fails_without_opening_a_connection():
@@ -15,6 +16,14 @@ def test_async_provider_http_fails_without_opening_a_connection():
         async with httpx.AsyncClient() as client:
             with pytest.raises(pytest.fail.Exception, match="Real HTTP is forbidden"):
                 await client.get("https://api.deepgram.com/v1/listen")
+    asyncio.run(attempt())
+
+
+def test_provider_websocket_fails_without_opening_a_connection():
+    async def attempt():
+        with pytest.raises(pytest.fail.Exception, match="Real HTTP is forbidden"):
+            async with connect("wss://api.deepgram.com/v1/listen", proxy=None):
+                pytest.fail("Real provider sockets must be blocked.")
     asyncio.run(attempt())
 
 

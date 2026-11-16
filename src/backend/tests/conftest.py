@@ -6,6 +6,7 @@ from alembic import command
 from alembic.config import Config
 import pytest
 import httpx
+from websockets.asyncio.client import connect as websocket_connect
 from sqlalchemy import create_engine, text
 
 from app.database import make_engine
@@ -24,6 +25,9 @@ def block_external_http(monkeypatch):
 
     monkeypatch.setattr(httpx.HTTPTransport, "handle_request", blocked)
     monkeypatch.setattr(httpx.AsyncHTTPTransport, "handle_async_request", blocked_async)
+    # Patch the class method so even previously imported connect aliases cannot
+    # establish real provider sockets or make billable calls in automated tests.
+    monkeypatch.setattr(websocket_connect, "create_connection", blocked_async)
 
 
 @pytest.fixture
