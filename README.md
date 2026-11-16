@@ -147,7 +147,9 @@ Before starting the app, apply database migrations. With the virtual environment
 python -m alembic upgrade head
 ```
 
-An empty database runs the initial journal-table migration (`0001`) then the four-table migration (`0002`), then authentication (`0003`), saved AI summaries (`0004`), and security budgets (`0005`). **If your database already has the original journal table without migration tracking, follow the backup and baseline-stamp instructions in [database setup](docs/database/migrations.md) first.** Existing databases must upgrade through `0005`. Return to the repository root afterward. The app does not create tables at startup.
+An empty database runs the complete Alembic history, including journal dates and weekly reflection storage. Check for `(head)` in the output of `alembic current`. **If your database already has the original journal table without migration tracking, follow the backup and baseline-stamp instructions in [database setup](docs/database/migrations.md) first.** Back up a tracked database before running `upgrade head`. Return to the repository root afterward. The app does not create tables at startup.
+
+Entries now store a required `journal_date` using the MVP's UTC+7 calendar (`Asia/Bangkok`). Existing entries use their local creation day; new entries default to the current local day. See [journal dates and timestamps](docs/database/migrations.md#journal-dates-and-timestamps) for migration behavior and Backend date-selection integration.
 
 The old development user remains disabled and its entries stay private. Register a real account in the browser. See [accounts and sessions](docs/authentication.md) for configuration and API details.
 
@@ -161,7 +163,30 @@ npm start
 
 `npm start` installs npm dependencies when needed, then runs the backend and frontend together with `[backend]` and `[frontend]` log labels. Press Ctrl+C to stop both. The launcher uses `.venv`'s Python when available; otherwise it uses `python3` on Linux/macOS or `python` on Windows. Make sure the Python backend dependencies and `.env` are set up as described above. Open `http://localhost:5173` when Vite is ready. The API provides `POST /api/entries` with `{"content":"..."}` and `GET /api/entries`.
 
+## Live speech-to-text
+
+The reusable asynchronous Deepgram streaming service, transcript normalizer, and
+`transcribe_audio()` session helper are available for backend integration. Set
+backend `DEEPGRAM_API_KEY`; see the [service guide](docs/speech-to-text.md) for
+WebM/Opus input, interim/final segments, no-speech outcomes, safe errors, cleanup,
+and offline tests. The backend exposes the authenticated WebSocket at
+`/api/transcriptions/live`. Set frontend
+`VITE_RECORD_TRANSCRIPTION_PATH=/api/transcriptions/live` locally and restart Vite
+to integrate the existing Record flow. The path remains disabled by default.
+Format/protocol validation and bounded streaming limits are implemented. Live
+Vietnamese/English evaluation remains outstanding.
+
 ## AI title suggestions
+
+Weekly recaps are available on `/reflection`: choose a week and select **Generate
+weekly recap** for a factual account of its events. This is separate from
+entry-level reflection questions. See [weekly recap API and behavior](docs/weekly-recap.md).
+
+The backend also provides `POST /api/weekly-reflections` for a selected seven-day
+period and a summary with exactly two questions. Successful generation saves the
+result; `GET /api/weekly-reflections/{period_start}` reads it without calling AI.
+Nonempty generation requests return `503` until the reflection AI generator is
+connected. See [weekly reflection integration](docs/weekly-reflections.md).
 
 `POST /api/ai/suggest-title` accepts journal text directly and returns one short
 title. It does not look up or save journal entries and rejects `entry_id` or any
@@ -269,10 +294,6 @@ GitHub Actions runs the PostgreSQL backend tests on Linux, Windows, and macOS, a
 
 For an interactive walkthrough to create and inspect test users and journals, see [create and test the database](docs/database/create-and-test.md). For request flow, backend behavior, and test details, see the [application flow guide](docs/application-flow.md).
 
-## Security rollout
-
-See [backend and database security hardening](docs/security-hardening.md) for migration `0005`, password/rate-limit changes, restricted database roles, PostgreSQL authentication, and production setup. Apply this guide before deployment; installing code does not edit PostgreSQL authentication rules.
-
 ## Accounts and current limits
 
 Email/password registration, login, logout, seven-day revocable cookie sessions,
@@ -292,3 +313,7 @@ backend tests.
 
 The [security rules](docs/security-rules.md) include broader deployment and product
 requirements; implementing authentication does not certify all those requirements.
+
+## Security hardening
+
+See [backend/database security rollout](docs/security-hardening.md) for migration `0008`, authentication budgets, password policy, runtime roles, and production setup. PostgreSQL authentication rules require the documented operator rollout.

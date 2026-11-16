@@ -1,7 +1,5 @@
 # Accounts and private journals
 
-> Security update: current schema head is **0005**. See [security hardening](security-hardening.md) for the current password policy, independent account/IP limits, request quotas, and separate migration/runtime roles.
-
 This guide describes the implemented email/password account flow, its database
 changes, and how journal access is restricted to the signed-in account.
 
@@ -17,14 +15,14 @@ python -m alembic -c src/backend/alembic.ini current
 npm start
 ```
 
-The migration command should report revision `0005` when checking `current`.
+The output of `alembic current` should show the current revision marked `(head)`.
 Using `-c` lets Alembic find its configuration from the repository root. Without
 `-c`, run Alembic commands from `src/backend`.
 
 Migration is an explicit step; starting the app does not apply it.
 
 Open `http://localhost:5173/register` and create an email/password account. Email
-is trimmed and lowercased; new passwords are 15–128 characters, checked against a local common-password list, and are never trimmed. Existing accounts retain the 8–128 login contract.
+is trimmed and lowercased; passwords are 8–128 characters and are never trimmed.
 Registration signs you in immediately. Each account starts with its own empty
 journal. Login uses email, not a username. Google login, email verification,
 password recovery, and account deletion are not implemented in this slice.
@@ -90,17 +88,20 @@ cookie deployments need a separately reviewed configuration.
 | POST `/api/auth/login` | `{email, password}` → `200 {id, email}`, session cookie; invalid/disabled credentials → `401` |
 | GET `/api/auth/me` | `{id, email}`; anonymous/invalid/expired session → `401` |
 | POST `/api/auth/logout` | Send `{}`; revokes session, clears cookie, returns `204` even if already logged out |
-| POST `/api/entries` | `{content}` → entry owned by the verified current user |
+| POST `/api/entries` | `{content, journal_date?}` → entry owned by the verified current user |
 | GET `/api/entries` | Only the verified current user's entries |
-| PATCH `/api/entries/{entry_id}` | `{content}` updates an owned entry; returns the updated entry; clears the saved AI summary if content changes |
+| GET `/api/entries/{entry_id}` | One owned entry; missing and foreign-owned entries both return `404` |
+| PATCH `/api/entries/{entry_id}` | `{content?, journal_date?}` updates an owned entry; at least one field required; clears saved AI output only if content changes |
 | DELETE `/api/entries/{entry_id}` | Deletes an owned entry and linked mood/image records; returns `204` |
 
 Editing and deleting require the same session, origin, and CSRF checks as creating
 entries. Missing entries and another account's entries both return `404`. Edits
 accept 1–5000 characters, trim whitespace, and reject blank content and extra
-fields. An edit preserves the entry ID and creation timestamp and updates
-`updated_at`. A changed entry needs a new AI summary; unchanged text keeps the
-existing summary. Deletion is permanent and is confirmed in the journal page.
+fields. An edit preserves the entry ID and creation timestamp; actual changes
+update `updated_at`, while no-op edits preserve it. Changed text needs a new AI
+summary; date-only edits keep the existing summary. See the
+[journal-management handoff](journal-management.md) for date validation and
+partial-update examples. Deletion is permanent and is confirmed in the journal page.
 CORS allows `PATCH` and `DELETE` as well as `GET` and `POST`, so the browser can
 complete preflight before sending these requests.
 
@@ -111,12 +112,14 @@ must supply the headers too; visiting `/docs` on the API host alone does not
 bypass the origin policy. CORS allows credentials only for the exact configured
 frontend origin. Never use `*` with credentialed access.
 
-Login allows at most five failed attempts per normalized email and thirty per IP
-in fifteen minutes, independently. Limits persist across workers/restarts and return
-429 with Retry-After. Registration permits five attempts per IP per fifteen-minute
-window before hashing. AI title/summary requests share account/IP budgets and a
-one-active-request-per-account guard. See [security hardening](security-hardening.md)
-for exact limits, password policy, trusted-proxy settings, and deployment checks.
+Five failed login attempts for one normalized email/client IP within fifteen
+minutes cause subsequent attempts to return `429` with `Retry-After`. Attempts
+are database-backed and serialized per identity across backend workers. Expired
+attempts are cleaned during login; successful login clears that identity's
+failures. Throttling uses the request client IP supplied by the ASGI server;
+configure Uvicorn's trusted-proxy settings deliberately if deploying behind a
+reverse proxy. This is basic login throttling, not a complete internet-facing
+abuse prevention system.
 
 ## Code walkthrough
 
@@ -156,7 +159,7 @@ session-token digests are never included in account responses.
 | Symptom | What to check |
 | --- | --- |
 | Alembic says `No 'script_location' key found` | Use the repository-root command with `-c src/backend/alembic.ini`, or change into `src/backend` first. |
-| Requests return `503` | Check PostgreSQL is running, `.env` credentials are correct, and migration `0005` is applied. The API uses a generic response for database errors. |
+| Requests return `503` | Check PostgreSQL is running, `.env` credentials are correct, and migration `0003` is applied. The API uses a generic response for database errors. |
 | Requests return `401` | Sign in again. The cookie may be missing, invalid, expired, or revoked. |
 | Requests return `403` | Check `FRONTEND_ORIGIN` and the CSRF header. Scripts must also supply the expected origin and header. |
 | Requests return `429` | Wait for the interval indicated by `Retry-After`; restarting the API does not clear login failures. |
@@ -180,3 +183,7 @@ In the browser, register account A, save an entry, refresh, and verify it remain
 Log out, register account B, and verify B has no A entries. Log back into A and
 verify its journal returns. No password hashes, session tokens, or journal bodies
 should appear in server logs or frontend error details.
+
+## Security update
+
+Migration `0008_security_limits.py` follows `0007` and adds shared request budgets and independent login indexes. New registrations require 15–128 characters; existing passwords remain valid for login. See [security rollout](security-hardening.md) for independent account/IP limits, AI quotas, database roles, and deployment requirements.

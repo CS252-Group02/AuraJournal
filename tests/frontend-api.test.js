@@ -2,6 +2,23 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
+test('API sends an idempotency key only when explicitly supplied', async () => {
+  const original = globalThis.fetch;
+  const headers = [];
+  try {
+    globalThis.fetch = async (url, options) => {
+      headers.push(options.headers);
+      return new Response('{"id":"entry"}', { status: 201 });
+    };
+    const { api } = await loadApi();
+    await api('/api/entries', { method: 'POST', body: { content: 'edited' }, idempotencyKey: 'same-attempt' });
+    await api('/api/entries', { method: 'POST', body: { content: 'ordinary' } });
+    assert.equal(headers[0]['Idempotency-Key'], 'same-attempt');
+    assert.equal(headers[0]['X-AuraJournal-CSRF'], '1');
+    assert.equal(headers[1]['Idempotency-Key'], undefined);
+  } finally { globalThis.fetch = original; }
+});
+
 async function loadApi() {
   const source = (await readFile(new URL('../src/frontend/src/lib/api.js', import.meta.url), 'utf8'))
     .replace('import.meta.env.VITE_API_URL', "''");

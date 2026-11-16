@@ -41,12 +41,12 @@ list is defense in depth, not a comprehensive breach-password database.
 - `app/request_limits.py`: bounded ASGI request-body handling.
 - `app/deployment.py`: production settings and database posture checks.
 - `app/models/auth.py`: `RateLimitBucket` and additional failed-login indexes.
-- `migrations/versions/0005_security_limits.py`: additive migration after `0004`.
+- `migrations/versions/0008_security_limits.py`: additive migration after `0007`.
 - `scripts/database-runtime-role.sql`: explicit, transactional operator provisioning.
 - `scripts/audit-database.py`: read-only privilege/TLS and wrong-password audit.
 - Registration UI now explains the 15–128 character policy. Login remains compatible.
 
-`0005` adds `rate_limit_buckets(key varchar(64) primary key, attempts integer,
+`0008` adds `rate_limit_buckets(key varchar(64) primary key, attempts integer,
 expires_at timestamptz)`, a positive-attempt constraint, an expiry index, and indexes
 on `login_attempts(email, created_at)` and `(ip, created_at)`. Keys are SHA-256
 identifiers; they are not reversible encryption or protection against guessing
@@ -79,7 +79,7 @@ python -m alembic -c src/backend/alembic.ini upgrade head
 python -m alembic -c src/backend/alembic.ini current
 ```
 
-The revision must be `0005`. Alembic uses `MIGRATION_DATABASE_URL` when nonempty,
+The revision must be `0008`. Alembic uses `MIGRATION_DATABASE_URL` when nonempty,
 otherwise `DATABASE_URL` for development compatibility. Keep migration credentials
 out of the deployed API environment: supply them only to the migration job/shell.
 
@@ -95,7 +95,7 @@ psql -X -v ON_ERROR_STOP=1 -h localhost -U YOUR_ADMIN -d aurajournal -f scripts/
 The script creates `aurajournal_owner` and `aurajournal_runtime`, transfers the
 app database/schema/tables to the owner, revokes PUBLIC database/schema access,
 and grants runtime CONNECT, schema USAGE, and only SELECT/INSERT/UPDATE/DELETE
-on the seven application tables. Runtime cannot alter/drop tables, create schemas,
+on the eight application tables. Runtime cannot alter/drop tables, create schemas,
 or access Alembic metadata. Existing elevated role definitions or runtime role
 memberships are rejected. No default password is assigned. Because PUBLIC grants
 are revoked, this script is for a dedicated AuraJournal database, not a shared
@@ -194,7 +194,7 @@ provisioning, allows runtime DML, rejects runtime DDL/migration-table changes,
 checks owner DDL, rolls back temporary roles and drops its scratch database. It
 skips if either deployment role already exists to avoid touching real roles.
 
-If rolling back code, stop the upgraded API first. Revision `0005` can be downgraded
+If rolling back code, stop the upgraded API first. Revision `0008` can be downgraded
 to `0004`; doing so discards request budgets and resets those limits. Database role
 and HBA changes are separate operator changes and are not undone by Alembic. Keep
 the secure roles/authentication unless a reviewed recovery procedure requires a
@@ -214,3 +214,23 @@ Local validation: 209 backend tests passed, including the optional administrator
 role-provisioning test on a disposable database; four frontend API tests passed;
 the Vite production build and whitespace checks passed. AI responses were mocked.
 No live AI requests, load tests, or browser UI verification were performed.
+
+## Integration with main (November 16)
+
+Main migrations 0005 (journal date), 0006 (weekly reflections), and 0007
+(browsing index) are retained. Security budgets now use revision **0008**,
+following 0007; the former security-only 0005 file has been removed. This
+upgrade path is tested from main at 0007, preserving journal content. If you
+already applied the old security-only 0005 to a database, do not stamp or
+upgrade blindly: its version identifier collides with main and requires a
+reviewed reconciliation or restore first.
+
+The role script includes weekly_reflections. WebSocket transport limits and
+authentication from main are preserved. HTTP body limits do not apply to
+WebSocket frames. New image/weekly/transcription features retain their main
+controls; the shared AI budget in this branch covers title and summary only.
+Extending shared quotas to the newer providers remains follow-up work.
+
+Integrated validation: full backend suite 562 passed, one optional admin test
+skipped; separate admin/security run 19 passed; new 0007-to-0008 preservation
+test passed. Frontend 91 passed and production build passed.

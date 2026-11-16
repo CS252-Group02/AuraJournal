@@ -194,3 +194,22 @@ def test_development_database_owner_fails_production_posture(application):
     from app.deployment import validate_database
     with pytest.raises(RuntimeError, match="restricted"):
         validate_database(application.state.engine)
+
+
+def test_upgrade_from_main_preserves_journal_and_adds_security_budgets(isolated_engine):
+    from conftest import migrate
+    from sqlalchemy import text, inspect
+    from uuid import uuid4
+    from app.config import DEVELOPMENT_USER_ID
+    migrate(isolated_engine, '0007')
+    entry_id = uuid4()
+    with isolated_engine.begin() as c:
+        c.execute(text('INSERT INTO journal_entries (id,user_id,content,journal_date) '
+                       'VALUES (:id,:owner,:content,:day)'),
+                  {'id':entry_id,'owner':DEVELOPMENT_USER_ID,'content':'Preserve on upgrade',
+                   'day':'2026-11-01'})
+    migrate(isolated_engine)
+    with isolated_engine.connect() as c:
+        assert c.scalar(text('SELECT version_num FROM alembic_version')) == '0008'
+        assert c.scalar(text('SELECT content FROM journal_entries WHERE id=:id'), {'id':entry_id}) == 'Preserve on upgrade'
+        assert 'rate_limit_buckets' in inspect(c).get_table_names()

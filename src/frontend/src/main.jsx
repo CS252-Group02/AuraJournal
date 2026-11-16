@@ -5,6 +5,10 @@ import JournalPage from './pages/JournalPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
 import RecordPage from './pages/RecordPage.jsx';
+import HistoryPage from './pages/HistoryPage.jsx';
+import EntryPage from './pages/EntryPage.jsx';
+import ReflectionPage from './pages/ReflectionPage.jsx';
+import DashboardPage from './pages/DashboardPage.jsx';
 import './styles/index.css';
 import { AuthProvider, GuestPage, PrivatePage } from './auth/Auth.jsx';
 
@@ -13,6 +17,7 @@ createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <AuthProvider>
         <Routes>
+          <Route path="/dashboard" element={<PrivatePage><DashboardPage /></PrivatePage>} />
           <Route
             path="/"
             element={
@@ -42,6 +47,30 @@ createRoot(document.getElementById('root')).render(
             element={
               <PrivatePage>
                 <RecordPage />
+              </PrivatePage>
+            }
+          />
+          <Route
+            path="/history"
+            element={
+              <PrivatePage>
+                <HistoryPage />
+              </PrivatePage>
+            }
+          />
+          <Route
+            path="/journal/:id"
+            element={
+              <PrivatePage>
+                <EntryPage />
+              </PrivatePage>
+            }
+          />
+          <Route
+            path="/reflection"
+            element={
+              <PrivatePage>
+                <ReflectionPage />
               </PrivatePage>
             }
           />

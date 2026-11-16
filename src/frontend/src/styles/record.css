@@ -14,6 +14,9 @@
   font-display: swap;
 }
 
+/* Reserve the document scrollbar only on this route, so playback cannot shift the microphone. */
+html:has(.record-page) { scrollbar-gutter: stable; }
+
 .record-page {
   position: relative;
   isolation: isolate;
@@ -73,6 +76,13 @@
   inset: auto 0 0;
   height: 19.444444%;
   background: rgb(223 234 220 / 68%);
+}
+
+/* Readability belongs to the page background, never to a transcript card. */
+.record-page[data-has-record-image="true"] .record-background::before {
+  inset: 35% 0 0;
+  height: auto;
+  background: linear-gradient(180deg, transparent, rgb(243 243 234 / 90%) 35%, #f3f3ea);
 }
 
 .record-background::after {
@@ -135,7 +145,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 32px;
   min-width: 0;
   margin-top: max(32px, calc(14.666667svh - 60px));
@@ -181,8 +191,39 @@
   border-radius: 50%;
   background: #527d65;
   opacity: 1;
-  cursor: default;
+  cursor: pointer;
 }
+
+.record-page .record-trigger:disabled { cursor: default; }
+.record-page .record-trigger:focus-visible,
+.record-page .record-action:focus-visible,
+.record-page .record-sidebar-toggle:focus-visible { outline: 3px solid #283d36; outline-offset: 5px; }
+.record-page .record-sidebar-toggle:not(:disabled) { cursor: pointer; }
+.record-trigger.is-recording::after { border-radius: 6px; }
+
+.record-page .record-feedback {
+  margin: 10px 0;
+  min-height: 42px;
+  color: #527d65;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.record-page .record-error { color: #a33b32; }
+.record-playback { width: 100%; text-align: center; }
+.record-playback audio { display: block; width: 100%; margin: 8px 0; }
+.record-page .record-action {
+  margin-top: 8px;
+  padding: 8px 16px;
+  border: 1px solid #527d65;
+  border-radius: 12px;
+  background: #fffefa;
+  color: #344e42;
+  font-size: 13px;
+  cursor: pointer;
+}
+.record-page .record-action:disabled { cursor: default; }
 
 .record-trigger::after {
   content: '';
@@ -203,23 +244,94 @@
 .record-transcript {
   flex: 0 0 auto;
   width: min(740px, 100%);
-  min-height: clamp(180px, 23.333333svh, 210px);
-  padding: 25px 32px 32px;
-  border-radius: 24px;
-  background: rgb(255 254 250 / 91%);
+  min-height: 180px;
+  padding: 4px;
+  color: #283d36;
+  overflow-wrap: anywhere;
 }
 
-.record-page .record-transcript h2 {
-  color: #527d65;
-  font: 600 13px / normal 'AuraJournal Record Inter', sans-serif;
-}
-
-.record-page .record-transcript p {
-  margin-top: 34px;
-  padding-left: 1px;
+.record-live {
+  max-height: clamp(180px, 35svh, 420px);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
   font-size: 18px;
-  line-height: 1.4;
+  line-height: 1.6;
+  white-space: pre-wrap;
 }
+.record-page .record-transcript p { margin: 12px 0; line-height: 1.6; }
+.record-interim, .record-transcript-hint { color: #52695d; }
+.record-interim { font-style: italic; }
+.record-live { padding-inline-end: 3px; }
+.record-live-segment {
+  color: inherit;
+  opacity: .72;
+  transition: opacity 200ms ease-out;
+}
+.record-live-segment[data-final="true"] { opacity: 1; }
+.record-live-word {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  vertical-align: baseline;
+}
+.record-live-word.has-caret::after {
+  content: '';
+  position: absolute;
+  inset-inline-end: -2px;
+  top: .15em;
+  width: 2px;
+  height: 1em;
+  background: #8b7fa3;
+  animation: record-caret-blink 900ms ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes record-caret-blink { 0%, 100% { opacity: .35; } 50% { opacity: .9; } }
+@media (prefers-reduced-motion: reduce) {
+  .record-live-segment { transition: none; }
+  .record-live-word.has-caret::after { animation: none; opacity: .7; }
+}
+.record-duration { font-size: 14px; color: #344e42; }
+.record-duration span { font-variant-numeric: tabular-nums; }
+.record-page .record-phase-title {
+  margin: 0;
+  font: 600 30px / 1.2 'AuraJournal Record Cormorant', Georgia, serif;
+  text-align: center;
+}
+.record-page .record-save {
+  background: #356b51;
+  color: #fff;
+  font-size: 16px;
+  min-height: 44px;
+}
+.record-page .record-action:disabled { opacity: .5; }
+.record-back:focus-visible, .record-journal-link:focus-visible {
+  outline: 2px solid #527d65;
+  outline-offset: 4px;
+}
+.record-back[aria-disabled="true"] { opacity: .5; }
+.record-editor {
+  width: 100%;
+  min-height: 200px;
+  max-height: 50svh;
+  padding: 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  resize: vertical;
+  font: inherit;
+  font-size: 18px;
+  line-height: 1.6;
+  color: inherit;
+}
+.record-editor:focus { outline: 2px solid #527d65; outline-offset: 3px; }
+.record-live:focus-visible, .record-original summary:focus-visible { outline: 2px solid #527d65; outline-offset: 3px; }
+.record-original { margin: 16px 0; }
+.record-original summary { cursor: pointer; }
+.record-original p, .record-saved-text { white-space: pre-wrap; }
+.record-page .record-draft-help { font-size: 13px; color: #52695d; }
+.record-journal-link { display: inline-block; margin: 12px; color: #344e42; }
+.record-transcript .record-playback { max-width: 360px; margin: 20px auto 0; }
 
 .record-mascot {
   grid-column: 3;
@@ -341,4 +453,45 @@
   .record-brand h1 { font-size: 23px; }
   .record-brand p { font-size: 10px; }
   .record-transcript { padding-inline: 24px; }
+}
+
+/* Later phases give the transcript and editor the available working space. */
+.record-page:is([data-record-phase="finalizing"], [data-record-phase="proofreading"],
+  [data-record-phase="review"], [data-record-phase="saving"], [data-record-phase="saved"]) .record-content {
+  grid-column: 2;
+  margin-top: 24px;
+  gap: 20px;
+}
+.record-page:is([data-record-phase="finalizing"], [data-record-phase="proofreading"],
+  [data-record-phase="review"], [data-record-phase="saving"], [data-record-phase="saved"]) .record-primary {
+  width: 100%;
+  min-height: 0;
+}
+.record-page:is([data-record-phase="finalizing"], [data-record-phase="proofreading"],
+  [data-record-phase="review"], [data-record-phase="saving"], [data-record-phase="saved"]) .record-mascot {
+  display: none;
+}
+.record-page:is([data-record-phase="review"], [data-record-phase="saving"]) .record-editor {
+  min-height: clamp(200px, 35svh, 400px);
+}
+.record-page:is([data-record-phase="recording"], [data-record-phase="finalizing"]) .record-live {
+  height: clamp(180px, 35svh, 420px);
+}
+.record-page .record-original { max-height: 35svh; overflow-y: auto; }
+.record-back { text-decoration: none; }
+.record-page .record-transcript { min-width: 0; }
+
+@media (max-width: 1023px) {
+  .record-page:is([data-record-phase="finalizing"], [data-record-phase="proofreading"],
+    [data-record-phase="review"], [data-record-phase="saving"], [data-record-phase="saved"]) .record-content {
+    grid-column: 1;
+  }
+}
+@media (max-width: 600px), (max-height: 700px) {
+  .record-content { margin-top: 24px; gap: 20px; }
+  .record-primary { min-height: 0; }
+  .record-orbit { width: 220px; }
+  .record-page .record-feedback { min-height: 0; }
+  .record-mascot { display: none; }
+  .record-transcript { padding-inline: 4px; }
 }
