@@ -2,7 +2,8 @@ import RecordButton from '../features/record/RecordButton.jsx';
 import RecordBackground from '../features/record/RecordBackground.jsx';
 import TranscriptView from '../features/record/TranscriptView.jsx';
 import { useRecordFlow } from '../features/record/useRecordFlow.js';
-import { Link } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
+import { useNavigationGuard } from '../components/layout/navigation.js';
 
 function JournalMascot() {
   return (
@@ -20,6 +21,8 @@ function JournalMascot() {
 
 export default function Record({ backgroundImage, backgroundStatus = 'ready', onOpenSidebar, services }) {
   const model = useRecordFlow(services);
+  const shell = useOutletContext();
+  const openSidebar = onOpenSidebar || shell?.openSidebar;
   function confirmDiscard() {
     if (model.phase === 'saving') return false;
     if (!model.hasUnsavedWork) return true;
@@ -32,6 +35,7 @@ export default function Record({ backgroundImage, backgroundStatus = 'ready', on
           : 'Discard this take and unsaved draft? Your audio and text will be lost.';
     return window.confirm(message);
   }
+  const guardedByShell = useNavigationGuard(confirmDiscard);
   function reset() {
     if (!confirmDiscard()) return;
     model.flow.reset();
@@ -39,14 +43,15 @@ export default function Record({ backgroundImage, backgroundStatus = 'ready', on
   function leave(event) {
     // A new tab leaves this take mounted and does not discard any work.
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    if (!confirmDiscard()) event.preventDefault();
+    if (!guardedByShell && !confirmDiscard()) event.preventDefault();
   }
   return (
     <main className="record-page" aria-label="Record journal" data-record-phase={model.phase} data-has-record-image={Boolean(backgroundImage)}>
       <RecordBackground key={`${backgroundStatus}:${backgroundImage || ''}`} imageUrl={backgroundImage} status={backgroundStatus} />
 
       <header className="record-header">
-        <button className="record-sidebar-toggle" type="button" aria-label="Open sidebar" disabled={!onOpenSidebar} onClick={onOpenSidebar}>
+        <button className="record-sidebar-toggle" type="button" aria-label="Open sidebar" disabled={!openSidebar} onClick={openSidebar}
+          aria-expanded={shell?.sidebarOpen} aria-controls={shell ? 'app-navigation-drawer' : undefined}>
           <span aria-hidden="true">»</span>
         </button>
         <div className="record-brand">

@@ -8,6 +8,7 @@ import { Skeleton, StatePanel } from '../components/ui/StatePanel.jsx';
 import { entryTitle, readMinutes, wordCount } from '../features/journal/entryText.js';
 import { forgetLastOpened, setLastOpened } from '../features/journal/recentlyOpened.js';
 import { useJournalEntries } from '../features/journal/useJournalEntries.js';
+import { useNavigationGuard } from '../components/layout/navigation.js';
 
 const MAX_LENGTH = 5000;
 
@@ -70,6 +71,8 @@ export default function EntryPage() {
   const [failure, setFailure] = useState('');
   const [summary, setSummary] = useState({ busy: false, error: '' });
   const dialog = useRef(null);
+  useNavigationGuard(() => !busy && (!editing || draft.trim() === entry?.content ||
+    window.confirm('Leave this entry and discard your unsaved changes?')));
 
   const foundId = entry?.id;
   useEffect(() => {
