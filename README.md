@@ -135,10 +135,26 @@ Copy-Item src/frontend/.env.example src/frontend/.env.local
 
 Update `.env` if your PostgreSQL credentials differ. The virtual environment and local env files are not shared or committed.
 
-On the first `npm start`, the launcher creates `.venv`, installs the Python
-requirements, and applies database migrations before starting either app. It
-reinstalls requirements when `src/backend/requirements.txt` changes. PostgreSQL
-must be running, and `.env` must contain the app database configuration. **If
+Create the project Python environment and install its requirements manually:
+
+**Linux/macOS:**
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r src/backend/requirements.txt
+```
+
+**Windows PowerShell:**
+
+```powershell
+py -3 -m venv .venv
+.venv\Scripts\python -m pip install -r src/backend/requirements.txt
+```
+
+Run the install command again when `src/backend/requirements.txt` changes.
+`npm start` checks that `.venv` and its declared packages are present, then
+applies database migrations before starting either app. PostgreSQL must be
+running, and `.env` must contain the app database configuration. **If
 your database already has the original journal table without migration
 tracking, follow the backup and baseline-stamp instructions in
 [database setup](docs/database/migrations.md) before starting.** Back up an
@@ -156,7 +172,7 @@ PostgreSQL must be running before you start the app. From the repository root, r
 npm start
 ```
 
-`npm start` installs npm dependencies when needed, prepares the Python
+`npm start` installs npm dependencies when needed, checks the prepared Python
 environment, applies database migrations, then runs the backend and frontend
 together with `[backend]` and `[frontend]` log labels. Press Ctrl+C to stop both.
 Open `http://localhost:5173` when Vite is ready. The API provides
