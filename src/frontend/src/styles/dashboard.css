@@ -7,11 +7,9 @@
   --aj-serif: 'AuraJournal Record Cormorant', Georgia, serif;
   --aj-sans: 'AuraJournal Record Inter', ui-sans-serif, system-ui, sans-serif;
 }
-.dashboard-page .aj-inner { max-width: 820px; }
+.dashboard-page .aj-inner { width: 100%; max-width: 1260px; container-type: inline-size; }
 .dashboard-page .dashboard-title { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
 .dashboard-page .dashboard-title h1 { font-size: clamp(2.4rem, 5vw, 3.45rem); }
-.dashboard-page .dashboard-streak { margin: 0; padding: 10px 14px; border-radius: 20px; background: #e3eee1; color: #356b51; font-size: .85rem; font-weight: 600; }
-.dashboard-streak span { display: block; margin-top: 3px; font-size: .75rem; font-weight: 400; }
 .dashboard-links { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-bottom: 20px; font-size: .88rem; }
 .dashboard-links .aj-btn { margin-left: auto; }
 .dashboard-page .dashboard-status { color: var(--aj-muted); line-height: 1.6; }
@@ -49,7 +47,92 @@
 .dashboard-entry-list > li { min-width: 0; }
 .dashboard-page .dashboard-entry-list .journal-card { height: 100%; background: var(--aj-surface); transition: none; }
 .dashboard-page .dashboard-entry-list .journal-card:hover { transform: none; }
+.dashboard-page .dashboard-entry-list .journal-card-top { min-height: 0; padding-bottom: 0; }
 .dashboard-page .aj-btn { transition: none; }
+
+.dashboard-page { overflow-wrap: anywhere; }
+.dashboard-page .aj-btn:not(.aj-btn-outline, .aj-btn-quiet) { color: #fffefa; }
+.dashboard-primary { display: grid; gap: 32px; align-items: start; }
+.dashboard-primary > *, .dashboard-reflections-column > * { min-width: 0; }
+.dashboard-reflections-column { display: grid; gap: 28px; }
+.dashboard-page :is(.dashboard-week, .dashboard-moods, .dashboard-recent) h2 { font-size: clamp(1.65rem, 3vw, 2rem); line-height: 1.15; margin-top: 8px; }
+.dashboard-page p { line-height: 1.65; }
+.dashboard-page .dashboard-fine, .dashboard-selection-hint { font-size: .76rem; color: var(--aj-muted); line-height: 1.6; }
+.dashboard-muted { color: var(--aj-muted); font-size: .88rem; }
+.dashboard-activity { margin: 28px 0 32px; padding: 24px 0 18px; border-block: 1px solid var(--aj-line); }
+.dashboard-activity dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; margin: 0; }
+.dashboard-activity dt { font-size: .76rem; color: var(--aj-muted); }
+.dashboard-activity dd { margin: 8px 0 0; font: 600 2rem / 1.15 var(--aj-serif); }
+.dashboard-activity dd span { font: 400 .76rem / 1.6 var(--aj-sans); color: var(--aj-muted); }
+.dashboard-activity > p { margin-bottom: 0; }
+.dashboard-week { padding: 24px; border-radius: 22px; background: #edf2e9; }
+.dashboard-week-story { font: 600 1.4rem / 1.45 var(--aj-serif); }
+.dashboard-week-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; padding: 0; margin: 24px 0; list-style: none; }
+.dashboard-page .dashboard-week-days button { display: grid; justify-items: center; gap: 2px; width: 100%; min-height: 50px; padding: 8px 0; background: transparent; color: var(--aj-muted); font-size: .7rem; font-weight: 500; }
+.dashboard-page .dashboard-week-days button.has-entries { background: var(--aj-surface); color: #356b51; }
+.dashboard-week-days .dashboard-week-mark { font-size: 22px; line-height: 20px; }
+.dashboard-reflection-invite, .dashboard-reflection-result, .dashboard-reflection-error { padding-top: 16px; border-top: 1px solid #d5dfd2; }
+.dashboard-reflection-result > p { white-space: pre-line; }
+.dashboard-reflection-result ul { padding-left: 20px; font-size: .85rem; line-height: 1.65; }
+.dashboard-reflection-result li + li { margin-top: 10px; }
+.dashboard-highlight-sources { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 4px; font-size: .75rem; }
+.dashboard-reflection-error { color: #8a2f27; font-size: .85rem; }
+.dashboard-selection-hint { margin: 14px 8px 0; }
+.dashboard-page .calendar-date-picker { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 0 0; font-size: .78rem; color: var(--aj-muted); }
+.calendar-date-picker input { min-width: 0; max-width: 100%; min-height: 44px; padding: 8px 10px; border: 1px solid var(--aj-line); border-radius: 10px; background: var(--aj-surface); color: var(--aj-ink); font: inherit; }
+.dashboard-page .dashboard-day-entries .journal-card { overflow-wrap: anywhere; }
+.dashboard-section-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
+.dashboard-section-heading > a { font-size: .82rem; padding-block: 12px; text-underline-offset: 4px; }
+.dashboard-moods, .dashboard-recent { margin-top: 44px; padding-top: 28px; border-top: 1px solid var(--aj-line); }
+.dashboard-period { display: flex; gap: 4px; padding: 4px; border-radius: 24px; background: #edf2e9; }
+.dashboard-page .dashboard-period button { min-height: 40px; padding: 8px 16px; border-radius: 20px; font-size: .78rem; font-weight: 500; background: transparent; color: var(--aj-muted); }
+.dashboard-page .dashboard-period button[aria-pressed="true"] { background: var(--aj-surface); color: #356b51; }
+.dashboard-mood-unavailable { padding-block: 20px; max-width: 64ch; }
+.dashboard-mood-unavailable p { margin: 10px 0 0; }
+.dashboard-mood-palette { display: flex; gap: 8px; }
+.dashboard-mood-palette span { width: 24px; height: 24px; border-radius: 50%; border: 1px solid rgb(40 61 54 / 10%); }
+.dashboard-mood-distribution { max-width: 640px; list-style: none; padding: 0; display: grid; gap: 12px; }
+.dashboard-mood-distribution li { display: grid; grid-template-columns: 90px minmax(0, 1fr) 36px; align-items: center; gap: 12px; font-size: .85rem; }
+.dashboard-mood-track { height: 14px; overflow: hidden; border-radius: 7px; background: #eeeee7; }
+.dashboard-mood-track > span { display: block; height: 100%; border-radius: inherit; }
+.dashboard-mood-timeline { display: grid; grid-template-columns: repeat(auto-fit, minmax(24px, 1fr)); gap: 8px; list-style: none; padding: 0; margin: 24px 0 12px; }
+.dashboard-mood-timeline li { display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch; gap: 3px; }
+.dashboard-mood-timeline li > span { display: block; height: 12px; border-radius: 4px; }
+.dashboard-mood-timeline .dashboard-mood-gap { background: #eeeee7; }
+.dashboard-mood-timeline time { text-align: center; font-size: .65rem; color: var(--aj-muted); }
+.dashboard-recent-list { display: grid; gap: 0 28px; grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; padding: 0; margin: 20px 0 0; }
+.dashboard-recent-list > li { min-width: 0; }
+.dashboard-recent-list a { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; height: 100%; padding: 22px 0; text-decoration: none; border-top: 1px solid var(--aj-line); }
+.dashboard-recent-list a:hover h3 { text-decoration: underline; text-underline-offset: 4px; }
+.dashboard-recent-list h3 { font-size: 1.45rem; line-height: 1.2; }
+.dashboard-recent-list p { margin: 0; color: var(--aj-muted); font-size: .84rem; }
+.dashboard-recent-open { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: auto; padding-top: 8px; font-size: .76rem; color: #356b51; }
+.dashboard-recent-open > span { padding: 4px 8px; border-radius: 8px; color: var(--aj-ink); }
+.journal-companion { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 20px; align-items: center; padding: 12px 4px; }
+.journal-companion p { font: 600 1.25rem / 1.45 var(--aj-serif); margin: 8px 0 12px; }
+.journal-companion a { font-size: .78rem; text-underline-offset: 4px; }
+.journal-companion-art { position: relative; width: 80px; height: 80px; }
+.journal-companion-face { position: absolute; inset: 0; border-radius: 50%; background: #fffefa; }
+.journal-companion-face::before, .journal-companion-eyes::before, .journal-companion-eyes::after, .journal-companion-blush::before, .journal-companion-blush::after { content: ''; position: absolute; border-radius: 50%; }
+.journal-companion-face::before { left: 46%; top: -4%; width: 17%; height: 17%; background: #7fa48b; }
+.journal-companion-eyes::before, .journal-companion-eyes::after { top: 44%; width: 8%; height: 8%; background: #344e42; }
+.journal-companion-eyes::before { left: 27%; }
+.journal-companion-eyes::after { left: 62%; }
+.journal-companion-blush::before, .journal-companion-blush::after { top: 65%; width: 15%; height: 15%; background: #f1dcd1; }
+.journal-companion-blush::before { left: 19%; }
+.journal-companion-blush::after { left: 71%; }
+.dashboard-page :is(button, a, input):focus-visible { outline: 3px solid #356b51; outline-offset: 3px; }
+
+@container (min-width: 1040px) {
+  .dashboard-primary { grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 28px; }
+}
+@container (min-width: 700px) and (max-width: 1039px) {
+  .dashboard-reflections-column { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); align-items: start; }
+}
+@container (max-width: 699px) {
+  .dashboard-activity dl { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 16px; }
+  .dashboard-recent-list { grid-template-columns: 1fr; }
+}
 
 @media (max-width: 600px) {
   .dashboard-page { padding: 20px 8px 48px; }
@@ -64,4 +147,8 @@
   .calendar-entry-dot { top: 6px; right: 5px; width: 5px; height: 5px; }
   .calendar-legend { justify-content: flex-start; }
   .dashboard-links .aj-btn { margin-left: 0; }
+  .dashboard-page .calendar-date-picker { margin-inline: 8px; }
+  .dashboard-activity, .dashboard-reflections-column, .dashboard-moods, .dashboard-recent { margin-inline: 6px; }
+  .dashboard-week { padding: 22px 18px; }
+  .journal-companion { gap: 14px; }
 }

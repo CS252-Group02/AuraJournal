@@ -29,7 +29,9 @@ export function useCalendarView() {
     changeMonth(date) {
       update({ month: monthKey(date), date: selectedKey?.startsWith(`${monthKey(date)}-`) ? selectedKey : null });
     },
-    selectDate(key) { update({ month: monthKey(month), date: key }); },
+    selectDate(key) {
+      if (parseDateKey(key)) update({ month: key.slice(0, 7), date: key });
+    },
     changeMode(value) { update({ month: monthKey(month), mode: value }); },
     goToday() {
       const current = refresh();

@@ -11,10 +11,11 @@ Start PostgreSQL. From the repository root, run:
 npm start
 ```
 
-The launcher creates `.venv`, installs backend requirements when needed, and
-applies database migrations before starting the app. Make sure the repository
-root `.env` is configured. For production, run migrations as an explicit
-deployment step instead of using this development launcher.
+Before running `npm start`, create `.venv` and install
+`src/backend/requirements.txt` manually. The launcher checks the environment
+and applies database migrations before starting the app. Make sure the
+repository root `.env` is configured. For production, run migrations as an
+explicit deployment step instead of using this development launcher.
 
 Open `http://localhost:5173/register` and create an email/password account. Email
 is trimmed and lowercased; passwords are 8–128 characters and are never trimmed.

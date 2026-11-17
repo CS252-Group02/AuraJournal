@@ -1,6 +1,6 @@
 from datetime import date, datetime, timedelta
 import re
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -11,6 +11,7 @@ class WeeklyRecapRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     start: date
     timezone: str = Field(min_length=1, max_length=100)
+    date_basis: Literal["recorded", "journal"] = "recorded"
 
     @field_validator("start")
     @classmethod
@@ -100,7 +101,7 @@ class WeeklyReflectionContent(WeeklyReflectionText):
     @field_validator("questions")
     @classmethod
     def distinct_questions(cls, value):
-        if value[0].casefold() == value[1].casefold():
+        if " ".join(value[0].split()).casefold() == " ".join(value[1].split()).casefold():
             raise ValueError("Reflection questions must be distinct.")
         return value
 

@@ -121,6 +121,25 @@ and treats instruction-like journal text as untrusted data. Sparse weeks should
 produce shorter summaries, not invented experiences. Date membership and schema
 validation do not establish semantic accuracy; real-model review remains necessary.
 
+### Writing direction
+
+The summary uses natural, direct second-person language and stays close to the
+recorded events. Short weeks get short summaries. It avoids report headings,
+day-by-day templates, praise, advice, diagnoses, and generic claims about growth.
+Feelings may be acknowledged only when the writer explicitly named them; the
+model must not decide the week's mood or tell the writer what events meant.
+
+Exactly two different, non-leading questions invite the writer's own perspective.
+They must not presume an event was positive, difficult, significant, or needs
+improvement. English and Vietnamese style examples guide the prompt; the
+predominant language of journal content determines all output language.
+Plans remain plans, uncertainty stays uncertain, and embedded AI instructions
+are ignored rather than described as recorded experiences.
+
+Metaprompting is a development process (draft, critique, evaluate), not an extra
+production critique/rewrite call. See the [prompt evaluation](weekly-reflection-evaluation.md)
+for fictional cases, actual results, and remaining quality limits.
+
 Use the shared `AIInvalidResponseError`, `AIServiceNotConfiguredError`, and
 `AIServiceUnavailableError` exceptions for invalid output, configuration, and
 provider failures, respectively. Timeout/rate-limit failures map to
@@ -138,18 +157,24 @@ without dropping sources. Whitespace-only source text raises `EmptyJournalError`
 - `413`: `json.dumps({"entries": sources}, ensure_ascii=False)` exceeds 60,000
   characters, or the generator rejects its input size. No entries are truncated
   or omitted. The backend limit is checked before calling the generator.
+- `429`: existing shared AI budgets are exceeded (10/account/minute,
+  100/account/day, 30/client-IP/minute). `Retry-After` indicates when to retry.
+  Empty periods, oversized inputs, and saved reads do not spend this quota.
+  Budget transactions finish before the provider call; no database connection
+  is held while generating.
 - `409`: selected sources changed during generation. The backend rechecks IDs,
   journal dates, current content, creation times, and update times before saving
   and returning the result. Retry with current entries. This is a point-in-time
   recheck, not a lock preventing subsequent edits.
-- `502`: invalid generator output; `503`: generator not connected, AI service
+- `502`: invalid generator output, including duplicate questions; `503`: missing/rejected credentials, AI service
   unavailable, or database unavailable. Public errors omit provider details and
   journal content.
 
 ## Verification
 
-Backend regression verified on 2026-11-17: **722 passed, 2 skipped** using
-isolated PostgreSQL test schemas and mocked providers. The skips are the
+After reconciling main and source-date support on 2026-11-17, backend regression
+returned **747 passed, 2 skipped**, using isolated PostgreSQL test schemas and
+mocked providers. All **120 frontend tests passed** and the frontend build passed. The skips are the
 administrator-only role-provisioning test and Windows symlink-privilege test.
 No Groq quality verification or application-database migration was performed.
 
@@ -157,7 +182,7 @@ With a disposable PostgreSQL database configured as described in the repository
 README, run from `src/backend`:
 
 ```sh
-python -m pytest tests/test_weekly_reflection_service.py tests/test_weekly_reflections_api.py tests/test_weekly_reflections.py tests/test_weekly_recap.py tests/test_database.py -q
+python -m pytest tests/test_weekly_reflection_service.py tests/test_weekly_reflection_generator.py tests/test_weekly_reflections_api.py tests/test_weekly_reflections.py tests/test_weekly_recap.py tests/test_database.py -q
 ```
 
 The reflection API tests use real database queries and mocked generation. They
@@ -195,3 +220,16 @@ invented. A source date is a reference to a journal, not independent proof of an
 AI claim. Provider quality verification remains pending while `GROQ_API_KEY` is
 unavailable. For full integration, authenticate, POST a period with saved journals,
 then GET the saved result and check that its evidence survives reload.
+
+
+### Bundled writing-quality evaluation
+
+From the repository root, `python scripts/evaluate-weekly-reflections.py --live`
+explicitly runs up to six paid calls with the bundled fictional cases and no DB
+access. The report serializes source dates as ISO strings. Missing credentials
+means no evaluation is executed. Review both the writing and supporting dates.
+
+The [previous prompt evaluation](weekly-reflection-evaluation.md) records earlier
+results from main. The merged prompt additionally requires source dates and has
+a different hash; those historical results do not verify this exact prompt.
+No live evaluation of the merged prompt was performed during conflict resolution.
