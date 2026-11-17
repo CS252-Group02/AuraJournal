@@ -189,8 +189,10 @@ entry-level reflection questions. See [weekly recap API and behavior](docs/weekl
 The backend also provides `POST /api/weekly-reflections` for a selected seven-day
 period and a summary with exactly two questions. Successful generation saves the
 result; `GET /api/weekly-reflections/{period_start}` reads it without calling AI.
-Nonempty generation requests return `503` until the reflection AI generator is
-connected. See [weekly reflection integration](docs/weekly-reflections.md).
+The Groq generator is connected using `GROQ_API_KEY` and optional `GROQ_MODEL`.
+It returns a natural factual summary and two questions that leave interpretation
+to the writer. Missing/rejected credentials return `503` without replacing a
+saved reflection. See [weekly reflection integration](docs/weekly-reflections.md).
 
 `POST /api/ai/suggest-title` accepts journal text directly and returns one short
 title. It does not look up or save journal entries and rejects `entry_id` or any
