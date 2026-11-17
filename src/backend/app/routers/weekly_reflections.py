@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.auth import current_user
 from app.database import get_session
 from app.models import User, WeeklyReflection
+from app.limits import consume_ai_budget
 from app.schemas.weekly import (
     ReflectionPeriodStart,
     SavedWeeklyReflectionResponse,
@@ -42,6 +43,7 @@ def _source_snapshot(session: Session, user_id: UUID, start: date, end: date):
 @router.post("", response_model=WeeklyReflectionResponse)
 def generate_weekly_reflection(
     payload: WeeklyReflectionRequest,
+    request: Request,
     session: Session = Depends(get_session),
     user: User = Depends(current_user),
     generator: WeeklyReflectionGenerator | None = Depends(get_weekly_reflection_generator),
@@ -64,6 +66,7 @@ def generate_weekly_reflection(
             raise WeeklyReflectionTooLarge
         if generator is None:
             raise AIServiceNotConfiguredError
+        consume_ai_budget(request, user, session)
         result = WeeklyReflectionContent.model_validate(generator.generate(sources))
     except WeeklyReflectionTooLarge:
         raise HTTPException(413, "This period's entries are too long. No entries were omitted.") from None
