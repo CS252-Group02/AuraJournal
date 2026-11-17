@@ -1,7 +1,6 @@
 """Authenticated, transient WebM/Opus uploads using the live speech helper."""
 
 import asyncio
-from contextlib import aclosing
 from email.message import Message
 from uuid import UUID, uuid4
 
@@ -15,7 +14,7 @@ from app.database import get_session
 from app.limits import consume_ai_budget
 from app.models import User
 from app.schemas.transcription_upload import UploadedTranscript
-from app.services import transcribe_audio
+from app.services import DeepgramError, collect_recorded_transcript, transcribe_audio
 from app.services.async_deadline import deadline
 from app.upload_policy import AUDIO_UPLOAD_PATH
 
@@ -85,26 +84,13 @@ async def recognize(request: Request, audio: bytearray) -> UploadedTranscript:
         for offset in range(0, len(audio), CHUNK_BYTES):
             yield bytes(audio[offset:offset + CHUNK_BYTES])
 
-    segments = {}
-    async with aclosing(transcribe_audio(
-        chunks(), session_id=str(uuid4()), client=request.app.state.deepgram_streaming_client,
-    )) as events:
-        async for event in events:
-            if event["type"] == "error":
-                provider_error(event)
-            if event["type"] == "segment":
-                previous = segments.get(event["segment_id"])
-                if previous is None or (not previous["is_final"] and event["revision"] > previous["revision"]):
-                    segments[event["segment_id"]] = event
-            elif event["type"] == "complete":
-                if event["outcome"] not in {"transcribed", "no_speech"}:
-                    provider_error({"code": "invalid_response"})
-                finals = sorted((s for s in segments.values() if s["is_final"]), key=lambda s: s["order"])
-                text = " ".join(s["text"].strip() for s in finals if s["text"].strip())
-                if event["final_count"] != len(finals) or bool(text) != (event["outcome"] == "transcribed"):
-                    provider_error({"code": "invalid_response"})
-                return UploadedTranscript(transcript=text, outcome=event["outcome"])
-    provider_error({"code": "invalid_response"})
+    try:
+        result = await collect_recorded_transcript(transcribe_audio(
+            chunks(), session_id=str(uuid4()), client=request.app.state.deepgram_streaming_client,
+        ))
+    except DeepgramError as error:
+        provider_error({"code": error.code})
+    return UploadedTranscript(transcript=result.transcript, outcome=result.outcome)
 
 
 async def recognize_connected(request: Request, audio: bytearray):

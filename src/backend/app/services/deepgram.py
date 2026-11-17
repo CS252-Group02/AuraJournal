@@ -27,6 +27,19 @@ DEEPGRAM_STREAM_URL = "wss://api.deepgram.com/v1/listen?" + urlencode([
 SUPPORTED_MIME_TYPES = ("audio/webm;codecs=opus",)
 
 
+def _json_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("Duplicate provider field.")
+        result[key] = value
+    return result
+
+
+def _invalid_json_constant(value):
+    raise ValueError("Non-finite provider number.")
+
+
 class DeepgramError(RuntimeError):
     """Safe service error; never includes provider details or journal content."""
 
@@ -155,10 +168,23 @@ class DeepgramStream:
                 try:
                     if not isinstance(raw, str):
                         raise ValueError
-                    event = json.loads(raw)
+                    event = json.loads(raw, object_pairs_hook=_json_object,
+                                       parse_constant=_invalid_json_constant)
                     if not isinstance(event, dict) or not isinstance(event.get("type"), str):
                         raise ValueError
-                except (ValueError, TypeError):
+                    # Bound nesting explicitly: decoder recursion limits differ
+                    # between supported Python versions. Real provider packets
+                    # need only a few object/array levels.
+                    pending = [(event, 0)]
+                    while pending:
+                        value, depth = pending.pop()
+                        if depth > 32 or (isinstance(value, float) and not math.isfinite(value)):
+                            raise ValueError
+                        if isinstance(value, dict):
+                            pending.extend((child, depth + 1) for child in value.values())
+                        elif isinstance(value, list):
+                            pending.extend((child, depth + 1) for child in value)
+                except (ValueError, TypeError, RecursionError):
                     raise DeepgramInvalidResponseError("Speech service returned an invalid response.") from None
                 if event["type"] == "Error":
                     code = event.get("code", event.get("err_code", ""))

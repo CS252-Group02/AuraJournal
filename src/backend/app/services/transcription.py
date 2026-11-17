@@ -1,11 +1,16 @@
 """Reduce ordered, single-channel Deepgram events to the Record protocol."""
 
 from collections.abc import AsyncIterator
+from contextlib import aclosing
 from dataclasses import dataclass, replace
 import math
 from typing import Literal, TypedDict
 
-from app.services.deepgram import DeepgramInvalidResponseError, provider_stream_error
+from app.services.deepgram import (
+    DeepgramConfigurationError, DeepgramInvalidAudioError, DeepgramInvalidResponseError,
+    DeepgramRateLimitedError, DeepgramTimeoutError, DeepgramUnavailableError,
+    provider_stream_error,
+)
 
 
 # Provider timestamps can differ slightly at the same audio boundary.
@@ -27,6 +32,63 @@ class TranscriptComplete(TypedDict):
     session_id: str
     final_count: int
     outcome: Literal["transcribed", "no_speech", "incomplete"]
+
+
+@dataclass(frozen=True, repr=False)
+class RecordedTranscript:
+    """Final-only result for a completed recording; text stays out of repr()."""
+
+    transcript: str
+    outcome: Literal["transcribed", "no_speech"]
+
+
+async def collect_recorded_transcript(events: AsyncIterator[dict]) -> RecordedTranscript:
+    """Collect transcribe_audio() events without promoting provisional text.
+
+    Owns and closes the event generator, including cancellation and early return.
+    Service errors are raised as the existing safe Deepgram exceptions; callers
+    decide whether to turn them into HTTP responses or another presentation.
+    """
+    errors = {
+        "not_configured": DeepgramConfigurationError,
+        "invalid_audio": DeepgramInvalidAudioError,
+        "invalid_response": DeepgramInvalidResponseError,
+        "timeout": DeepgramTimeoutError,
+        "rate_limited": DeepgramRateLimitedError,
+    }
+    segments = {}
+    async with aclosing(events):
+        async for event in events:
+            if not isinstance(event, dict):
+                raise _invalid_response()
+            if event.get("type") == "error":
+                code = event.get("code")
+                error = errors.get(code if isinstance(code, str) else "", DeepgramUnavailableError)
+                raise error(error.public_message)
+            if event.get("type") == "segment":
+                segment_id = event.get("segment_id")
+                if (not isinstance(segment_id, str) or not segment_id
+                        or not isinstance(event.get("text"), str)
+                        or type(event.get("is_final")) is not bool
+                        or any(type(event.get(key)) is not int or event[key] < 0
+                               for key in ("order", "revision"))):
+                    raise _invalid_response()
+                previous = segments.get(segment_id)
+                if previous is None or (not previous["is_final"] and event["revision"] > previous["revision"]):
+                    segments[segment_id] = event
+            elif event.get("type") == "complete":
+                if event.get("outcome") not in ("transcribed", "no_speech"):
+                    raise _invalid_response()
+                finals = sorted((s for s in segments.values() if s["is_final"]), key=lambda s: s["order"])
+                text = " ".join(s["text"].strip() for s in finals if s["text"].strip())
+                if (type(event.get("final_count")) is not int or event["final_count"] != len(finals)
+                        or bool(text) != (event["outcome"] == "transcribed")
+                        or any(not s["is_final"] and s["text"].strip() for s in segments.values())):
+                    raise _invalid_response()
+                return RecordedTranscript(transcript=text, outcome=event["outcome"])
+            else:
+                raise _invalid_response()
+    raise _invalid_response()
 
 
 @dataclass(frozen=True, repr=False)

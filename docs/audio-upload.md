@@ -1,5 +1,9 @@
 # HTTP recording transcription
 
+The reusable final-transcript collector, standalone verification command and
+Vietnamese/English browser checklist are documented in
+[Browser-recording transcription](recording-transcription.md).
+
 `POST /api/transcriptions` accepts one transient WebM/Opus recording and returns
 one transcript using the existing Deepgram streaming helper. The separate
 `/api/transcriptions/live` WebSocket and Record screen remain unchanged.
