@@ -21,6 +21,13 @@ class WeeklyReflection(CreatedAt, UpdatedAt, Base):
             ELSE false END""",
             name="ck_weekly_reflections_questions",
         ),
+        CheckConstraint(
+            """source_dates IS NULL OR CASE WHEN jsonb_typeof(source_dates) = 'array' THEN
+                jsonb_array_length(source_dates) BETWEEN 1 AND 7
+                AND NOT jsonb_path_exists(source_dates, '$[*] ? (@.type() != "string")')
+            ELSE false END""",
+            name="ck_weekly_reflections_source_dates",
+        ),
     )
 
     user_id: Mapped[UUID] = mapped_column(
@@ -29,3 +36,4 @@ class WeeklyReflection(CreatedAt, UpdatedAt, Base):
     period_start: Mapped[date] = mapped_column(Date, primary_key=True)
     summary: Mapped[str] = mapped_column(Text)
     questions: Mapped[list[str]] = mapped_column(JSONB)
+    source_dates: Mapped[list[str] | None] = mapped_column(JSONB(none_as_null=True), nullable=True)

@@ -189,8 +189,11 @@ entry-level reflection questions. See [weekly recap API and behavior](docs/weekl
 The backend also provides `POST /api/weekly-reflections` for a selected seven-day
 period and a summary with exactly two questions. Successful generation saves the
 result; `GET /api/weekly-reflections/{period_start}` reads it without calling AI.
-Nonempty generation requests return `503` until the reflection AI generator is
-connected. See [weekly reflection integration](docs/weekly-reflections.md).
+The Groq generator returns supporting `source_dates`, saved with the result.
+Run `alembic upgrade head` (revision `0009`) before starting the updated backend;
+configure `GROQ_API_KEY` to generate nonempty results. Historical reflections
+return `source_dates: null` until regenerated. See
+[weekly reflection integration](docs/weekly-reflections.md).
 
 `POST /api/ai/suggest-title` accepts journal text directly and returns one short
 title. It does not look up or save journal entries and rejects `entry_id` or any

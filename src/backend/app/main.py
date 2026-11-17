@@ -17,6 +17,7 @@ from app.routers.titles import router as titles_router
 from app.routers.reflections import router as reflections_router
 from app.routers.weekly_reflections import router as weekly_reflections_router
 from app.services.weekly_recap import WeeklyRecapGenerator
+from app.services.weekly_reflection import GroqWeeklyReflectionGenerator
 from app.services import JournalSummarizer, JournalTitleGenerator
 from app.auth import require_browser_request
 from app.deployment import production, validate_settings, validate_database
@@ -51,7 +52,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
     app.state.journal_summarizer = JournalSummarizer()
     app.state.journal_title_generator = JournalTitleGenerator()
     app.state.weekly_recap_generator = WeeklyRecapGenerator()
-    app.state.weekly_reflection_generator = None
+    app.state.weekly_reflection_generator = GroqWeeklyReflectionGenerator()
     app.state.deepgram_streaming_client = DeepgramStreamingClient(open_timeout=8)
     app.state.moment_extractor = MomentExtractor()
     app.state.pixellab_client = PixelLabClient()
