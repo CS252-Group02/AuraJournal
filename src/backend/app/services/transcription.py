@@ -95,7 +95,11 @@ def _read_result(event: dict) -> _Result:
                         or not isinstance(word_text, str) or not word_text.strip()
                         or word_end < word_start
                         or word_start < start - _TIME_TOLERANCE
-                        or word_end > end + _TIME_TOLERANCE
+                        # Interim word ends are provisional and can extend past
+                        # the result window (observed with real Nova-3 output).
+                        # They must start within the window; finals stay bounded.
+                        or word_start > end + _TIME_TOLERANCE
+                        or (event["is_final"] and word_end > end + _TIME_TOLERANCE)
                         or (parsed and word_start < parsed[-1].start)):
                     raise ValueError
                 parsed.append(_Word(word_start, word_end, word_text.strip()))

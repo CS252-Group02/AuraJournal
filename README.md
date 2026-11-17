@@ -164,6 +164,11 @@ Open `http://localhost:5173` when Vite is ready. The API provides
 
 ## Live speech-to-text
 
+Completed WebM/Opus recordings can also be sent as raw audio to authenticated
+`POST /api/transcriptions`, which returns `{transcript, outcome}`. See the
+[HTTP audio-upload guide](docs/audio-upload.md) for headers, limits, errors,
+and the distinction between automated, real-provider, and browser verification.
+
 The reusable asynchronous Deepgram streaming service, transcript normalizer, and
 `transcribe_audio()` session helper are available for backend integration. Set
 backend `DEEPGRAM_API_KEY`; see the [service guide](docs/speech-to-text.md) for

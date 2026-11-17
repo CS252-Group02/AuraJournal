@@ -15,8 +15,10 @@ no-speech and incomplete results, returns safe error envelopes, and cleans up on
 failure, cancellation, or early consumer exit.
 
 The authenticated browser WebSocket is available at `/api/transcriptions/live`.
-It bridges the existing Record protocol to these services. The application still does
-not upload/persist audio or save a journal automatically.
+It bridges the existing Record protocol to these services. A separate
+[`POST /api/transcriptions` upload endpoint](audio-upload.md) accepts a completed
+WebM/Opus recording and returns one transcript. Neither path persists audio or
+saves a journal automatically.
 
 This is the transport for the agreed live-transcript direction. The existing
 `external_api_tests/deepgram/test.py` remains an older file-transcription

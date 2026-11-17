@@ -27,6 +27,7 @@ from app.services.image_storage import ImageStorage
 from app.services.pixel_art import MomentExtractor
 from app.services.pixellab import PixelLabClient
 from app.routers.transcriptions import router as transcriptions_router
+from app.routers.transcription_upload import router as transcription_upload_router
 from app.services import DeepgramStreamingClient
 
 
@@ -101,6 +102,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
     app.include_router(weekly_reflections_router)
     app.include_router(pixel_art_router)
     app.include_router(transcriptions_router)
+    app.include_router(transcription_upload_router)
     return app
 
 
