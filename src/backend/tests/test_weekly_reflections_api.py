@@ -10,7 +10,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.models import JournalEntry, User, WeeklyReflection
-from app.services import AIInvalidResponseError, AIServiceNotConfiguredError, AIServiceUnavailableError
+from app.services import AIInvalidResponseError, AIServiceNotConfiguredError, AIServiceUnavailableError, EmptyJournalError
 from app.services.weekly_reflection import WeeklyReflectionTooLarge
 from test_api import app, application_for, request  # noqa: F401 - authenticated database fixture
 from test_ai_service import FakeCompletions, client_for
@@ -20,7 +20,8 @@ PATH = "/api/weekly-reflections"
 START = date(2026, 11, 12)
 PAYLOAD = {"period_start": START.isoformat()}
 OUTPUT = {"summary": "You completed an exam.",
-          "questions": ["What helped you prepare?", "What would you try next time?"]}
+          "questions": ["What helped you prepare?", "What would you try next time?"],
+          "source_dates": [START.isoformat()]}
 
 
 def test_real_generator_two_accounts_generate_persist_and_read_without_extra_calls(app):
@@ -67,7 +68,8 @@ def test_real_generator_two_accounts_generate_persist_and_read_without_extra_cal
         sources = json.loads(kwargs["messages"][1]["content"])["entries"]
         assert [entry["id"] for entry in sources] == [other_entry_id]
         return FakeCompletions(json.dumps({
-            "summary": "Another recorded week.", "questions": ["What do you want to revisit?", "What would you add?"]
+            "summary": "Another recorded week.", "questions": ["What do you want to revisit?", "What would you add?"],
+            "source_dates": [START.isoformat()]
         })).create(**kwargs)
     completions.create = Mock(side_effect=complete_other)
     assert call(app).status_code == 200
@@ -79,7 +81,7 @@ def test_real_generator_two_accounts_generate_persist_and_read_without_extra_cal
 
 def test_duplicate_provider_questions_preserve_saved_reflection(app, saved_reflection):
     insert_entry(app)
-    completions = FakeCompletions(json.dumps({"summary": "Recorded events.", "questions": ["Same?", " SAME? "]}))
+    completions = FakeCompletions(json.dumps({"summary": "Recorded events.", "questions": ["Same?", " SAME? "], "source_dates": [START.isoformat()]}))
     app.state.weekly_reflection_generator = GroqWeeklyReflectionGenerator(client=client_for(completions))
     assert call(app).status_code == 502
     assert read(app).json() == saved_reflection
@@ -168,6 +170,7 @@ def test_selected_calendar_dates_owner_order_and_generation(app, generator):
     with Session(app.state.engine) as session:
         saved = session.get(WeeklyReflection, (app.user_id, START))
         assert saved.summary == OUTPUT["summary"] and saved.questions == OUTPUT["questions"]
+        assert saved.source_dates == OUTPUT["source_dates"]
         assert session.get(JournalEntry, first).ai_summary == "DO NOT SEND STORED AI TEXT"
 
 
@@ -178,7 +181,7 @@ def test_empty_period_skips_generation_even_without_a_provider(app, generator, c
     response = call(app)
     assert response.status_code == 200
     assert response.json() == {"period_start": "2026-11-12", "period_end": "2026-11-18",
-                               "entry_count": 0, "summary": None, "questions": []}
+                               "entry_count": 0, "summary": None, "questions": [], "source_dates": []}
     generator.generate.assert_not_called()
     assert read(app).json() == saved_reflection
 
@@ -214,6 +217,7 @@ def test_invalid_generator_output_returns_safe_error(app, generator, result, sav
     (AIServiceNotConfiguredError("private key"), 503),
     (AIServiceUnavailableError("private provider detail"), 503),
     (WeeklyReflectionTooLarge("private content"), 413),
+    (EmptyJournalError("private content"), 422),
 ])
 def test_service_errors_are_controlled(app, generator, error, status, saved_reflection):
     insert_entry(app)
@@ -347,3 +351,52 @@ def test_failed_commit_rolls_back_generated_changes(app, generator, saved_reflec
     assert response.status_code == 503
     assert response.json() == {"detail": "Database is unavailable. Please try again later."}
     assert read(app).json() == saved_reflection
+
+
+@pytest.mark.parametrize("dates", [None, [], ["2026-11-13"], ["2026-11-11"], ["2026-11-19"],
+                                   [0], [True], ["2026-11-12T00:00:00Z"]])
+def test_invalid_or_unsupplied_source_dates_do_not_replace_saved_results(app, generator, dates, saved_reflection):
+    insert_entry(app)
+    generator.generate.return_value = {**OUTPUT, "source_dates": dates}
+    response = call(app)
+    assert response.status_code == 502
+    assert read(app).json() == saved_reflection
+
+
+def test_missing_source_dates_are_rejected_at_the_generator_boundary(app, generator, saved_reflection):
+    insert_entry(app)
+    generator.generate.return_value = {key: value for key, value in OUTPUT.items() if key != "source_dates"}
+    assert call(app).status_code == 502
+    assert read(app).json() == saved_reflection
+
+
+def test_regeneration_updates_evidence_and_saved_reads_keep_the_snapshot(app, generator):
+    insert_entry(app)
+    assert call(app).json()["source_dates"] == [START.isoformat()]
+    next_day = START + timedelta(days=1)
+    entry_id = insert_entry(app, journal_date=next_day)
+    generator.generate.return_value = {**OUTPUT, "source_dates": [next_day.isoformat()]}
+    assert call(app).json()["source_dates"] == [next_day.isoformat()]
+    with Session(app.state.engine) as session:
+        session.delete(session.get(JournalEntry, entry_id))
+        session.commit()
+    assert read(app).json()["source_dates"] == [next_day.isoformat()]
+
+
+def test_legacy_saved_results_explicitly_report_unknown_sources(app, generator, saved_reflection):
+    assert saved_reflection["source_dates"] is None
+    assert read(app).json()["source_dates"] is None
+    generator.generate.assert_not_called()
+
+
+def test_real_generator_is_connected_to_queries_and_persistence(app):
+    import json
+    from app.services.weekly_reflection import GroqWeeklyReflectionGenerator
+    from test_ai_service import FakeCompletions, client_for
+    insert_entry(app)
+    completions = FakeCompletions(json.dumps(OUTPUT))
+    app.state.weekly_reflection_generator = GroqWeeklyReflectionGenerator(client=client_for(completions))
+    assert call(app).json()["source_dates"] == OUTPUT["source_dates"]
+    assert read(app).json()["source_dates"] == OUTPUT["source_dates"]
+    assert len(completions.calls) == 1
+    assert json.loads(completions.calls[0]["messages"][1]["content"])["entries"][0]["journal_date"] == START.isoformat()

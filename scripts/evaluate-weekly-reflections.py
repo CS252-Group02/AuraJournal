@@ -41,7 +41,7 @@ def main():
         entries = [entry | {"id": str(UUID(int=index + 1))} for index, entry in enumerate(case["entries"])]
         record = {"name": case["name"], "review": case["review"]}
         try:
-            record["result"] = generator.generate(entries).model_dump()
+            record["result"] = generator.generate(entries).model_dump(mode="json")
         except JournalSummaryError as error:
             record["error"] = type(error).__name__  # Never echo credentials or provider bodies.
             failed = True

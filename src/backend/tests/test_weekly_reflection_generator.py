@@ -12,6 +12,7 @@ SOURCES = [{"id": "00000000-0000-0000-0000-000000000001", "journal_date": "2026-
             "content": "Hôm nay tôi đã nộp báo cáo."}]
 OUTPUT = {"summary": "Bạn đã nộp báo cáo.",
           "questions": ["Nhìn lại lúc nộp báo cáo, điều gì đọng lại với bạn?", "Bạn muốn ghi lại thêm điều gì về việc này?"]}
+OUTPUT["source_dates"] = [SOURCES[0]["journal_date"]]
 
 
 def test_one_structured_call_receives_dated_unicode_sources_and_prompt():
@@ -21,7 +22,7 @@ def test_one_structured_call_receives_dated_unicode_sources_and_prompt():
     assert len(completions.calls) == 1
     call = completions.calls[0]
     assert call["model"] == "test-model"
-    assert call["max_completion_tokens"] == 1536
+    assert call["max_completion_tokens"] == 2048
     assert call["response_format"] == {"type": "json_object"}
     assert call["messages"][0] == {"role": "system", "content": service.SYSTEM_PROMPT}
     assert json.loads(call["messages"][1]["content"]) == {"entries": SOURCES}
@@ -70,3 +71,33 @@ def test_default_application_wires_generator_without_calling_provider(monkeypatc
     app = create_app()
     assert isinstance(app.state.weekly_reflection_generator, GroqWeeklyReflectionGenerator)
     app.state.engine.dispose()
+
+
+
+def test_evaluation_report_serializes_evidence_dates_without_provider_calls(monkeypatch, capsys):
+    from pathlib import Path
+    import runpy
+    import sys
+    from app import config
+
+    root = Path(__file__).resolve().parents[3]
+    script = root / "scripts" / "evaluate-weekly-reflections.py"
+    case = json.loads(script.with_name("weekly-reflection-cases.json").read_text(encoding="utf-8"))[0]
+    calls = []
+
+    class FakeGenerator:
+        def generate(self, entries):
+            calls.append(entries)
+            return WeeklyReflectionContent(
+                summary="A fictional week.", questions=["What stood out?", "What would you revisit?"],
+                source_dates=sorted({entry["journal_date"] for entry in entries}),
+            )
+
+    monkeypatch.setattr(config, "groq_api_key", lambda: "test-key")
+    monkeypatch.setattr(service, "GroqWeeklyReflectionGenerator", FakeGenerator)
+    monkeypatch.setattr(sys, "argv", [str(script), "--live", "--case", case["name"]])
+    module = runpy.run_path(str(script), run_name="evaluation_test")
+    assert module["main"]() == 0
+    report = json.loads(capsys.readouterr().out)
+    assert len(calls) == 1
+    assert report["cases"][0]["result"]["source_dates"] == sorted({entry["journal_date"] for entry in calls[0]})

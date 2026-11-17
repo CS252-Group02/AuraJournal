@@ -1,5 +1,8 @@
 # Deepgram streaming
 
+For the completed-recording adapter, standalone verification command and browser sample
+checklist, see [Browser-recording transcription](recording-transcription.md).
+
 The transport provides a reusable asynchronous Python service for streaming audio to
 Deepgram. It opens one provider WebSocket per take, sends original audio bytes,
 yields provider JSON events as they arrive, and releases the connection on

@@ -233,6 +233,11 @@ def test_silence_is_preserved_as_raw_empty_result_not_a_service_failure():
 
 @pytest.mark.parametrize("raw,expected", [
     ("not JSON private", DeepgramInvalidResponseError),
+    ('{"type":"Metadata","type":"Results"}', DeepgramInvalidResponseError),
+    ('{"type":"Metadata","duration":NaN}', DeepgramInvalidResponseError),
+    ('{"type":"Metadata","duration":Infinity}', DeepgramInvalidResponseError),
+    ('{"type":"Metadata","duration":1e9999}', DeepgramInvalidResponseError),
+    ('{"type":"Metadata","nested":' + '[' * 2000 + '0' + ']' * 2000 + '}', DeepgramInvalidResponseError),
     ("[]", DeepgramInvalidResponseError),
     ('{"transcript":"private"}', DeepgramInvalidResponseError),
     (b'{"type":"Results"}', DeepgramInvalidResponseError),

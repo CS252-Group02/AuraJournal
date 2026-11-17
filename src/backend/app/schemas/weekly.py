@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StringConstraints, field_validator, model_validator
+from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
 
 class WeeklyRecapRequest(BaseModel):
@@ -73,13 +73,42 @@ ReflectionSummary = Annotated[str, StringConstraints(strip_whitespace=True, min_
 ReflectionQuestion = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=300)]
 
 
-class WeeklyReflectionContent(BaseModel):
+def _source_date(value):
+    if isinstance(value, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        return date.fromisoformat(value)
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    raise ValueError("Source dates must use YYYY-MM-DD.")
+
+
+ReflectionSourceDate = Annotated[date, BeforeValidator(_source_date)]
+ReflectionSourceDates = Annotated[
+    list[ReflectionSourceDate], Field(min_length=1, max_length=7),
+    AfterValidator(lambda days: sorted(set(days))),
+]
+
+
+class WeeklyReflectionText(BaseModel):
     model_config = ConfigDict(extra="forbid")
     summary: ReflectionSummary
     questions: list[ReflectionQuestion] = Field(min_length=2, max_length=2)
 
 
-class SavedWeeklyReflectionResponse(WeeklyReflectionContent):
+class WeeklyReflectionContent(WeeklyReflectionText):
+    model_config = ConfigDict(revalidate_instances="always")
+    source_dates: ReflectionSourceDates
+
+    @field_validator("questions")
+    @classmethod
+    def distinct_questions(cls, value):
+        if " ".join(value[0].split()).casefold() == " ".join(value[1].split()).casefold():
+            raise ValueError("Reflection questions must be distinct.")
+        return value
+
+
+class SavedWeeklyReflectionResponse(WeeklyReflectionText):
+    # Historical reflections did not store evidence. Never infer it from today's journals.
+    source_dates: ReflectionSourceDates | None
     period_start: date
     period_end: date
     created_at: datetime
@@ -93,12 +122,18 @@ class WeeklyReflectionResponse(BaseModel):
     entry_count: int = Field(ge=0)
     summary: ReflectionSummary | None
     questions: list[ReflectionQuestion] = Field(max_length=2)
+    source_dates: Annotated[
+        list[ReflectionSourceDate], Field(max_length=7),
+        AfterValidator(lambda days: sorted(set(days))),
+    ]
 
     @model_validator(mode="after")
     def result_matches_entries(self):
         if self.entry_count == 0:
-            if self.summary is not None or self.questions:
+            if self.summary is not None or self.questions or self.source_dates:
                 raise ValueError("An empty period must have no generated content.")
-        elif self.summary is None or len(self.questions) != 2:
-            raise ValueError("A nonempty period requires a summary and exactly two questions.")
+        elif self.summary is None or len(self.questions) != 2 or not self.source_dates:
+            raise ValueError("A nonempty period requires a summary, two questions and source dates.")
+        if any(day < self.period_start or day > self.period_end for day in self.source_dates):
+            raise ValueError("Source dates must belong to the selected period.")
         return self

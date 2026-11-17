@@ -19,10 +19,12 @@ from app.services.deepgram import (
     DeepgramUnavailableError,
 )
 from app.services.transcription import (
+    RecordedTranscript,
     TranscriptComplete,
     TranscriptNormalizer,
     TranscriptSegment,
     normalize_transcript_events,
+    collect_recorded_transcript,
 )
 from app.services.transcription_session import transcribe_audio
 
@@ -45,6 +47,8 @@ __all__ = [
     "DeepgramTimeoutError",
     "DeepgramUnavailableError",
     "TranscriptComplete",
+    "RecordedTranscript",
+    "collect_recorded_transcript",
     "TranscriptNormalizer",
     "TranscriptSegment",
     "normalize_transcript_events",
