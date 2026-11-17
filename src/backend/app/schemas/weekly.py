@@ -1,6 +1,6 @@
 from datetime import date, datetime, timedelta
 import re
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -11,6 +11,7 @@ class WeeklyRecapRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     start: date
     timezone: str = Field(min_length=1, max_length=100)
+    date_basis: Literal["recorded", "journal"] = "recorded"
 
     @field_validator("start")
     @classmethod

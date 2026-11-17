@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { addDays, toDateKey } from '../../lib/localDate.js';
+import { addDays, parseDateKey, toDateKey } from '../../lib/localDate.js';
 import { dateInMonth, HEATMAP, heatLevel, moodPresentation, MOODS, monthCells, monthKey, parseMonthKey, shiftMonth } from './calendarModel.js';
 
 const EMPTY_MOODS = new Map();
@@ -107,6 +107,11 @@ export default function Calendar({ month, todayKey, selectedKey, mode, byDay, st
           })}</tr>
         ))}</tbody>
       </table>
+      <label className="calendar-date-picker">
+        <span>See entries for a date</span>
+        <input type="date" value={selectedKey || ''} min="1000-01-01" max="9999-12-31" disabled={!ready}
+          onChange={event => { if (parseDateKey(event.target.value)) onSelectDate(event.target.value); }} />
+      </label>
       <ul className="calendar-legend" aria-label={mode === 'heatmap' ? 'Entries per day' : 'Mood color legend'}>
         {legend.map(item => <li key={item.label}><span style={{ background: item.color }} aria-hidden="true" />{item.label}</li>)}
       </ul>
