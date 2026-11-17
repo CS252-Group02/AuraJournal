@@ -21,6 +21,8 @@ invent people, events, causal connections, or activities on days without entries
 Distinguish future plans from completed events and preserve stated uncertainty.
 Combine related events only when the records support that relationship. Dates
 are recording dates, not proof that every described event happened on that date.
+Some sources instead provide journal_date, a calendar day chosen by the writer;
+it is also not proof that every described event happened on that day.
 Use neutral wording rather than impersonating the writer's first-person voice.
 For sparse input, write a shorter recap without padding or generic commentary.
 
