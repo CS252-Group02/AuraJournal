@@ -1,5 +1,4 @@
-import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -64,38 +63,30 @@ async function runStep(label, command, args, cwd = root) {
   return result.code === 0;
 }
 
-function pythonBootstrapCommand() {
-  const candidates = windows
-    ? [['py', ['-3']], ['python', []]]
-    : [['python3', []], ['python', []]];
-  return candidates.find(([command, args]) => (
-    spawnSync(command, [...args, '--version'], { stdio: 'ignore' }).status === 0
-  ));
-}
-
 async function prepareBackend() {
   if (!existsSync(python)) {
-    const bootstrap = pythonBootstrapCommand();
-    if (!bootstrap) {
-      console.error('Python 3 was not found. Install Python 3.10+ and run `npm start` again.');
-      return false;
-    }
-    if (!await runStep('Creating the project Python environment', bootstrap[0], [
-      ...bootstrap[1], '-m', 'venv', venvDir,
-    ])) return false;
+    console.error('The project Python environment was not found. Create `.venv` and install `src/backend/requirements.txt` before running `npm start`.');
+    return false;
   }
 
-  const requirementsHash = createHash('sha256').update(readFileSync(requirements)).digest('hex');
-  const fingerprintPath = join(venvDir, '.requirements.sha256');
-  const installedHash = existsSync(fingerprintPath)
-    ? readFileSync(fingerprintPath, 'utf8').trim()
-    : '';
-
-  if (requirementsHash !== installedHash) {
-    if (!await runStep('Installing backend Python requirements', python, [
-      '-m', 'pip', 'install', '-r', requirements,
-    ])) return false;
-    writeFileSync(fingerprintPath, `${requirementsHash}\n`);
+  const requirementNames = readFileSync(requirements, 'utf8')
+    .split(/\r?\n/)
+    .map((line) => line.match(/^\s*([A-Za-z0-9][A-Za-z0-9._-]*)/)?.[1])
+    .filter(Boolean);
+  const dependencyCheck = spawnSync(python, [
+    '-c',
+    `import importlib.metadata, sys
+installed = {d.metadata["Name"].lower().replace("_", "-").replace(".", "-") for d in importlib.metadata.distributions()}
+missing = [name for name in sys.argv[1:] if name.lower().replace("_", "-").replace(".", "-") not in installed]
+if missing:
+    print("Missing Python packages: " + ", ".join(missing), file=sys.stderr)
+    sys.exit(1)`,
+    ...requirementNames,
+  ], { cwd: backendDir, encoding: 'utf8', stdio: ['ignore', 'ignore', 'inherit'] });
+  if (dependencyCheck.error || dependencyCheck.status !== 0) {
+    if (dependencyCheck.error) console.error(`Could not check the project Python environment: ${dependencyCheck.error.message}`);
+    console.error('Install the backend requirements into `.venv` (see the setup instructions in README.md), then run `npm start` again.');
+    return false;
   }
 
   if (!await runStep('Applying database migrations', python, [

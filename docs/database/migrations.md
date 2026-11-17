@@ -1,6 +1,6 @@
 # Database setup and migrations
 
-AuraJournal uses PostgreSQL 14+ and Alembic. For local development, `npm start` creates `.venv`, installs `src/backend/requirements.txt` when needed, and applies migrations before launching the app. Alembic reads the repository-root `.env`; an exported `DATABASE_URL` takes precedence. Manual Alembic commands below run from `src/backend` with `.venv`'s Python.
+AuraJournal uses PostgreSQL 14+ and Alembic. For local development, create `.venv` and install `src/backend/requirements.txt` manually before running `npm start`; the launcher checks the environment and applies migrations before starting the app. Alembic reads the repository-root `.env`; an exported `DATABASE_URL` takes precedence. Manual Alembic commands below run from `src/backend` with `.venv`'s Python.
 
 The current head is **0008**. The history below lists the schema changes. See [authentication](../authentication.md) for account setup.
 
