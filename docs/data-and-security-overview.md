@@ -288,6 +288,13 @@ external operation. Image generation also requires enabled PixelLab configuratio
 
 ## 10. Verification record for this implementation
 
+After integration with remote main `eb89235` (November 19, 2026), the full backend
+suite passed: **759 passed, 1 skipped** (optional administrator test). Frontend:
+**121 passed**; Vite production build and whitespace checks passed. The populated
+upgrade test now seeds the historical schema explicitly and verifies that source
+dates remain null for legacy reflections after upgrading through `0009`.
+The following earlier results describe the initial implementation before that merge.
+
 Local verification on disposable PostgreSQL 18 / Python 3.15: previous pre-integration full backend suite
 **596 passed, 1 skipped** (the explicit administrator role test requires a separate
 opt-in URL); frontend **109 passed**; Vite production build passed. Provider calls

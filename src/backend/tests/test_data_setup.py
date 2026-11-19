@@ -1,4 +1,4 @@
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.models import JournalEntry, JournalImage, MoodRecord, WeeklyReflection
@@ -32,8 +32,12 @@ def test_security_upgrade_preserves_owned_ai_and_child_records(isolated_engine):
         entry.image = JournalImage(image_url='pixel-art/legacy-reference.png')
         entry.mood_record = MoodRecord(valence=0.5, arousal=0.25)
         session.add(entry)
-        session.add(WeeklyReflection(user_id=DEVELOPMENT_USER_ID, period_start=date(2026, 11, 16),
-                                    summary='Saved week', questions=['What helped?', 'What next?']))
+        # Seed the historical schema without the source_dates column added in 0009.
+        session.execute(text("""
+            INSERT INTO weekly_reflections (user_id, period_start, summary, questions)
+            VALUES (:owner, '2026-11-16', 'Saved week',
+                    '["What helped?", "What next?"]'::jsonb)
+        """), {'owner': DEVELOPMENT_USER_ID})
         session.commit()
         entry_id, created = entry.id, entry.created_at
     migrate(isolated_engine)
@@ -49,3 +53,4 @@ def test_security_upgrade_preserves_owned_ai_and_child_records(isolated_engine):
         reflection = session.get(WeeklyReflection, (DEVELOPMENT_USER_ID, date(2026, 11, 16)))
         assert reflection.summary == 'Saved week'
         assert reflection.questions == ['What helped?', 'What next?']
+        assert reflection.source_dates is None
