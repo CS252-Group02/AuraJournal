@@ -1,6 +1,7 @@
 """Database queries for journal history. Pass the authenticated owner's ID."""
 
 from datetime import date
+from typing import Literal
 from uuid import UUID
 
 from sqlalchemy import and_, func, select, text
@@ -45,6 +46,7 @@ def daily_entry_counts(
 def search_entries(
     session: Session, user_id: UUID, keyword: str = "",
     start: date | None = None, end: date | None = None,
+    sort: Literal["newest", "oldest"] = "newest", limit: int | None = None,
 ) -> list[JournalEntry]:
     """Literal, case-insensitive content search with inclusive optional dates.
 
@@ -52,6 +54,10 @@ def search_entries(
     """
     if start is not None and end is not None and start > end:
         raise ValueError("The start date must be on or before the end date.")
+    if sort not in {"newest", "oldest"}:
+        raise ValueError("Sort must be 'newest' or 'oldest'.")
+    if limit is not None and limit < 1:
+        raise ValueError("The result limit must be a positive integer.")
     keyword = keyword.strip()
     if "\x00" in keyword:
         raise ValueError("The keyword cannot contain a null character.")
@@ -62,9 +68,18 @@ def search_entries(
         query = query.where(JournalEntry.journal_date >= start)
     if end is not None:
         query = query.where(JournalEntry.journal_date <= end)
-    query = query.order_by(
-        JournalEntry.journal_date.desc(), JournalEntry.created_at.desc(), JournalEntry.id.desc(),
-    )
+    if sort == "newest":
+        query = query.order_by(
+            JournalEntry.journal_date.desc(), JournalEntry.created_at.desc(),
+            JournalEntry.id.desc(),
+        )
+    else:
+        query = query.order_by(
+            JournalEntry.journal_date.asc(), JournalEntry.created_at.asc(),
+            JournalEntry.id.asc(),
+        )
+    if limit is not None:
+        query = query.limit(limit)
     return list(session.scalars(query))
 
 

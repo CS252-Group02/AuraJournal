@@ -8,6 +8,7 @@ from app.services.deepgram import (
     DeepgramError, DeepgramInvalidAudioError, DeepgramStreamingClient, DeepgramTimeoutError,
 )
 from app.services.transcription import TranscriptNormalizer, normalize_transcript_events
+from app.services.async_deadline import deadline
 
 
 async def transcribe_audio(
@@ -35,7 +36,7 @@ async def transcribe_audio(
                     received_audio = False
                     while True:
                         try:
-                            chunk = await asyncio.wait_for(anext(audio_chunks), audio_timeout)
+                            chunk = await deadline(anext(audio_chunks), audio_timeout)
                         except StopAsyncIteration:
                             break
                         except (TimeoutError, asyncio.TimeoutError):

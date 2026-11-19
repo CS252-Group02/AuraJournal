@@ -209,3 +209,54 @@ def test_weekly_requires_login_and_csrf(app):
     assert recap(app, headers={}).status_code == 403
     assert recap(app, headers={'Origin': 'https://evil.example', 'X-AuraJournal-CSRF': '1'}).status_code == 403
     assert app.state.weekly_recap_generator.calls == []
+
+
+def test_journal_date_mode_uses_owned_calendar_dates_instead_of_recording_time(app):
+    # An entry recorded outside the week belongs to it by its chosen journal date.
+    first = insert_entry(app, 'Earlier journal day.', journal_date=date(2026, 11, 9),
+                         created_at=ENTRY_TIME + timedelta(days=30))
+    last = insert_entry(app, 'Last journal day.', journal_date=date(2026, 11, 15),
+                        created_at=ENTRY_TIME - timedelta(days=30))
+    insert_entry(app, 'Recorded inside, dated outside.', journal_date=date(2026, 11, 16))
+    insert_entry(app, 'Before the period.', journal_date=date(2026, 11, 8))
+    with Session(app.state.engine) as session:
+        other = User(email='other-journal-week@example.com', password_hash='!disabled')
+        session.add(JournalEntry(user=other, content='PRIVATE OTHER ACCOUNT', journal_date=date(2026, 11, 9)))
+        session.commit()
+    generator = FakeRecap()
+    app.state.weekly_recap_generator = generator
+    response = asyncio.run(request(app, 'POST', ENDPOINT, json={**PAYLOAD, 'date_basis': 'journal'}))
+    assert response.status_code == 200
+    assert response.json()['entry_count'] == 2
+    assert [record['id'] for record in generator.calls[0]] == [str(first), str(last)]
+    assert [record['journal_date'] for record in generator.calls[0]] == ['2026-11-09', '2026-11-15']
+    assert all(set(record) == {'id', 'journal_date', 'content'} for record in generator.calls[0])
+
+
+def test_journal_date_change_during_generation_invalidates_result(app):
+    entry_id = insert_entry(app, journal_date=date(2026, 11, 9))
+
+    def change():
+        with Session(app.state.engine) as session:
+            session.get(JournalEntry, entry_id).journal_date = date(2026, 11, 16)
+            session.commit()
+
+    app.state.weekly_recap_generator = FakeRecap(mutation=change)
+    response = asyncio.run(request(app, 'POST', ENDPOINT, json={**PAYLOAD, 'date_basis': 'journal'}))
+    assert response.status_code == 409
+
+
+def test_weekly_date_basis_defaults_to_existing_recording_behavior():
+    assert WeeklyRecapRequest.model_validate(PAYLOAD).date_basis == 'recorded'
+    for invalid in ['mood', '', None]:
+        with pytest.raises(ValidationError):
+            WeeklyRecapRequest.model_validate({**PAYLOAD, 'date_basis': invalid})
+
+
+def test_journal_date_sources_use_existing_factual_ai_provider():
+    records = [{'id': str(uuid4()), 'journal_date': '2026-11-09', 'content': 'Finished an exam.'}]
+    completions = FakeCompletions(json.dumps(output(records)))
+    result = WeeklyRecapGenerator(client=client_for(completions)).generate(records)
+    assert result.summary == 'You finished an exam.'
+    assert json.loads(completions.calls[0]['messages'][1]['content']) == {'entries': records}
+    assert 'a calendar day chosen by the writer' in completions.calls[0]['messages'][0]['content']

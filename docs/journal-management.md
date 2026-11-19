@@ -4,8 +4,8 @@
 
 | Task | Current handoff |
 | --- | --- |
-| B01 | Existing authenticated owner-filtered list; retain its newest-created-first ordering. |
-| B02 | Implemented: GET `/api/entries/{entry_id}` uses the existing owner filter and returns the same 404 for foreign and missing entries. |
+| B01 | Authenticated ownership is enforced across journal, AI, transcription, reflection, and image routes; auth regression coverage includes session and account isolation. |
+| B02 | GET `/api/entries` supports literal keyword search, inclusive date filters, newest/oldest journal-date sorting, and an optional result limit. Detail reads use the owner filter and return the same 404 for foreign and missing entries. |
 | B03 | Implemented: optional calendar dates at creation, content/date/both in partial PATCH, and `journal_date` in all entry responses. |
 | B04 | Existing owner-only deletion returns 204 and cascades linked records. |
 | B05 | Implemented: two independently registered/logged-in accounts exercise private create/list/detail/date-only edit/combined edit/delete, selected-date reads, ownership spoof rejection, persistence across app recreation, and unchanged foreign entries and saved weekly reflections. Both accounts take the owner role. |
@@ -14,8 +14,10 @@
 ## Journal reads
 
 Both GET `/api/entries` and GET `/api/entries/{entry_id}` require a valid account
-session. The list stays ordered by `created_at DESC, id DESC`, preserving the
-existing client contract. The detail endpoint returns one `EntryResponse`, never
+session. The list supports `q`, `start`, `end`, `sort`, and `limit`, and defaults
+to creation time descending for unfiltered requests. Filtered requests preserve
+journal-date descending order; explicit `sort` values use journal-date order in
+the requested direction. The detail endpoint returns one `EntryResponse`, never
 an owner ID or account credentials. Missing/foreign resources both return 404;
 anonymous, invalid, expired, revoked, and disabled sessions return 401. Invalid
 UUIDs return 422. Private responses use `Cache-Control: no-store`.

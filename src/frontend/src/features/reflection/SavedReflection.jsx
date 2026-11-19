@@ -46,6 +46,7 @@ export default function SavedReflection({ periodStart }) {
     {state.data ? <>
       <p>{state.data.summary}</p>
       <ol>{state.data.questions.map((question, index) => <li key={index}>{question}</li>)}</ol>
+      {state.data.source_dates?.length > 0 && <p>Source journal dates: {state.data.source_dates.join(', ')}</p>}
       <p>Saved snapshot. Generate again after changing your journals.</p>
     </> : !state.loading && <p>No reflection saved for this period.</p>}
     <button type="button" className="aj-btn aj-btn-outline" disabled={state.loading} onClick={generate}>

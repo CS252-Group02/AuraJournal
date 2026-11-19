@@ -49,7 +49,7 @@ application privacy does not mean that no third party processes journal content.
 
 ## 3. Data structure
 
-The current Alembic head is **0008**. PostgreSQL has eight application tables plus
+The current Alembic head is **0009**. PostgreSQL has eight application tables plus
 `alembic_version`, which records the applied schema revision.
 
 | Table | Key and important fields | Responsibility |
@@ -58,7 +58,7 @@ The current Alembic head is **0008**. PostgreSQL has eight application tables pl
 | `journal_entries` | UUID `id`; required `user_id`; `content`; `journal_date`; timestamps; nullable AI summary/question/generation time | Owned journal and its saved per-entry AI result. |
 | `mood_records` | UUID `id`; unique required `entry_id`; `valence`, `arousal` floats | Optional one-to-one mood data. Numeric clinical ranges are not enforced. |
 | `journal_images` | UUID `id`; unique required `entry_id`; `image_url`; `file_format`; creation time | Optional one-to-one image reference. `image_url` is an internal storage key, not a public URL. |
-| `weekly_reflections` | Composite primary key `(user_id, period_start)`; `summary`; JSONB `questions`; timestamps | One saved reflection per owner and chosen seven-day start date. |
+| `weekly_reflections` | Composite primary key `(user_id, period_start)`; `summary`; JSONB `questions`; nullable JSONB `source_dates`; timestamps | One saved reflection per owner and chosen seven-day start date. |
 | `auth_sessions` | SHA-256 `token_hash` primary key; required `user_id`; `expires_at` | Revocable seven-day sessions; the raw cookie token is not stored. |
 | `login_attempts` | UUID `id`; normalized email; client IP; creation time | Failed-login throttling and expiry cleanup. |
 | `rate_limit_buckets` | Hashed `key`; positive `attempts`; `expires_at` | Shared request budgets across backend workers. |
@@ -110,6 +110,10 @@ relationships and filters, rather than letting the browser query arbitrary rows.
 | Read saved reflection | Composite lookup `(authenticated user.id, period_start)`; no provider call is needed. |
 | Display image | Authorize entry owner → follow image relation → validate internal key → read private file → return PNG bytes with private response headers. |
 
+Saved reflections now persist source dates checked against the selected journals.
+Historical rows have null source dates; the application does not invent evidence
+from current journals.
+
 The saved reflection is a snapshot, not a live view. Later journal edits/deletions
 do not silently rewrite it. Explicit regeneration updates the same row, preserves
 `created_at`, and refreshes `updated_at`. Empty periods do not overwrite a previous
@@ -156,7 +160,7 @@ planner remains free to choose a sequential scan for small/unselective tables.
 
 Migration order: legacy table `0001` → UUID ownership/child tables `0002` → sessions
 `0003` → entry AI fields `0004` → journal date/backfill `0005` → weekly storage
-`0006` → browse index `0007` → shared budgets/login indexes `0008`.
+`0006` → browse index `0007` → shared budgets/login indexes `0008` → saved reflection source dates `0009`.
 The local `npm start` launcher runs Alembic before launching the apps; the FastAPI
 process itself does not create/upgrade tables. Production should run migrations
 as a separate deployment job before starting the restricted API process.
@@ -284,7 +288,7 @@ external operation. Image generation also requires enabled PixelLab configuratio
 
 ## 10. Verification record for this implementation
 
-Local verification on disposable PostgreSQL 18 / Python 3.15: full backend suite
+Local verification on disposable PostgreSQL 18 / Python 3.15: previous pre-integration full backend suite
 **596 passed, 1 skipped** (the explicit administrator role test requires a separate
 opt-in URL); frontend **109 passed**; Vite production build passed. Provider calls
 were mocked. FastAPI/Starlette emitted Python deprecation warnings. The setup tool

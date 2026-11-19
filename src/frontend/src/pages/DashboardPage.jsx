@@ -4,11 +4,13 @@ import { useAuth } from '../auth/Auth.jsx';
 import PageHeader from '../components/layout/PageHeader.jsx';
 import { StatePanel } from '../components/ui/StatePanel.jsx';
 import Calendar from '../features/calendar/Calendar.jsx';
-import { currentStreak, groupEntriesByDay } from '../features/calendar/calendarModel.js';
+import { monthKey } from '../features/calendar/calendarModel.js';
 import { useCalendarView } from '../features/calendar/useCalendarView.js';
 import JournalCard from '../features/journal/JournalCard.jsx';
 import { useJournalEntries } from '../features/journal/useJournalEntries.js';
 import { parseDateKey } from '../lib/localDate.js';
+import { activitySummary, dashboardPreview, indexJournalDays, journalDayKey, weeklyActivity } from '../features/dashboard/dashboardModel.js';
+import { Activity, DashboardCompanion, MoodAnalytics, RecentEntries, WeeklyRecap } from '../features/dashboard/DashboardSections.jsx';
 
 function SelectedDayEntries({ dateKey, entries }) {
   const [visibleCount, setVisibleCount] = useState(20);
@@ -23,7 +25,9 @@ function SelectedDayEntries({ dateKey, entries }) {
         Choose another day to revisit your entries.
       </StatePanel> : <>
         <ul className="dashboard-entry-list">
-          {entries.slice(0, visibleCount).map(entry => <li key={entry.id}><JournalCard entry={entry} /></li>)}
+          {entries.slice(0, visibleCount).map(entry => <li key={entry.id}><JournalCard entry={entry}
+            previewText={dashboardPreview(entry.content)} dateTime={journalDayKey(entry)}
+            dateLabel={label} /></li>)}
         </ul>
         {visibleCount < entries.length && <button type="button" className="aj-btn aj-btn-outline"
           onClick={() => setVisibleCount(count => count + 20)}>Show more journals</button>}
@@ -35,8 +39,10 @@ function SelectedDayEntries({ dateKey, entries }) {
 function DashboardContent({ user }) {
   const { entries, status, error, reload } = useJournalEntries();
   const view = useCalendarView();
-  const { byDay, invalidCount } = useMemo(() => groupEntriesByDay(entries), [entries, view.timezone]);
-  const streak = useMemo(() => currentStreak(byDay, view.today), [byDay, view.todayKey, view.timezone]);
+  const displayedMonth = monthKey(view.month);
+  const { byDay, invalidCount } = useMemo(() => indexJournalDays(entries), [entries, view.timezone]);
+  const activity = useMemo(() => activitySummary(entries, byDay, view.todayKey, displayedMonth), [entries, byDay, view.todayKey, displayedMonth]);
+  const week = useMemo(() => weeklyActivity(byDay, view.todayKey), [byDay, view.todayKey]);
   const ready = status === 'ready';
 
   return (
@@ -45,9 +51,6 @@ function DashboardContent({ user }) {
         <PageHeader initial={user.email[0]?.toUpperCase()} />
         <header className="aj-title dashboard-title">
           <div><h1>Your journey</h1><p>Every day tells a story. Here’s yours.</p></div>
-          {ready && <p className="dashboard-streak" role="status">
-            {streak.count ? <>{streak.count}-day streak <span>through {streak.throughKey === view.todayKey ? 'today' : 'yesterday'}</span></> : 'No current streak'}
-          </p>}
         </header>
         <nav className="dashboard-links" aria-label="Your journal">
           <Link to="/">Back to Main</Link>
@@ -57,16 +60,28 @@ function DashboardContent({ user }) {
         {status === 'loading' && <p className="dashboard-status" role="status">Loading your journal activity…</p>}
         {status === 'error' && <StatePanel title="Couldn’t load your journals" tone="error" role="alert"
           action={<button type="button" className="aj-btn" onClick={reload}>Try again</button>}>{error}</StatePanel>}
-        <Calendar month={view.month} todayKey={view.todayKey} selectedKey={view.selectedKey} mode={view.mode}
-          byDay={byDay} status={status} onMonthChange={view.changeMonth} onToday={view.goToday}
-          onModeChange={view.changeMode} onSelectDate={view.selectDate} />
+        <Activity activity={activity} month={view.month} status={status} todayKey={view.todayKey} />
         {ready && invalidCount > 0 && <p className="dashboard-status" role="status">
           {invalidCount} {invalidCount === 1 ? 'entry could' : 'entries could'} not be placed on the calendar because the date is unavailable. <Link to="/history">View them in History.</Link>
         </p>}
         {ready && entries.length === 0 && <StatePanel title="No journals yet" action={<Link className="aj-btn" to="/">Write your first entry</Link>}>
           Your saved journals will appear on the calendar.
         </StatePanel>}
-        {ready && view.selectedKey && <SelectedDayEntries key={view.selectedKey} dateKey={view.selectedKey} entries={byDay.get(view.selectedKey) || []} />}
+        <div className="dashboard-primary">
+          <div className="dashboard-calendar-column">
+            <Calendar month={view.month} todayKey={view.todayKey} selectedKey={view.selectedKey} mode={view.mode}
+              byDay={byDay} status={status} onMonthChange={view.changeMonth} onToday={view.goToday}
+              onModeChange={view.changeMode} onSelectDate={view.selectDate} />
+            {ready && view.selectedKey ? <SelectedDayEntries key={view.selectedKey} dateKey={view.selectedKey} entries={byDay.get(view.selectedKey) || []} />
+              : ready && <p className="dashboard-selection-hint">Choose a date to revisit its journals. A single-entry day opens directly; use the date picker to see its details here.</p>}
+          </div>
+          <div className="dashboard-reflections-column">
+            <WeeklyRecap week={week} status={status} userId={user.id} timezone={view.timezone} reload={reload} onSelectDate={view.selectDate} />
+            <DashboardCompanion activity={activity} week={week} status={status} />
+          </div>
+        </div>
+        <MoodAnalytics byDay={byDay} todayKey={view.todayKey} timezone={view.timezone} status={status} />
+        <RecentEntries entries={entries} status={status} />
       </div>
     </main>
   );

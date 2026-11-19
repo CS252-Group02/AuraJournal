@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.auth import current_user
 from app.database import get_session
 from app.models import User, WeeklyReflection
+from app.limits import consume_ai_budget
 from app.schemas.weekly import (
     ReflectionPeriodStart,
     SavedWeeklyReflectionResponse,
@@ -18,13 +19,14 @@ from app.schemas.weekly import (
     WeeklyReflectionRequest,
     WeeklyReflectionResponse,
 )
-from app.services import AIInvalidResponseError, AIServiceNotConfiguredError, AIServiceUnavailableError
+from app.services import AIInvalidResponseError, AIServiceNotConfiguredError, AIServiceUnavailableError, EmptyJournalError
 from app.services.journal_history import entries_in_range
 from app.services.weekly_reflection import (
     MAX_WEEKLY_REFLECTION_INPUT,
     WeeklyReflectionGenerator,
     WeeklyReflectionSource,
     WeeklyReflectionTooLarge,
+    validate_reflection_sources,
 )
 
 router = APIRouter(prefix="/api/weekly-reflections", tags=["weekly reflections"])
@@ -42,6 +44,7 @@ def _source_snapshot(session: Session, user_id: UUID, start: date, end: date):
 @router.post("", response_model=WeeklyReflectionResponse)
 def generate_weekly_reflection(
     payload: WeeklyReflectionRequest,
+    request: Request,
     session: Session = Depends(get_session),
     user: User = Depends(current_user),
     generator: WeeklyReflectionGenerator | None = Depends(get_weekly_reflection_generator),
@@ -51,7 +54,7 @@ def generate_weekly_reflection(
     snapshot = _source_snapshot(session, user_id, start, end)
     response = dict(period_start=start, period_end=end, entry_count=len(snapshot))
     if not snapshot:
-        return WeeklyReflectionResponse(**response, summary=None, questions=[])
+        return WeeklyReflectionResponse(**response, summary=None, questions=[], source_dates=[])
 
     sources: list[WeeklyReflectionSource] = [
         {"id": str(entry_id), "journal_date": day.isoformat(), "content": content}
@@ -64,7 +67,11 @@ def generate_weekly_reflection(
             raise WeeklyReflectionTooLarge
         if generator is None:
             raise AIServiceNotConfiguredError
+        consume_ai_budget(request, user, session)
         result = WeeklyReflectionContent.model_validate(generator.generate(sources))
+        validate_reflection_sources(result, sources)
+    except EmptyJournalError:
+        raise HTTPException(422, "Selected journals contain empty text. Edit them before generating a reflection.") from None
     except WeeklyReflectionTooLarge:
         raise HTTPException(413, "This period's entries are too long. No entries were omitted.") from None
     except (AIInvalidResponseError, ValidationError):
@@ -74,15 +81,18 @@ def generate_weekly_reflection(
 
     if snapshot != _source_snapshot(session, user_id, start, end):
         raise HTTPException(409, "Your journals changed during generation. Generate the reflection again.")
+    source_dates = [day.isoformat() for day in result.source_dates]
     statement = insert(WeeklyReflection).values(
         user_id=user_id, period_start=start, summary=result.summary, questions=result.questions,
+        source_dates=source_dates,
     ).on_conflict_do_update(
         index_elements=[WeeklyReflection.user_id, WeeklyReflection.period_start],
-        set_={"summary": result.summary, "questions": result.questions, "updated_at": func.now()},
+        set_={"summary": result.summary, "questions": result.questions,
+              "source_dates": source_dates, "updated_at": func.now()},
     )
     session.execute(statement)
     session.commit()
-    return WeeklyReflectionResponse(**response, summary=result.summary, questions=result.questions)
+    return WeeklyReflectionResponse(**response, **result.model_dump())
 
 
 @router.get("/{period_start}", response_model=SavedWeeklyReflectionResponse)
@@ -96,6 +106,6 @@ def get_weekly_reflection(
         raise HTTPException(404, "Weekly reflection was not found.")
     return SavedWeeklyReflectionResponse(
         period_start=reflection.period_start, period_end=reflection.period_start + timedelta(days=6),
-        summary=reflection.summary, questions=reflection.questions,
+        summary=reflection.summary, questions=reflection.questions, source_dates=reflection.source_dates,
         created_at=reflection.created_at, updated_at=reflection.updated_at,
     )

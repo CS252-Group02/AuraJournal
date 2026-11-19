@@ -8,6 +8,7 @@ flows, security controls, limitations, and reproducible verification.
 
 | Guide | Contents |
 | --- | --- |
+| [HTTP audio upload](audio-upload.md) | Authenticated raw WebM/Opus transcription, browser request contract, safe errors, and real-provider verification status |
 | [Speech-to-text streaming service and API](speech-to-text.md) | Provider transport, transcript normalization, authenticated WebSocket protocol, frontend configuration, and offline tests |
 | [Weekly recap](weekly-recap.md) | Factual weekly summaries, timezone boundaries, source links, API, and verification |
 | [Entry reflections](entry-reflections.md) | Per-entry short reflections, regeneration, and API response |

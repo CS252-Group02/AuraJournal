@@ -8,14 +8,14 @@ from app.services.weekly_reflection import GroqWeeklyReflectionGenerator, Weekly
 from test_ai_service import FakeCompletions, client_for
 from test_api import app, request  # noqa: F401 - authenticated database fixture
 
-SOURCES = [{"id": "example", "journal_date": "2026-11-16", "content": "I finished my exam."}]
-OUTPUT = {"summary": "You completed an exam.", "questions": ["What helped?", "What would you repeat?"]}
+SOURCES = [{"id": "00000000-0000-4000-8000-000000000016", "journal_date": "2026-11-16", "content": "I finished my exam."}]
+OUTPUT = {"summary": "You completed an exam.", "questions": ["What helped?", "What would you repeat?"], "source_dates": ["2026-11-16"]}
 
 
 def test_provider_sends_only_supplied_sources_and_validates_result():
     fake = FakeCompletions(json.dumps(OUTPUT))
     result = GroqWeeklyReflectionGenerator(client=client_for(fake)).generate(SOURCES)
-    assert result.model_dump() == OUTPUT
+    assert result.model_dump(mode="json") == OUTPUT
     assert json.loads(fake.calls[0]['messages'][1]['content']) == {'entries': SOURCES}
 
 

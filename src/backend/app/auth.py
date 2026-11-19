@@ -13,6 +13,7 @@ from starlette.requests import HTTPConnection
 from app.config import frontend_origin
 from app.database import get_session
 from app.models import AuthSession, User
+from app.upload_policy import is_audio_upload
 
 COOKIE_NAME = "aurajournal_session"
 SESSION_SECONDS = 7 * 24 * 60 * 60
@@ -41,7 +42,7 @@ def require_browser_request(request: HTTPConnection):
         return
     if request.headers.get("origin") != frontend_origin() or request.headers.get("x-aurajournal-csrf") != "1":
         raise HTTPException(403, "Request origin or CSRF header is invalid.")
-    if request.headers.get("content-type", "").split(";")[0].strip().lower() != "application/json":
+    if not is_audio_upload(request.scope) and request.headers.get("content-type", "").split(";")[0].strip().lower() != "application/json":
         raise HTTPException(415, "Use application/json.")
 
 

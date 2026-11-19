@@ -94,3 +94,37 @@ def test_reflection_migration_round_trip_preserves_journals(isolated_engine):
     with Session(isolated_engine) as session:
         # Downgrade intentionally drops saved reflections; re-upgrade cannot recover them.
         assert session.get(WeeklyReflection, (DEVELOPMENT_USER_ID, START)) is None
+
+
+@pytest.mark.parametrize("dates", [[], {}, [1], [None], ["2026-11-01"] * 8])
+def test_source_date_storage_rejects_invalid_shapes(migrated_engine, dates):
+    values = dict(user_id=DEVELOPMENT_USER_ID, period_start=START,
+                  summary="Weekly summary", questions=QUESTIONS, source_dates=dates)
+    with pytest.raises(IntegrityError), migrated_engine.begin() as connection:
+        connection.execute(insert(WeeklyReflection).values(values))
+
+
+def test_evidence_migration_preserves_old_results_and_downgrade_preserves_content(isolated_engine):
+    import json
+    migrate(isolated_engine, "0008")
+    with isolated_engine.begin() as connection:
+        connection.execute(text(
+            "INSERT INTO weekly_reflections (user_id, period_start, summary, questions) "
+            "VALUES (:owner, :start, :summary, CAST(:questions AS jsonb))"
+        ), {"owner": DEVELOPMENT_USER_ID, "start": START, "summary": "Legacy reflection",
+            "questions": json.dumps(QUESTIONS)})
+    migrate(isolated_engine)
+    with Session(isolated_engine) as session:
+        saved = session.get(WeeklyReflection, (DEVELOPMENT_USER_ID, START))
+        assert saved.summary == "Legacy reflection" and saved.questions == QUESTIONS
+        assert saved.source_dates is None
+        saved.source_dates = [START.isoformat()]
+        session.commit()
+    migrate(isolated_engine, "0008", downgrade=True)
+    with isolated_engine.connect() as connection:
+        assert "source_dates" not in {c["name"] for c in inspect(connection).get_columns("weekly_reflections")}
+        assert connection.scalar(text("SELECT summary FROM weekly_reflections")) == "Legacy reflection"
+    migrate(isolated_engine)
+    with Session(isolated_engine) as session:
+        saved = session.get(WeeklyReflection, (DEVELOPMENT_USER_ID, START))
+        assert saved.questions == QUESTIONS and saved.source_dates is None

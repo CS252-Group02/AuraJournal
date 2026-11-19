@@ -33,6 +33,13 @@ def weekly_recap(payload: WeeklyRecapRequest, session: Session = Depends(get_ses
     query = select(JournalEntry.id, JournalEntry.content, JournalEntry.created_at, JournalEntry.updated_at).where(
         JournalEntry.user_id == user_id, JournalEntry.created_at >= start, JournalEntry.created_at < end,
     ).order_by(JournalEntry.created_at, JournalEntry.id)
+    if payload.date_basis == "journal":
+        query = select(JournalEntry.id, JournalEntry.content, JournalEntry.created_at,
+                       JournalEntry.updated_at, JournalEntry.journal_date).where(
+            JournalEntry.user_id == user_id,
+            JournalEntry.journal_date >= payload.start,
+            JournalEntry.journal_date < payload.start + timedelta(days=7),
+        ).order_by(JournalEntry.journal_date, JournalEntry.created_at, JournalEntry.id)
     rows = session.execute(query).all()
     response = dict(week_start=payload.start, week_end=payload.start + timedelta(days=6),
                     timezone=payload.timezone, entry_count=len(rows))
@@ -40,6 +47,8 @@ def weekly_recap(payload: WeeklyRecapRequest, session: Session = Depends(get_ses
         return WeeklyRecapResponse(**response, summary=None, highlights=[])
     sources = [{"id": str(row.id), "recorded_at": row.created_at.astimezone(ZoneInfo(payload.timezone)).isoformat(),
                 "content": row.content} for row in rows]
+    if payload.date_basis == "journal":
+        sources = [{"id": str(row.id), "journal_date": row.journal_date.isoformat(), "content": row.content} for row in rows]
     # Release the read transaction/connection while waiting for the provider.
     session.rollback()
     try:

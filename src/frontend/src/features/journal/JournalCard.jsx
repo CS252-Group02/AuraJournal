@@ -11,8 +11,8 @@ export function entryTime(value) {
   return new Date(value).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 
-export default function JournalCard({ entry }) {
-  const preview = entryPreview(entry.content);
+export default function JournalCard({ entry, previewText, dateLabel, dateTime = entry.created_at }) {
+  const preview = previewText ?? entryPreview(entry.content);
   return (
     <Link to={`/journal/${entry.id}`} className={`journal-card tone-${entryTone(entry.id)}`}>
       <div className="journal-card-top">
@@ -20,7 +20,7 @@ export default function JournalCard({ entry }) {
         <h3>{entryTitle(entry.content)}</h3>
       </div>
       <div className="journal-card-body">
-        <time className="aj-kicker" dateTime={entry.created_at}>{longDate(entry.created_at)}</time>
+        <time className="aj-kicker" dateTime={dateTime}>{dateLabel ?? longDate(entry.created_at)}</time>
         {preview && <p>{preview}</p>}
         <div className="journal-card-meta">
           <span>{readMinutes(entry.content)} min read</span>

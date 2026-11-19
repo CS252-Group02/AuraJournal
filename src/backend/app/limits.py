@@ -53,13 +53,17 @@ def login_budget(request: Request, session: Session = Depends(get_session)):
     consume(session, [("login:requests:ip:" + client_ip(request), 60, 60)])
 
 
-def ai_budget(request: Request, user: User = Depends(current_user),
-              session: Session = Depends(get_session)):
+def consume_ai_budget(request: Request, user: User, session: Session):
     consume(session, [
         (f"ai:user:minute:{user.id}", 10, 60),
         (f"ai:user:day:{user.id}", 100, 86400),
         ("ai:ip:" + client_ip(request), 30, 60),
     ])
+
+
+def ai_budget(request: Request, user: User = Depends(current_user),
+              session: Session = Depends(get_session)):
+    consume_ai_budget(request, user, session)
     # Transaction lock is released when the request-scoped session closes or
     # commits. Another worker must reject, not wait while holding a DB connection.
     locked = session.scalar(text("SELECT pg_try_advisory_xact_lock(hashtextextended(:key, 0))"),

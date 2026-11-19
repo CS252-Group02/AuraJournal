@@ -138,10 +138,26 @@ Copy-Item src/frontend/.env.example src/frontend/.env.local
 
 Update `.env` if your PostgreSQL credentials differ. The virtual environment and local env files are not shared or committed.
 
-On the first `npm start`, the launcher creates `.venv`, installs the Python
-requirements, and applies database migrations before starting either app. It
-reinstalls requirements when `src/backend/requirements.txt` changes. PostgreSQL
-must be running, and `.env` must contain the app database configuration. **If
+Create the project Python environment and install its requirements manually:
+
+**Linux/macOS:**
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r src/backend/requirements.txt
+```
+
+**Windows PowerShell:**
+
+```powershell
+py -3 -m venv .venv
+.venv\Scripts\python -m pip install -r src/backend/requirements.txt
+```
+
+Run the install command again when `src/backend/requirements.txt` changes.
+`npm start` checks that `.venv` and its declared packages are present, then
+applies database migrations before starting either app. PostgreSQL must be
+running, and `.env` must contain the app database configuration. **If
 your database already has the original journal table without migration
 tracking, follow the backup and baseline-stamp instructions in
 [database setup](docs/database/migrations.md) before starting.** Back up an
@@ -159,13 +175,18 @@ PostgreSQL must be running before you start the app. From the repository root, r
 npm start
 ```
 
-`npm start` installs npm dependencies when needed, prepares the Python
+`npm start` installs npm dependencies when needed, checks the prepared Python
 environment, applies database migrations, then runs the backend and frontend
 together with `[backend]` and `[frontend]` log labels. Press Ctrl+C to stop both.
 Open `http://localhost:5173` when Vite is ready. The API provides
 `POST /api/entries` with `{"content":"..."}` and `GET /api/entries`.
 
 ## Live speech-to-text
+
+Completed WebM/Opus recordings can also be sent as raw audio to authenticated
+`POST /api/transcriptions`, which returns `{transcript, outcome}`. See the
+[HTTP audio-upload guide](docs/audio-upload.md) for headers, limits, errors,
+and the distinction between automated, real-provider, and browser verification.
 
 The reusable asynchronous Deepgram streaming service, transcript normalizer, and
 `transcribe_audio()` session helper are available for backend integration. Set
@@ -187,8 +208,11 @@ entry-level reflection questions. See [weekly recap API and behavior](docs/weekl
 The backend also provides `POST /api/weekly-reflections` for a selected seven-day
 period and a summary with exactly two questions. Successful generation saves the
 result; `GET /api/weekly-reflections/{period_start}` reads it without calling AI.
-Nonempty generation requests return `503` until the reflection AI generator is
-connected. See [weekly reflection integration](docs/weekly-reflections.md).
+The Groq generator returns supporting `source_dates`, saved with the result.
+Run `alembic upgrade head` (revision `0009`) before starting the updated backend;
+configure `GROQ_API_KEY` to generate nonempty results. Historical reflections
+return `source_dates: null` until regenerated. See
+[weekly reflection integration](docs/weekly-reflections.md).
 
 `POST /api/ai/suggest-title` accepts journal text directly and returns one short
 title. It does not look up or save journal entries and rejects `entry_id` or any
