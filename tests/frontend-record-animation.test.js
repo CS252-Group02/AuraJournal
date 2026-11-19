@@ -204,3 +204,57 @@ test('finalization and Review remove the caret and leave existing editing/save U
   assert.match(review, /Save journal/);
   assert.doesNotMatch(review, /has-caret|record-live-word/);
 });
+
+async function loadButton() {
+  const result = await build({ entryPoints: [fileURLToPath(new URL('../src/frontend/src/features/record/RecordButton.jsx', import.meta.url))],
+    bundle: true, write: false, platform: 'node', format: 'cjs', packages: 'external', jsx: 'automatic' });
+  const module = { exports: {} };
+  new Function('require', 'module', 'exports', result.outputFiles[0].text)(createRequire(import.meta.url), module, module.exports);
+  return module.exports.default;
+}
+
+test('record controls retain visible Start/Stop labels and disclose HTTP processing with a cancel action', async () => {
+  const Button = await loadButton();
+  const model = { capture: { status: 'ready' }, capabilities: { uploadAvailable: true }, elapsedSeconds: 0, flow: {} };
+  const render = updates => renderToStaticMarkup(React.createElement(Button, { model: { ...model, ...updates } }));
+  assert.match(render({ phase: 'ready' }), /record-trigger/);
+  assert.match(render({ phase: 'ready' }), /After Stop, WebM\/Opus audio is uploaded/);
+  const recording = render({ phase: 'recording', capture: { status: 'recording' }, elapsedSeconds: 12 });
+  assert.match(recording, /aria-label="Stop recording"/);
+  assert.match(recording, /is-recording/);
+  assert.match(recording, /00:12/);
+  const uploading = render({ phase: 'transcribing', capture: { status: 'stopped' } });
+  assert.match(uploading, /role="status"/);
+  assert.match(uploading, /Uploading audio and transcribing/);
+  assert.match(uploading, /100 seconds/);
+  assert.match(uploading, /Cancel transcription/);
+  assert.match(uploading, /Discard take/);
+});
+
+test('HTTP processing retains playback and an editable review editor while Save is disabled', async () => {
+  const View = await loadView();
+  const model = { phase: 'transcribing', transcript: createTranscript(), editorText: 'My working draft', originalTranscript: '',
+    capture: { url: 'blob:retained-audio' }, capabilities: {}, flow: {} };
+  const html = renderToStaticMarkup(React.createElement(MemoryRouter, {}, React.createElement(View, { model })));
+  assert.match(html, /<textarea[^>]*>My working draft<\/textarea>/);
+  assert.doesNotMatch(html, /readOnly|readonly/);
+  assert.match(html, /record-save[^>]*disabled/);
+  assert.match(html, /<audio[^>]*src="blob:retained-audio"[^>]*controls/);
+  assert.match(html, /Replay recording/);
+  assert.doesNotMatch(html, /has-caret|record-live-word|Retry transcription/);
+});
+
+test('HTTP retry and proposed replacement remain separate from the current edited journal', async () => {
+  const View = await loadView();
+  const model = { phase: 'review', transcript: createTranscript(), editorText: 'My corrected draft', originalTranscript: 'Confirmed live text',
+    capture: { url: 'blob:kept' }, capabilities: {}, flow: {}, canUpload: true, uploadStatus: 'failed' };
+  const render = updates => renderToStaticMarkup(React.createElement(MemoryRouter, {}, React.createElement(View, { model: { ...model, ...updates } })));
+  assert.match(render({}), /Retry transcription/);
+  assert.match(render({}), /new request.*transcription allowance/);
+  const comparison = render({ canUpload: false, uploadStatus: 'succeeded', uploadTranscript: 'Full recognized text' });
+  assert.match(comparison, /<textarea[^>]*>My corrected draft<\/textarea>/);
+  assert.match(comparison, /Confirmed live text/);
+  assert.match(comparison, /Full recognized text/);
+  assert.match(comparison, /Replace draft with uploaded transcript/);
+  assert.doesNotMatch(comparison, /Retry transcription/);
+});

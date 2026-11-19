@@ -1,7 +1,15 @@
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 let epoch = 0;
-export function changeAuthEpoch() { epoch += 1; }
+const authListeners = new Set();
+export function changeAuthEpoch() {
+  epoch += 1;
+  authListeners.forEach(listener => listener());
+}
 export function getAuthEpoch() { return epoch; }
+export function subscribeAuthChanges(listener) {
+  authListeners.add(listener);
+  return () => authListeners.delete(listener);
+}
 
 export async function api(path, { method = 'GET', body, signal, idempotencyKey } = {}) {
   const started = epoch;

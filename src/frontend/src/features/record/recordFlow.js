@@ -1,21 +1,30 @@
 import { createTranscript, mergeSegment, transcriptText, validContent } from './transcriptState.js';
+import { AUDIO_UPLOAD_TIMEOUT, recordingUploadError, validUploadedTranscript } from './audioUpload.js';
 
 const initial = () => ({ phase: 'ready', transcript: createTranscript(), originalTranscript: '',
   unconfirmedText: '', proposedDraft: '', editorText: '', editRevision: 0,
-  incomplete: false, error: '', warning: '', savedEntry: null, saveUnknown: false });
+  incomplete: false, error: '', warning: '', savedEntry: null, saveUnknown: false,
+  uploadOffered: false, uploadStatus: 'idle', uploadTranscript: null, uploadRetryable: true });
 
 // Feature orchestration, independent of React, layout and concrete network adapters.
 export function createRecordFlow({ recorder, services, schedule = setTimeout, cancel = clearTimeout,
-  proofreadTimeout = 30000, saveTimeout = 15000, makeKey = () => globalThis.crypto.randomUUID(),
+  proofreadTimeout = 30000, saveTimeout = 15000, uploadTimeout = AUDIO_UPLOAD_TIMEOUT,
+  makeKey = () => globalThis.crypto.randomUUID(),
 }) {
   let state = initial(), snapshot = { ...state, capture: recorder.getSnapshot(), transcriptionActive: false };
   let generation = 0, authEpoch, attached = false, transport = null, transportFailed = false;
   let unsubscribeChunks, pendingAbort, startupTask, stopTask, saveAttempt;
+  let localRecording = false, uploadGeneration = 0;
   const listeners = new Set();
   const current = (token) => attached && token === generation && authEpoch === services.getAuthEpoch();
   function publish(value = {}) {
     state = { ...state, ...value };
-    snapshot = { ...state, capture: recorder.getSnapshot(), transcriptionActive: Boolean(transport && !transportFailed) };
+    const capture = recorder.getSnapshot();
+    snapshot = { ...state, capture, transcriptionActive: Boolean(transport && !transportFailed),
+      uploadAfterStop: Boolean(localRecording && services.uploadAvailable),
+      canUpload: state.phase === 'review' && state.uploadOffered && state.uploadRetryable &&
+        !state.saveUnknown && !['succeeded', 'session_changed'].includes(state.uploadStatus) &&
+        !recordingUploadError(capture.blob) && current(generation) };
     listeners.forEach(listener => listener());
   }
   function disconnect() {
@@ -24,19 +33,20 @@ export function createRecordFlow({ recorder, services, schedule = setTimeout, ca
   }
   function reset() {
     ++generation;
+    ++uploadGeneration;
     pendingAbort?.abort(); pendingAbort = null;
-    disconnect(); startupTask = null; stopTask = null; saveAttempt = null; transportFailed = false;
+    disconnect(); startupTask = null; stopTask = null; saveAttempt = null; transportFailed = false; localRecording = false;
     recorder.reset();
     publish(initial());
   }
   async function request(task, timeout) {
     const controller = new AbortController();
     pendingAbort = controller;
-    let timer, onAbort;
+    let timer, onAbort, timedOut = false;
     const interrupted = new Promise((resolve, reject) => {
-      onAbort = () => reject(new DOMException('Request cancelled.', 'AbortError'));
+      onAbort = () => reject(new DOMException(timedOut ? 'Request timed out.' : 'Request cancelled.', timedOut ? 'TimeoutError' : 'AbortError'));
       controller.signal.addEventListener('abort', onAbort, { once: true });
-      timer = schedule(() => controller.abort(), timeout);
+      timer = schedule(() => { timedOut = true; controller.abort(); }, timeout);
     });
     try { return await Promise.race([task(controller.signal), interrupted]); }
     finally {
@@ -61,6 +71,7 @@ export function createRecordFlow({ recorder, services, schedule = setTimeout, ca
     authEpoch = services.getAuthEpoch(); transportFailed = false; startupTask = null; saveAttempt = null;
     publish({ ...initial(), phase: 'connecting' });
     const live = services.transcriptionAvailable && !localOnly;
+    localRecording = !live;
     try {
       let negotiation;
       if (live) {
@@ -85,7 +96,9 @@ export function createRecordFlow({ recorder, services, schedule = setTimeout, ca
         })();
       }
       const startup = startupTask;
-      publish({ phase: 'recording', warning: live ? state.warning : 'Live transcription is unavailable. Record locally, then write or correct your journal below.' });
+      publish({ phase: 'recording', warning: live ? state.warning : services.uploadAvailable
+        ? 'Recording locally. After Stop, supported audio will be uploaded for transcription. You can review and edit before saving.'
+        : 'Live transcription is unavailable. Record locally, then write or correct your journal below.' });
       await startup;
     } catch (error) {
       if (!current(token)) return;
@@ -126,6 +139,13 @@ export function createRecordFlow({ recorder, services, schedule = setTimeout, ca
     publish({ originalTranscript: text, incomplete: !complete });
     if (!complete) {
       enterReview({ incomplete: true, warning: [capture.error, state.warning].filter(Boolean).join(' ') || 'Transcription is incomplete. Listen to your recording and review the text manually.' });
+      if (services.uploadAvailable && capture.blob) {
+        const invalid = recordingUploadError(capture.blob);
+        publish({ uploadOffered: true, ...(invalid ? { uploadStatus: 'unavailable', uploadRetryable: false, error: invalid } : {}) });
+        // A live attempt may already be billable, even without confirmed text.
+        // Only a purely local take starts HTTP automatically, once.
+        if (localRecording && !capture.error && !invalid) await transcribe();
+      }
       return;
     }
     if (!validContent(text)) {
@@ -160,6 +180,50 @@ export function createRecordFlow({ recorder, services, schedule = setTimeout, ca
     })();
     return stopTask;
   }
+  async function transcribe() {
+    const capture = recorder.getSnapshot();
+    if (!attached || state.phase !== 'review' || !state.uploadOffered || !services.uploadAvailable ||
+        !state.uploadRetryable || state.saveUnknown || state.uploadStatus === 'succeeded' || !current(generation)) return;
+    const invalid = recordingUploadError(capture.blob);
+    if (invalid) { publish({ error: invalid, uploadStatus: 'unavailable', uploadRetryable: false }); return; }
+    const token = generation, attempt = ++uploadGeneration, revision = state.editRevision;
+    const existingText = Boolean(state.originalTranscript || state.editorText);
+    // Lock before starting the request, so repeated clicks cannot upload twice.
+    publish({ phase: 'transcribing', uploadStatus: 'pending', error: '', warning: '' });
+    try {
+      const result = await request(signal => services.uploadAudio(capture.blob, { signal }), uploadTimeout);
+      if (!current(token) || attempt !== uploadGeneration || state.phase !== 'transcribing') return;
+      if (!validUploadedTranscript(result)) throw new Error('The server returned an invalid transcript. Your recording is kept; you can try again.');
+      const warning = result.outcome === 'no_speech'
+        ? 'No speech was recognized. Listen to your recording and write or correct your journal manually.'
+        : 'Review the transcript against your recording before saving.';
+      if (existingText || state.editRevision !== revision) {
+        publish({ phase: 'review', uploadStatus: 'succeeded',
+          uploadTranscript: result.outcome === 'transcribed' ? result.transcript : null,
+          warning: result.outcome === 'transcribed'
+            ? 'The full recording was transcribed. Your existing text is kept. Compare the uploaded transcript below before choosing to replace your draft.' : warning });
+      } else {
+        publish({ phase: 'review', uploadStatus: 'succeeded', originalTranscript: result.transcript,
+          editorText: result.transcript, editRevision: state.editRevision + 1,
+          unconfirmedText: '', incomplete: false, warning });
+      }
+    } catch (error) {
+      if (!current(token) || attempt !== uploadGeneration || state.phase !== 'transcribing') return;
+      publish({ phase: 'review', uploadStatus: 'failed', uploadRetryable: error.retryable !== false,
+        error: error.name === 'TimeoutError'
+          ? 'Transcription took too long and was cancelled. Your recording and draft are kept. Retry when ready, or write your journal manually.'
+          : error.message || 'Transcription failed. Your recording and draft are kept; retry when ready.' });
+    }
+  }
+  function cancelUpload({ sessionChanged = false } = {}) {
+    if (state.phase !== 'transcribing') return;
+    ++uploadGeneration;
+    pendingAbort?.abort();
+    publish({ phase: 'review', uploadStatus: sessionChanged ? 'session_changed' : 'cancelled',
+      error: '', warning: sessionChanged
+        ? 'Your session changed. Transcription was cancelled. This take cannot be submitted in a different session. Discard it to start a new take.'
+        : 'Transcription cancelled. Your recording and draft are kept. You can retry or review manually.' });
+  }
   async function save() {
     if (!attached || state.phase !== 'review' || !validContent(state.editorText) ||
         (state.saveUnknown && !services.idempotentSaveAvailable)) return;
@@ -192,12 +256,18 @@ export function createRecordFlow({ recorder, services, schedule = setTimeout, ca
         publish();
         if (state.phase === 'recording' && ['stopped', 'error'].includes(recorder.getSnapshot().status)) void stop();
       });
+      const unsubscribeAuth = services.subscribeAuthChanges?.(() => cancelUpload({ sessionChanged: true }));
       publish();
-      return () => { attached = false; unsubscribe(); reset(); };
+      return () => { attached = false; unsubscribe(); unsubscribeAuth?.(); reset(); };
     },
-    start, stop, reset, save,
+    start, stop, reset, save, transcribe, cancelUpload: () => cancelUpload(),
+    useUploadTranscript() {
+      if (state.phase !== 'review' || state.saveUnknown || state.uploadTranscript === null || !current(generation)) return;
+      publish({ editorText: state.uploadTranscript, editRevision: state.editRevision + 1,
+        incomplete: false, error: '', warning: 'Review the uploaded transcript and make any corrections before saving.' });
+    },
     edit(text) {
-      if (state.phase !== 'review' || state.saveUnknown) return;
+      if (!['review', 'transcribing'].includes(state.phase) || state.saveUnknown) return;
       publish({ editorText: text, editRevision: state.editRevision + 1, error: '' });
     },
     useOriginal() {

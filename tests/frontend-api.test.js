@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { createAudioUpload, MAX_AUDIO_UPLOAD_BYTES, recordingUploadError } from '../src/frontend/src/features/record/audioUpload.js';
 
 test('API sends an idempotency key only when explicitly supplied', async () => {
   const original = globalThis.fetch;
@@ -83,4 +84,114 @@ test('anonymous session checks and wrong passwords do not trigger global logout'
     await assert.rejects(api('/api/entries'), { status: 401 });
     assert.deepEqual(events, ['aurajournal:unauthorized']);
   } finally { globalThis.fetch = originalFetch; globalThis.window = originalWindow; }
+});
+
+const recording = () => new Blob([new Uint8Array([0x1a, 0x45, 0xdf, 0xa3]), 'completed-audio'], { type: 'audio/webm;codecs=opus' });
+
+function uploadFixture(send) {
+  let epoch = 0;
+  const listeners = new Set(), calls = [];
+  const upload = createAudioUpload({ apiUrl: 'https://api.example.test', getAuthEpoch: () => epoch,
+    subscribeAuthChanges(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+    fetch: async (url, options) => { calls.push({ url, ...options }); return send(url, options); },
+  });
+  return { upload, calls, listeners, changeAccount() { epoch++; listeners.forEach(listener => listener()); } };
+}
+
+test('audio upload sends the completed Blob as exact raw bytes, with cookies, CSRF and cancellation', async () => {
+  const transcript = '  Hôm nay\nI feel happy. 😀  ';
+  const f = uploadFixture(async () => new Response(JSON.stringify({ transcript, outcome: 'transcribed' })));
+  const blob = recording(), controller = new AbortController();
+  assert.deepEqual(await f.upload(blob, { signal: controller.signal }), { transcript, outcome: 'transcribed' });
+  const call = f.calls[0];
+  assert.equal(call.url, 'https://api.example.test/api/transcriptions');
+  assert.equal(call.method, 'POST');
+  assert.equal(call.credentials, 'include');
+  assert.deepEqual(call.headers, { 'Content-Type': 'audio/webm;codecs=opus', 'X-AuraJournal-CSRF': '1' });
+  assert.equal(call.body, blob);
+  assert.deepEqual(await call.body.arrayBuffer(), await blob.arrayBuffer());
+  assert.ok(call.signal instanceof AbortSignal);
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.listeners.size, 0);
+});
+
+test('audio validation rejects empty, non-Blob, unsupported and oversized recordings before fetch', async () => {
+  const f = uploadFixture(() => { throw new Error('Must not fetch'); });
+  for (const blob of [null, 'audio', new Blob([], { type: 'audio/webm;codecs=opus' }),
+    ...['audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/webm;codecs=opus;extra=1'].map(type => new Blob(['audio'], { type })),
+    new Blob([new Uint8Array(MAX_AUDIO_UPLOAD_BYTES + 1)], { type: 'audio/webm;codecs=opus' })]) {
+    await assert.rejects(f.upload(blob), { retryable: false });
+  }
+  assert.equal(f.calls.length, 0);
+  assert.equal(recordingUploadError(new Blob([new Uint8Array(MAX_AUDIO_UPLOAD_BYTES)], { type: 'audio/webm;codecs=opus' })), '');
+  assert.equal(recordingUploadError(new Blob(['audio'], { type: 'Audio/WebM; codecs="Opus"' })), '');
+});
+
+test('HTTP upload errors use recoverable safe messages without automatic retries or global logout', async () => {
+  const messages = new Map([[400, /interrupted/], [401, /session expired/], [403, /security check/],
+    [413, /limit/], [415, /format/], [422, /decoded/], [429, /Try again in 5 seconds/],
+    [502, /invalid transcript/], [503, /unavailable/], [504, /timed out/], [500, /failed/]]);
+  for (const [status, message] of messages) {
+    const f = uploadFixture(() => new Response('private provider details', { status, headers: { 'Retry-After': '5' } }));
+    await assert.rejects(f.upload(recording()), error => {
+      assert.equal(error.status, status);
+      assert.match(error.message, message);
+      assert.doesNotMatch(error.message, /private provider/);
+      assert.equal(error.retryable, ![413, 415, 422].includes(status));
+      return true;
+    });
+    assert.equal(f.calls.length, 1);
+    assert.equal(f.listeners.size, 0);
+  }
+});
+
+test('network loss and malformed or contradictory success responses never become transcripts', async () => {
+  for (const send of [() => { throw new TypeError('network disconnected'); },
+    () => new Response('<html>proxy error</html>'),
+    ...[null, {}, { transcript: 2, outcome: 'transcribed' }, { transcript: ' ', outcome: 'transcribed' },
+      { transcript: 'unconfirmed', outcome: 'incomplete' }, { transcript: 'words', outcome: 'no_speech' }]
+      .map(value => () => new Response(JSON.stringify(value)))]) {
+    const f = uploadFixture(send);
+    await assert.rejects(f.upload(recording()), /recording is kept/);
+    assert.equal(f.calls.length, 1);
+  }
+  const f = uploadFixture(() => new Response('{"transcript":"","outcome":"no_speech"}'));
+  assert.deepEqual(await f.upload(recording()), { transcript: '', outcome: 'no_speech' });
+});
+
+test('aborted uploads settle immediately even when fetch ignores the signal; pre-abort sends nothing', async () => {
+  const f = uploadFixture(() => new Promise(() => {}));
+  const controller = new AbortController(), pending = f.upload(recording(), { signal: controller.signal });
+  controller.abort();
+  await assert.rejects(pending, { name: 'AbortError' });
+  assert.equal(f.calls[0].signal.aborted, true);
+  assert.equal(f.listeners.size, 0);
+  await assert.rejects(f.upload(recording(), { signal: controller.signal }), { name: 'AbortError' });
+  assert.equal(f.calls.length, 1);
+});
+
+test('authentication changes cancel uploads while fetching or parsing and ignore private late results', async () => {
+  for (const parsing of [false, true]) {
+    let release;
+    const f = uploadFixture(() => parsing
+      ? { ok: true, json: () => new Promise(resolve => { release = resolve; }) }
+      : new Promise(resolve => { release = resolve; }));
+    const pending = f.upload(recording());
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    f.changeAccount();
+    await assert.rejects(pending, { code: 'session_changed' });
+    assert.equal(f.calls[0].signal.aborted, true);
+    release(parsing ? { transcript: 'Old account', outcome: 'transcribed' } : new Response('{"transcript":"Old account","outcome":"transcribed"}'));
+    assert.equal(f.calls.length, 1);
+    assert.equal(f.listeners.size, 0);
+  }
+});
+
+test('auth epoch subscriptions notify once per change and release listeners', async () => {
+  const api = await loadApi(); let changes = 0;
+  const unsubscribe = api.subscribeAuthChanges(() => changes++);
+  api.changeAuthEpoch(); api.changeAuthEpoch();
+  assert.equal(changes, 2);
+  unsubscribe(); api.changeAuthEpoch();
+  assert.equal(changes, 2);
 });

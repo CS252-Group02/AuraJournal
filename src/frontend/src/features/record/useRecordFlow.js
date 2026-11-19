@@ -10,7 +10,7 @@ export function useRecordFlow(services = recordServices) {
   const state = useSyncExternalStore(flow.subscribe, flow.getSnapshot);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const hasUnsavedWork = state.phase !== 'saved' && (
-    ['connecting', 'recording', 'finalizing', 'proofreading', 'saving'].includes(state.phase) ||
+    ['connecting', 'recording', 'finalizing', 'transcribing', 'proofreading', 'saving'].includes(state.phase) ||
     Boolean(state.capture.blob || state.editorText || state.saveUnknown) ||
     Object.keys(state.transcript.segments).length > 0
   );

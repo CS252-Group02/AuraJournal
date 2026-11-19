@@ -456,22 +456,22 @@ html:has(.record-page) { scrollbar-gutter: stable; }
 }
 
 /* Later phases give the transcript and editor the available working space. */
-.record-page:is([data-record-phase="finalizing"], [data-record-phase="proofreading"],
+.record-page:is([data-record-phase="finalizing"], [data-record-phase="transcribing"], [data-record-phase="proofreading"],
   [data-record-phase="review"], [data-record-phase="saving"], [data-record-phase="saved"]) .record-content {
   grid-column: 2;
   margin-top: 24px;
   gap: 20px;
 }
-.record-page:is([data-record-phase="finalizing"], [data-record-phase="proofreading"],
+.record-page:is([data-record-phase="finalizing"], [data-record-phase="transcribing"], [data-record-phase="proofreading"],
   [data-record-phase="review"], [data-record-phase="saving"], [data-record-phase="saved"]) .record-primary {
   width: 100%;
   min-height: 0;
 }
-.record-page:is([data-record-phase="finalizing"], [data-record-phase="proofreading"],
+.record-page:is([data-record-phase="finalizing"], [data-record-phase="transcribing"], [data-record-phase="proofreading"],
   [data-record-phase="review"], [data-record-phase="saving"], [data-record-phase="saved"]) .record-mascot {
   display: none;
 }
-.record-page:is([data-record-phase="review"], [data-record-phase="saving"]) .record-editor {
+.record-page:is([data-record-phase="transcribing"], [data-record-phase="review"], [data-record-phase="saving"]) .record-editor {
   min-height: clamp(200px, 35svh, 400px);
 }
 .record-page:is([data-record-phase="recording"], [data-record-phase="finalizing"]) .record-live {
@@ -482,7 +482,7 @@ html:has(.record-page) { scrollbar-gutter: stable; }
 .record-page .record-transcript { min-width: 0; }
 
 @media (max-width: 1023px) {
-  .record-page:is([data-record-phase="finalizing"], [data-record-phase="proofreading"],
+  .record-page:is([data-record-phase="finalizing"], [data-record-phase="transcribing"], [data-record-phase="proofreading"],
     [data-record-phase="review"], [data-record-phase="saving"], [data-record-phase="saved"]) .record-content {
     grid-column: 1;
   }

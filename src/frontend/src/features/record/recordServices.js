@@ -1,5 +1,6 @@
-import { api, API_URL, getAuthEpoch } from '../../lib/api.js';
+import { api, API_URL, getAuthEpoch, subscribeAuthChanges } from '../../lib/api.js';
 import { createTranscriptionSession } from './transcriptionSession.js';
+import { createAudioUpload } from './audioUpload.js';
 
 // Set paths only after the backend deploys and verifies the proposed protocol.
 // Missing contracts are intentionally unavailable; no mock is used by the app.
@@ -13,9 +14,12 @@ function backendUrl(path) {
 
 export const recordServices = {
   transcriptionAvailable: Boolean(transcriptionPath),
+  uploadAvailable: true,
+  uploadAudio: createAudioUpload({ apiUrl: API_URL, getAuthEpoch, subscribeAuthChanges }),
   proofreadAvailable: Boolean(proofreadPath),
   idempotentSaveAvailable,
   getAuthEpoch,
+  subscribeAuthChanges,
   unauthorized() { window.dispatchEvent(new Event('aurajournal:unauthorized')); },
   createSession(callbacks) {
     const session = createTranscriptionSession({ ...callbacks, url: backendUrl(transcriptionPath).replace(/^http/, 'ws') });
