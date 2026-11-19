@@ -10,7 +10,8 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { activitySummary, companionMessage, dashboardPreview, indexJournalDays, journalDayKey,
-  moodAnalytics, reflectionScope, weeklyActivity } from '../src/frontend/src/features/dashboard/dashboardModel.js';
+  monthlyActivity, moodAnalytics, reflectionScope, weeklyActivity } from '../src/frontend/src/features/dashboard/dashboardModel.js';
+import { groupEntriesByDay } from '../src/frontend/src/features/calendar/calendarModel.js';
 
 const row = (id, day, extra = {}) => ({ id, journal_date: day, created_at: `${day}T12:00:00Z`, content: `Memory ${id}. A small moment.`, ...extra });
 
@@ -47,12 +48,80 @@ test('streaks count distinct days through yesterday across years, while totals r
   const entries = [row('a', '2026-12-30'), row('b', '2026-12-31'), row('c', '2027-01-01'), row('d', '2027-01-01'),
     row('future', '2027-01-03'), row('old', '2026-05-01'), { id: 'undated' }];
   const summary = activitySummary(entries, indexJournalDays(entries).byDay, '2027-01-02', '2027-01');
-  assert.deepEqual(summary, { total: 7, current: { count: 3, throughKey: '2027-01-01' }, longest: 3, monthDays: 1 });
+  assert.deepEqual(summary, { total: 7, activeDays: 4, todayCount: 0, current: { count: 3, throughKey: '2027-01-01' }, longest: 3, monthDays: 1 });
   const empty = activitySummary([], new Map(), '2027-01-02', '2026-12');
   assert.equal(empty.longest, 0);
   assert.equal(empty.current.count, 0);
   const leap = ['2024-02-28', '2024-02-29', '2024-03-01'].map((day, i) => row(i, day));
   assert.equal(activitySummary(leap, indexJournalDays(leap).byDay, '2024-03-01', '2024-02').longest, 3);
+});
+
+test('Dashboard and Calendar share one day index without mutating entries or moving saved dates', () => {
+  assert.equal(indexJournalDays, groupEntriesByDay);
+  const entries = Object.freeze([Object.freeze(row('backdated', '2024-02-29', { created_at: '2026-11-19T12:00:00Z' })),
+    Object.freeze(row('invalid', '2026-02-30')), Object.freeze({ id: 'legacy', created_at: '2026-11-19T12:00:00Z' })]);
+  assert.deepEqual(indexJournalDays(entries), groupEntriesByDay(entries));
+  assert.equal(indexJournalDays(entries).invalidCount, 1);
+});
+
+test('frontend streaks match the documented backend calendar samples at the same as_of date', () => {
+  const samples = [
+    { dates: ['2026-10-30', '2026-10-31', '2026-10-31', '2026-11-01', '2026-11-03', '2024-02-28', '2024-02-29', '2024-03-01'], expected: [3, 3, 1, 0], leap: 3 },
+    { dates: ['2026-10-31', '2026-11-02', '2026-11-03', '2024-03-01'], expected: [1, 1, 2, 0], leap: 1 },
+  ];
+  for (const sample of samples) {
+    const entries = sample.dates.map((day, index) => row(String(index), day));
+    const byDay = indexJournalDays(entries).byDay;
+    const actual = ['2026-11-01', '2026-11-02', '2026-11-03', '2026-11-05']
+      .map(day => activitySummary(entries, byDay, day).current.count);
+    assert.deepEqual(actual, sample.expected);
+    assert.equal(activitySummary(entries, byDay, '2024-03-01').current.count, sample.leap);
+  }
+});
+
+test('monthly overview counts all saved dates, handles ties deterministically and keeps future activity separate', () => {
+  const entries = [row('late', '2026-11-12'), row('early', '2026-11-01'), row('late-again', '2026-11-12'),
+    row('early-again', '2026-11-01'), row('future', '2026-11-30'), row('previous', '2026-10-01')];
+  const byDay = indexJournalDays(entries).byDay;
+  const month = monthlyActivity(byDay, '2026-11', '2026-11-19');
+  assert.equal(month.count, 5);
+  assert.equal(month.activeDays, 3);
+  assert.equal(month.futureCount, 1);
+  assert.deepEqual(month.mostActive, { key: '2026-11-01', count: 2, tiedDays: 2 });
+  assert.deepEqual(month.comparison, { previousMonth: '2026-10', throughDay: 19, currentCount: 4, previousCount: 1, delta: 3 });
+  assert.equal(monthlyActivity(byDay, '2026-12', '2026-11-19').comparison, null);
+  assert.equal(monthlyActivity(new Map(), '2026-11', '2026-11-19').mostActive, null);
+});
+
+test('monthly comparisons use equal elapsed days through short months and whole historical months', () => {
+  for (const [year, last] of [[2024, 29], [2026, 28]]) {
+    const entries = [row('feb', `${year}-02-${last}`), row('march', `${year}-03-${last}`),
+      row('outside', `${year}-03-31`), row('april', `${year}-04-01`)];
+    const byDay = indexJournalDays(entries).byDay;
+    const current = monthlyActivity(byDay, `${year}-03`, `${year}-03-31`);
+    assert.equal(current.count, 2);
+    assert.equal(current.comparison.throughDay, last);
+    assert.equal(current.comparison.currentCount, 1);
+    assert.equal(current.comparison.previousCount, 1);
+    assert.equal(current.comparison.delta, 0);
+    const historical = monthlyActivity(byDay, `${year}-03`, `${year}-04-15`);
+    assert.equal(historical.comparison.throughDay, null);
+    assert.equal(historical.comparison.delta, 1);
+  }
+  const byDay = indexJournalDays([row('december', '2025-12-01'), row('january', '2026-01-01')]).byDay;
+  assert.equal(monthlyActivity(byDay, '2026-01', '2026-01-01').comparison.previousMonth, '2025-12');
+});
+
+test('reloading edited, moved or deleted entries rebuilds heatmap, monthly highlights and streaks', () => {
+  const original = [row('a', '2024-02-28'), row('b', '2024-02-29'), row('c', '2024-03-01')];
+  const moved = original.map(entry => entry.id === 'b' ? { ...entry, journal_date: '2024-03-01' } : entry);
+  const deleted = moved.filter(entry => entry.id !== 'a');
+  for (const [entries, longest, februaryDays, marchCount] of [[original, 3, 2, 1], [moved, 1, 1, 2], [deleted, 1, 0, 2]]) {
+    const byDay = indexJournalDays(entries).byDay;
+    assert.equal(activitySummary(entries, byDay, '2024-03-01', '2024-03').longest, longest);
+    assert.equal(monthlyActivity(byDay, '2024-02', '2024-03-01').activeDays, februaryDays);
+    assert.equal(monthlyActivity(byDay, '2024-03', '2024-03-01').count, marchCount);
+  }
 });
 
 test('weekly recap compares equal elapsed portions and keeps future sources separate from activity', () => {
@@ -117,7 +186,8 @@ async function loadComponents() {
     stdin: { contents: (await readFile(path, 'utf8')) + '\nexport {fetchDashboardReflection} from "./useDashboardReflection.js";\nexport {default as DashboardPage} from "../../pages/DashboardPage.jsx";', resolveDir: dirname(fileURLToPath(path)), loader: 'jsx' },
     bundle: true, write: false, platform: 'node', format: 'cjs', packages: 'external', jsx: 'automatic',
     plugins: [{ name: 'dashboard-context', setup(builder) {
-      builder.onLoad({ filter: /[\\/]auth[\\/]Auth.jsx$/ }, () => ({ contents: 'export const useAuth=()=>({user:{id:"account-a",email:"a@example.com"}});', loader: 'js' }));
+      builder.onLoad({ filter: /[\\/]auth[\\/]Auth.jsx$/ }, () => ({ contents: 'export const useAuth=()=>({user:globalThis.__dashboardUser||{id:"account-a",email:"a@example.com"}});', loader: 'js' }));
+      builder.onLoad({ filter: /useLocalDay.js$/ }, () => ({ contents: 'export const useLocalDay=()=>({todayKey:"2026-11-19",timezone:"UTC",refresh:()=>({todayKey:"2026-11-19"})});', loader: 'js' }));
       builder.onLoad({ filter: /useJournalEntries.js$/ }, () => ({ contents: 'export const useJournalEntries=()=>globalThis.__dashboardEntries;', loader: 'js' }));
       builder.onLoad({ filter: /[\\/]lib[\\/]api.js$/ }, () => ({ contents: 'export const api=(...args)=>globalThis.__dashboardApi(...args);', loader: 'js' }));
     } }],
@@ -204,4 +274,71 @@ test('categorical mood fixtures render counts and colors without numeric emotion
   assert.match(html, /1 classified · 1 without a saved mood/);
   assert.match(html, /#ddeadc/);
   assert.match(html, /Daily mood history/);
+});
+
+test('monthly overview renders real totals, comparison bounds, tied dates and transparent future activity', async () => {
+  const { MonthlyOverview } = await components;
+  const byDay = indexJournalDays([row('a', '2026-11-01'), row('b', '2026-11-01'), row('c', '2026-11-12'),
+    row('d', '2026-11-12'), row('future', '2026-11-30'), row('previous', '2026-10-01')]).byDay;
+  const props = { month: new Date(2026, 10, 1), summary: monthlyActivity(byDay, '2026-11', '2026-11-19'), status: 'ready' };
+  const html = render(MonthlyOverview, props);
+  assert.match(html, /November 2026, in moments/);
+  assert.match(html, /<strong>5<\/strong> entries across <strong>3<\/strong> journal days/);
+  assert.match(html, /2 dates tied; earliest shown/);
+  assert.match(html, /3 entries more.*October 2026/);
+  assert.match(html, /first 19 days of each month/);
+  assert.match(html, /Includes 1 entry dated after today/);
+  for (const status of ['loading', 'error']) {
+    const pending = render(MonthlyOverview, { ...props, status });
+    assert.doesNotMatch(pending, /<strong>|Most entries on|entries more|dates tied/);
+    assert.match(pending, /role="status"/);
+  }
+  const empty = render(MonthlyOverview, { ...props, summary: monthlyActivity(new Map(), '2026-11', '2026-11-19') });
+  assert.match(empty, /No journals are dated in this month/);
+  assert.doesNotMatch(empty, /Most entries on/);
+});
+
+test('overview statistics separate all-time days, monthly activity and factual today highlights', async () => {
+  const { DashboardPage } = await components;
+  globalThis.__dashboardEntries = { entries: [row('old', '2026-10-01'), row('yesterday', '2026-11-18'),
+    row('today', '2026-11-19'), row('today-again', '2026-11-19'), row('future', '2026-12-01')], status: 'ready', reload() {} };
+  const html = render(DashboardPage, {}, '/dashboard?month=2026-10');
+  assert.match(html, /Days journaled<\/dt><dd>3<span> through today/);
+  assert.match(html, /Journal entries<\/dt><dd>5/);
+  assert.match(html, /2 entries are dated today/);
+  assert.match(html, /local time \(UTC\)/);
+  assert.match(html, /October 2026, in moments/);
+  assert.match(html, /<strong>1<\/strong> entry across <strong>1<\/strong> journal day/);
+  assert.match(html, /Mood unavailable/);
+  assert.doesNotMatch(html, /Most recorded:/);
+});
+
+test('stale data stays hidden during reload/errors and another account cannot inherit highlights or links', async () => {
+  const { DashboardPage } = await components;
+  const entries = [row('private-draft', '2026-11-19')];
+  for (const status of ['loading', 'error']) {
+    globalThis.__dashboardEntries = { entries, status, error: 'Please log in.', reload() {} };
+    const html = render(DashboardPage, {}, '/dashboard?month=2026-11&date=2026-11-19');
+    assert.doesNotMatch(html, /\/journal\/private-draft|1 entry is dated today|Most entries on|Generate weekly recap|Memory private-draft/);
+    assert.match(html, /Loading your journal activity|Please log in/);
+  }
+  try {
+    globalThis.__dashboardUser = { id: 'other-account', email: 'other@example.test' };
+    globalThis.__dashboardEntries = { entries: [], status: 'ready', reload() {} };
+    const other = render(DashboardPage, {}, '/dashboard?month=2026-11&date=2026-11-19');
+    assert.match(other, /No journals yet/);
+    assert.match(other, /No journals on this date/);
+    assert.doesNotMatch(other, /private-draft|Most entries on|Generate weekly recap/);
+  } finally { delete globalThis.__dashboardUser; }
+});
+
+test('missing mood scores never acquire categories in analytics or recent entries', async () => {
+  const { MoodAnalytics, RecentEntries } = await components;
+  const entries = [row('numeric', '2026-11-19', { valence: 0.9, arousal: 0.1, mood_record: { valence: 0.9, arousal: 0.1 } })];
+  const moods = render(MoodAnalytics, { byDay: indexJournalDays(entries).byDay, todayKey: '2026-11-19', status: 'ready' });
+  assert.match(moods, /no saved mood classification/);
+  assert.doesNotMatch(moods, /Most recorded:|Daily mood history/);
+  const recent = render(RecentEntries, { entries, status: 'ready' });
+  assert.match(recent, /Mood unavailable/);
+  assert.doesNotMatch(recent, />Calm<|>Happy<|>Blue<|0\.9/);
 });

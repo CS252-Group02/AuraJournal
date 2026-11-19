@@ -2,9 +2,11 @@
 
 All endpoints require the existing session cookie. Ownership comes from the session.
 Calendar activity uses `journal_date`, now included in entry responses, rather than
-`created_at`. The calendar and streak use the data team's UTC+7 convention
-(`Asia/Bangkok`). Frontend integration should use these dates rather than regrouping
-creation timestamps in the browser timezone.
+`created_at`. Stored journal dates are preserved without timezone conversion.
+The streak endpoint's `as_of` uses the data team's UTC+7 convention
+(`Asia/Bangkok`). The Dashboard derives activity from the existing entry list and
+uses browser-local today consistently; near midnight this can differ from the
+server's `as_of`. See the [Dashboard timezone policy](calendar-and-streak.md#today-and-timezone-policy).
 
 - `GET /api/calendar?year=2026&month=11`: returns `year`, `month`, and `days`, an
   ascending list of `{date: "2026-11-01", count: 0}` for every date of the month.
@@ -19,5 +21,6 @@ creation timestamps in the browser timezone.
 
 Year and month are required, with year 1–9999 and month 1–12. Invalid inputs return
 422, unauthenticated requests 401, and database failures 503. Existing create/edit
-payloads remain content-only; date editing belongs to B03. No schema migration is
-required beyond the existing revision 0007. Frontend adoption is a separate task.
+payloads support `journal_date` as a validated non-null calendar date; omission
+uses the database default on create and preserves the value on edit. U05/U06
+adds no API or schema changes and does not duplicate these statistics requests.

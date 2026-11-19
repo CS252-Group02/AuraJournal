@@ -1,28 +1,11 @@
-import { currentStreak, moodPresentation, MOODS } from '../calendar/calendarModel.js';
+import { currentStreak, moodPresentation, MOODS, monthKey, parseMonthKey, shiftMonth } from '../calendar/calendarModel.js';
 import { startOfWeek, weekDays } from '../reflection/week.js';
 import { addDays, parseDateKey, toDateKey } from '../../lib/localDate.js';
 
-// A journal date is a calendar day, not a UTC timestamp. Only legacy records
-// without that field fall back to the browser-local recording date.
-export function journalDayKey(entry) {
-  if (entry.journal_date != null) return parseDateKey(entry.journal_date) ? entry.journal_date : null;
-  const date = typeof entry.created_at === 'string' && entry.created_at.trim() ? new Date(entry.created_at) : null;
-  return date && Number.isFinite(date.getTime()) ? toDateKey(date) : null;
-}
+// Keep existing imports working while Calendar and Dashboard share one policy.
+export { journalDayKey, groupEntriesByDay as indexJournalDays } from '../calendar/calendarModel.js';
 
-export function indexJournalDays(entries) {
-  const byDay = new Map();
-  let invalidCount = 0;
-  for (const entry of entries) {
-    const key = journalDayKey(entry);
-    if (!key) { invalidCount++; continue; }
-    if (!byDay.has(key)) byDay.set(key, []);
-    byDay.get(key).push(entry);
-  }
-  return { byDay, invalidCount };
-}
-
-export function activitySummary(entries, byDay, todayKey, displayedMonth) {
+export function activitySummary(entries, byDay, todayKey, displayedMonth = todayKey.slice(0, 7)) {
   const today = parseDateKey(todayKey);
   const days = [...byDay.keys()].filter(key => key <= todayKey).sort();
   let longest = 0, run = 0, previous;
@@ -33,10 +16,40 @@ export function activitySummary(entries, byDay, todayKey, displayedMonth) {
   }
   return {
     total: entries.length,
+    activeDays: days.length,
+    todayCount: byDay.get(todayKey)?.length || 0,
     current: currentStreak(byDay, today),
     longest,
     monthDays: [...byDay.keys()].filter(key => key.startsWith(`${displayedMonth}-`) && key <= todayKey).length,
   };
+}
+
+export function monthlyActivity(byDay, displayedMonth, todayKey) {
+  const month = parseMonthKey(displayedMonth);
+  const days = [...byDay.entries()].filter(([key, entries]) => key.startsWith(`${displayedMonth}-`) && entries.length)
+    .sort(([left], [right]) => left.localeCompare(right));
+  const count = days.reduce((total, [, entries]) => total + entries.length, 0);
+  const maximum = days.reduce((highest, [, entries]) => Math.max(highest, entries.length), 0);
+  const busiest = days.filter(([, entries]) => entries.length === maximum);
+  const futureCount = days.filter(([key]) => key > todayKey).reduce((total, [, entries]) => total + entries.length, 0);
+  let comparison = null;
+  const previousMonth = monthKey(shiftMonth(month, -1));
+  if (displayedMonth <= todayKey.slice(0, 7) && previousMonth !== displayedMonth) {
+    const partial = displayedMonth === todayKey.slice(0, 7);
+    const previous = parseMonthKey(previousMonth);
+    // Compare the same elapsed day numbers. March 31 vs February uses days
+    // 1–28 (or 29) on both sides, rather than pretending February had 31 days.
+    const throughDay = partial ? Math.min(parseDateKey(todayKey).getDate(), new Date(previous.getFullYear(), previous.getMonth() + 1, 0).getDate()) : null;
+    const within = key => !throughDay || Number(key.slice(8)) <= throughDay;
+    const currentCount = days.filter(([key]) => within(key)).reduce((total, [, entries]) => total + entries.length, 0);
+    let previousCount = 0;
+    for (const [key, entries] of byDay) {
+      if (key.startsWith(`${previousMonth}-`) && within(key)) previousCount += entries.length;
+    }
+    comparison = { previousMonth, throughDay, currentCount, previousCount, delta: currentCount - previousCount };
+  }
+  return { count, activeDays: days.length, futureCount,
+    mostActive: busiest.length ? { key: busiest[0][0], count: maximum, tiedDays: busiest.length } : null, comparison };
 }
 
 function rangeCounts(byDay, start, endKey) {

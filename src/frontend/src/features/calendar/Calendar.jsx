@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { addDays, parseDateKey, toDateKey } from '../../lib/localDate.js';
-import { dateInMonth, HEATMAP, heatLevel, moodPresentation, MOODS, monthCells, monthKey, parseMonthKey, shiftMonth } from './calendarModel.js';
+import { parseDateKey, toDateKey } from '../../lib/localDate.js';
+import { calendarKeyboardDate, HEATMAP, heatLevel, moodPresentation, MOODS, monthCells, monthKey, parseMonthKey, shiftMonth } from './calendarModel.js';
 
 const EMPTY_MOODS = new Map();
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -19,6 +19,12 @@ export default function Calendar({ month, todayKey, selectedKey, mode, byDay, st
   const tabKey = focusedKey.startsWith(`${displayedMonth}-`) ? focusedKey : preferredFocus;
 
   useEffect(() => {
+    // Today/date-picker/URL changes update the grid's tab stop without stealing
+    // focus from the control used to select the date. Keyboard moves own focus.
+    if (!pendingFocus.current) setFocusedKey(preferredFocus);
+  }, [preferredFocus]);
+
+  useEffect(() => {
     if (pendingFocus.current && controls.current.has(pendingFocus.current)) {
       controls.current.get(pendingFocus.current).focus();
       pendingFocus.current = null;
@@ -26,18 +32,9 @@ export default function Calendar({ month, todayKey, selectedKey, mode, byDay, st
   }, [focusedKey, displayedMonth, ready]);
 
   function moveFocus(event, date) {
-    let next;
-    const offsets = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
-    if (Object.hasOwn(offsets, event.key)) next = addDays(date, offsets[event.key]);
-    else if (event.key === 'Home') {
-      next = dateInMonth(month, Math.max(1, date.getDate() - ((date.getDay() + 6) % 7)));
-    } else if (event.key === 'End') {
-      next = dateInMonth(month, date.getDate() + 6 - ((date.getDay() + 6) % 7));
-    } else if (event.key === 'PageUp' || event.key === 'PageDown') {
-      next = dateInMonth(shiftMonth(month, event.key === 'PageUp' ? -1 : 1), date.getDate());
-    } else return;
+    const next = calendarKeyboardDate(date, event.key);
+    if (!next) return;
     event.preventDefault();
-    if (!parseMonthKey(monthKey(next))) return;
     const key = toDateKey(next);
     pendingFocus.current = key;
     setFocusedKey(key);
@@ -62,11 +59,15 @@ export default function Calendar({ month, todayKey, selectedKey, mode, byDay, st
       <div className="calendar-navigation">
         <div role="group" aria-label="Calendar month navigation">
           <button type="button" aria-label="Previous month" disabled={monthKey(previous) === displayedMonth}
-            onClick={() => onMonthChange(previous)}>←</button>
+            onClick={() => onMonthChange(previous, -1)}>←</button>
           <button type="button" onClick={onToday}>Today</button>
           <button type="button" aria-label="Next month" disabled={monthKey(next) === displayedMonth}
-            onClick={() => onMonthChange(next)}>→</button>
+            onClick={() => onMonthChange(next, 1)}>→</button>
         </div>
+        <label className="calendar-month-picker"><span className="visually-hidden">Jump to month</span>
+          <input type="month" aria-label="Jump to month" value={displayedMonth} min="1000-01" max="9999-12"
+            onChange={event => { const value = parseMonthKey(event.target.value); if (value) onMonthChange(value); }} />
+        </label>
         <p id="calendar-help">Select a date to open its journal or choose an entry.</p>
       </div>
       <table className="calendar-grid" role="grid" aria-labelledby="calendar-month" aria-describedby="calendar-help"
@@ -100,7 +101,10 @@ export default function Calendar({ month, todayKey, selectedKey, mode, byDay, st
             return (
               <td key={key} role="gridcell" aria-selected={key === selectedKey}>
                 {count === 1
-                  ? <Link {...properties} to={`/journal/${encodeURIComponent(entries[0].id)}`}>{content}</Link>
+                  ? <Link {...properties} to={`/journal/${encodeURIComponent(entries[0].id)}`}
+                    onClick={event => {
+                      if (!event.defaultPrevented && event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) onSelectDate(key);
+                    }}>{content}</Link>
                   : <button {...properties} type="button" disabled={!ready} onClick={() => onSelectDate(key)}>{content}</button>}
               </td>
             );
@@ -115,8 +119,9 @@ export default function Calendar({ month, todayKey, selectedKey, mode, byDay, st
       <ul className="calendar-legend" aria-label={mode === 'heatmap' ? 'Entries per day' : 'Mood color legend'}>
         {legend.map(item => <li key={item.label}><span style={{ background: item.color }} aria-hidden="true" />{item.label}</li>)}
       </ul>
-      {mode === 'mood' && moodsByDay.size === 0 && <p className="calendar-mood-note">
-        Mood information is not available for these entries yet. Dots mark dates with journals.
+      {ready && mode === 'mood' && moodsByDay.size === 0 && <p className="calendar-mood-note">
+        Mood information is not available for these entries yet. Dots mark dates with journals.{' '}
+        <button type="button" className="calendar-text-action" onClick={() => onModeChange('heatmap')}>See activity heatmap</button>
       </p>}
       <p className="visually-hidden">Use arrow keys to move between dates, Home and End within a row, and Page Up or Page Down to change months.</p>
     </section>
