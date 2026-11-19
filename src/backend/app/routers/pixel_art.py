@@ -1,4 +1,3 @@
-from datetime import date
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -9,12 +8,18 @@ from sqlalchemy.orm import Session
 from app.auth import current_user
 from app.database import get_session
 from app.models import JournalEntry, JournalImage, User
-from app.schemas.pixel_art import PixelArtMetadata, PixelArtRequest, PixelArtResponse, DatedPixelArt
+from app.schemas.entries import JournalDate
+from app.schemas.pixel_art import (
+    DatedPixelArt, PixelArtMetadata, PixelArtRequest, PixelArtResponse,
+    PixelMemoryDay, PixelMemoryEntry, PixelMemoryFeed,
+)
 from app.services._groq import (
     AIInvalidResponseError, AIServiceNotConfiguredError, AIServiceUnavailableError, EmptyJournalError,
 )
 from app.services.image_lifecycle import generation_locks
-from app.services.journal_images import attach_image, recent_journal_images
+from app.services.journal_images import (
+    attach_image, has_owned_image_reference, recent_journal_images, recent_journal_memories,
+)
 from app.services.pixel_art import build_pixel_art_prompt
 from app.services.pixellab import PixelArtError, PixelArtRateLimited
 
@@ -37,6 +42,8 @@ def owned(session, entry_id, user_id, *, lock=False):
 
 
 def metadata(image: JournalImage) -> PixelArtResponse:
+    if not has_owned_image_reference(image):
+        raise HTTPException(404, "Journal image was not found.")
     return PixelArtResponse(entry_id=image.entry_id, image=PixelArtMetadata(
         id=image.id, created_at=image.created_at,
         content_url=f"/api/entries/{image.entry_id}/pixel-art/content",
@@ -112,12 +119,27 @@ def generate_pixel_art(entry_id: UUID, payload: PixelArtRequest, request: Reques
 
 
 @router.get("/pixel-art/recent", response_model=list[DatedPixelArt])
-def recent_pixel_art(as_of: date, user: User = Depends(current_user),
+def recent_pixel_art(as_of: JournalDate, user: User = Depends(current_user),
                      session: Session = Depends(get_session)):
     return [
         DatedPixelArt(journal_date=day, entry_id=image.entry_id, image=metadata(image).image)
         for day, image in recent_journal_images(session, user.id, as_of)
+        if has_owned_image_reference(image)
     ]
+
+
+@router.get("/pixel-art/memories", response_model=PixelMemoryFeed)
+def pixel_memories(as_of: JournalDate, user: User = Depends(current_user),
+                   session: Session = Depends(get_session)):
+    groups = {}
+    for day, entry_id, image in recent_journal_memories(session, user.id, as_of):
+        available = image is not None and has_owned_image_reference(image)
+        groups.setdefault(day, []).append(PixelMemoryEntry(
+            entry_id=entry_id, image=metadata(image).image if available else None,
+        ))
+    return PixelMemoryFeed(as_of=as_of, days=[
+        PixelMemoryDay(journal_date=day, entries=entries) for day, entries in groups.items()
+    ])
 
 
 @router.get("/{entry_id}/pixel-art", response_model=PixelArtResponse, response_model_exclude_none=True)
@@ -132,7 +154,7 @@ def get_pixel_art(entry_id: UUID, user: User = Depends(current_user), session: S
 def get_pixel_art_content(entry_id: UUID, request: Request,
                           user: User = Depends(current_user), session: Session = Depends(get_session)):
     entry = owned(session, entry_id, user.id, lock=True)
-    if entry.image is None:
+    if entry.image is None or not has_owned_image_reference(entry.image):
         raise HTTPException(404, "Journal image was not found.")
     try:
         data = request.app.state.image_storage.read(entry.image.image_url)

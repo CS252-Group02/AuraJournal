@@ -9,6 +9,8 @@ an authenticated session cookie. POST also requires the configured Origin,
 | `POST /api/entries/{entry_id}/pixel-art` with `{}` | 201 new image; 200 existing image without another provider call |
 | `GET /api/entries/{entry_id}/pixel-art` | 200 image metadata |
 | `GET /api/entries/{entry_id}/pixel-art/content` | 200 private PNG bytes |
+| `GET /api/entries/pixel-art/memories?as_of=2026-11-20` | Up to seven occupied journal days, including missing images |
+| `GET /api/entries/pixel-art/recent?as_of=2026-11-20` | Existing flat image-only view of the same seven days |
 
 Example generation response:
 
@@ -42,6 +44,119 @@ There are no automatic generation retries. A timeout can still incur a provider
 charge and cannot be recovered through this synchronous API. Retrying is a new
 explicit billable submission if no image was saved. Repeating a successful
 request returns existing metadata. Existing records are never silently replaced.
+
+## Seven-day memory feed
+
+`GET /api/entries/pixel-art/memories?as_of=2026-11-20` returns the signed-in
+user's latest **seven distinct days with journals**, on or before the inclusive
+`as_of` cutoff. These are not seven consecutive calendar dates or seven images.
+A journal day without any generated image still occupies one of the seven slots;
+older image-bearing days do not replace it. Dates use `journal_date`, including
+backdated journals, rather than journal or image creation timestamps.
+
+The response is grouped newest day first. Within each day all journals are
+included, sorted by creation time descending, then journal UUID descending for
+stable ties. Multiple images in a day are retained, so more than seven image
+cards can be returned. Empty accounts return `{"as_of":"2026-11-20","days":[]}`.
+
+Example response with an existing illustration and a missing one:
+
+```json
+{
+  "as_of": "2026-11-20",
+  "days": [
+    {
+      "journal_date": "2026-11-20",
+      "entries": [
+        {
+          "entry_id": "00000000-0000-4000-8000-000000000002",
+          "image": {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "file_format": "png",
+            "width": 128,
+            "height": 128,
+            "created_at": "2026-11-20T12:00:00Z",
+            "content_url": "/api/entries/00000000-0000-4000-8000-000000000002/pixel-art/content"
+          }
+        }
+      ]
+    },
+    {
+      "journal_date": "2026-11-16",
+      "entries": [
+        {"entry_id": "00000000-0000-4000-8000-000000000004", "image": null}
+      ]
+    }
+  ]
+}
+```
+
+`as_of` is required and must be an exact real `YYYY-MM-DD` date. A client can
+supply its local date or a historical cutoff; the server never shifts stored
+journal dates according to timezone. Entries after the cutoff are excluded.
+The existing `/pixel-art/recent` route retains its flat list response and omits
+missing images, using the same day-selection query and strict date validation.
+Use the grouped feed when a UI needs to distinguish empty history from journals
+whose illustrations have not been generated.
+
+GET requests do not call Groq/PixelLab, generate images or write metadata/files.
+They work when generation is disabled or provider credentials are unavailable.
+Fresh generation remains the explicit POST above: it validates ownership, calls
+the existing extractor/PixelLab services, saves a private PNG, and attaches the
+reference atomically in the existing database workflow. Successful repeats reuse
+the saved image. A generation failure leaves the written journal intact.
+
+### Missing art, private links and lifecycle
+
+- `image: null` means no usable owned reference is stored for that journal.
+  Render a placeholder; do not trigger automatic billable generation.
+- Metadata only exposes an authenticated backend `content_url`, never a disk
+  path, storage key or provider URL. Load it with the existing session cookie;
+  cross-origin fetches need `credentials: 'include'`.
+- An image key must match the exact associated journal ID and image ID and use
+  the supported PNG format. Legacy external, malformed or cross-journal keys
+  return 404 for direct metadata/content, are omitted from the flat list, and
+  become `image: null` in the grouped feed. Invalid references never reach storage.
+- The feed reads metadata without opening every PNG. If a referenced file was
+  removed or disappears after the response, content GET returns 404; the UI must
+  also provide an image-load fallback. A storage outage may return 503. Neither
+  case automatically replaces the record or resubmits a generation request.
+- Date-only edits move the day group and retain the image. Text edits invalidate
+  the image association; the journal stays in the feed with `image: null`.
+  Deleting a journal removes it from future responses and its content URL stops
+  working. Existing post-commit cleanup/reconciliation handles file removal.
+- Newest-day selection and ordering are recalculated on each request. Every
+  query and content request enforces the current authenticated owner, including
+  after switching accounts. All responses use `Cache-Control: no-store`.
+
+The existing `representation` field is only known on fresh generation, not saved
+in image metadata. A gallery should label retrieved art as an illustration;
+metadata alone does not establish that the scene depicts a grounded event.
+Connecting the existing frontend gallery to this feed is a separate UI change.
+
+## Automated verification
+
+Verified on 2026-11-20: the complete backend regression returned **818 passed,
+2 skipped**. The skips are the existing administrator-only database-role test
+and Windows symlink-privilege test. Tests used isolated PostgreSQL schemas and
+private PNGs in temporary test storage; provider calls were mocked/blocked.
+No application-database migration, private-image modification, or live AI call
+was performed during this implementation verification.
+
+From `src/backend`, set `TEST_DATABASE_URL` to a disposable PostgreSQL database
+as described in the README, then run:
+
+```sh
+python -m pytest tests/test_pixel_memories_api.py tests/test_pixel_art_api.py tests/test_journal_images.py tests/test_image_storage.py -q
+```
+
+Tests use real private PNG files, authenticated HTTP requests and isolated
+PostgreSQL schemas. External provider calls are mocked/blocked. They cover
+seven occupied days across gaps/month boundaries, missing images, stable ties,
+multiple images per day, one image query per feed, restart durability, two-user
+isolation, strict cutoffs, invalid/cross-journal references, missing files,
+date/text edits, deletion, failure recovery and idempotent generation. This
+verifies API/storage integration, not real-provider scene quality.
 
 ## Configuration and deployment
 

@@ -170,6 +170,11 @@ Streak/dashboard requests accept an optional IANA `timezone`; the default remain
 `Asia/Bangkok`, and stored journal dates never shift. See the
 [calendar API guide](docs/calendar-api.md) for parameters and verification.
 
+Pixel-art APIs generate and retrieve private journal-linked images. The grouped
+`GET /api/entries/pixel-art/memories?as_of=2026-11-20` feed includes up to seven
+recent journal days and explicit missing-image placeholders. See the
+[pixel-art and memory API guide](docs/pixel-art.md) for contracts and verification.
+
 The old development user remains disabled and its entries stay private. Register a real account in the browser. See [accounts and sessions](docs/authentication.md) for configuration and API details.
 
 ## Run
