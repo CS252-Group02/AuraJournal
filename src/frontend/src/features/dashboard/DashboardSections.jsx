@@ -13,19 +13,45 @@ function PendingSection({ status }) {
     ? 'Gathering your journal activity…' : 'Unavailable until your journals can be loaded. Use Refresh entries to try again.'}</p>;
 }
 
-export function Activity({ activity, month, status, todayKey }) {
-  const monthLabel = month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+export function Activity({ activity, status, todayKey, timezone }) {
   return <section className="dashboard-activity" aria-label="Journaling activity" aria-busy={status === 'loading'}>
     {status !== 'ready' ? <PendingSection status={status} /> : <>
       <dl>
         <div><dt>Current streak</dt><dd>{activity.current.count}<span> {activity.current.count === 1 ? 'day' : 'days'}</span></dd></div>
         <div><dt>Longest streak</dt><dd>{activity.longest}<span> {activity.longest === 1 ? 'day' : 'days'}</span></dd></div>
         <div><dt>Journal entries</dt><dd>{activity.total}<span> in all</span></dd></div>
-        <div><dt>Days journaled</dt><dd>{activity.monthDays}<span> in {monthLabel}</span></dd></div>
+        <div><dt>Days journaled</dt><dd>{activity.activeDays}<span> through today</span></dd></div>
       </dl>
       <p className="dashboard-fine">{activity.current.count
         ? `Your streak continues through ${activity.current.throughKey === todayKey ? 'today' : 'yesterday'}.`
         : 'No current streak. A new page is always welcome.'} A day counts once, however many entries you save. Activity follows your journal dates.</p>
+      <p className="dashboard-fine">{activity.todayCount
+        ? `${activity.todayCount} ${activity.todayCount === 1 ? 'entry is' : 'entries are'} dated today.`
+        : 'No entry is dated today yet. Your next page is here whenever you’re ready.'}{' '}
+        Today and streaks use your local time{timezone ? ` (${timezone})` : ''}; future journal dates are counted in totals, but do not extend streaks.</p>
+    </>}
+  </section>;
+}
+
+export function MonthlyOverview({ summary, month, status, onSelectDate }) {
+  const label = month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  const comparison = summary.comparison;
+  const previousLabel = comparison && parseDateKey(`${comparison.previousMonth}-01`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  return <section className="dashboard-month" aria-labelledby="dashboard-month-heading" aria-busy={status === 'loading'}>
+    <h2 id="dashboard-month-heading">{label}, in moments</h2>
+    {status !== 'ready' ? <PendingSection status={status} /> : <>
+      <p className="dashboard-month-counts"><strong>{summary.count}</strong> {summary.count === 1 ? 'entry' : 'entries'} across{' '}
+        <strong>{summary.activeDays}</strong> {summary.activeDays === 1 ? 'journal day' : 'journal days'}.</p>
+      {summary.mostActive ? <p className="dashboard-fine">Most entries on{' '}
+        <button type="button" className="dashboard-text-action" onClick={() => onSelectDate(summary.mostActive.key)}>
+          {parseDateKey(summary.mostActive.key).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+        </button>{' '}· {summary.mostActive.count} {summary.mostActive.count === 1 ? 'entry' : 'entries'}
+        {summary.mostActive.tiedDays > 1 ? ` (${summary.mostActive.tiedDays} dates tied; earliest shown)` : ''}.</p>
+        : <p className="dashboard-fine">No journals are dated in this month yet. Choose another month to revisit a memory.</p>}
+      {comparison && <p className="dashboard-fine">{comparison.delta === 0 ? 'The same number of entries' : `${Math.abs(comparison.delta)} ${Math.abs(comparison.delta) === 1 ? 'entry' : 'entries'} ${comparison.delta > 0 ? 'more' : 'fewer'}`}{' '}
+        than {previousLabel}{comparison.throughDay ? ` across the first ${comparison.throughDay} ${comparison.throughDay === 1 ? 'day' : 'days'} of each month` : ' (whole months)'}.
+        {' '}Every month has its own pace.</p>}
+      {summary.futureCount > 0 && <p className="dashboard-fine">Includes {summary.futureCount} {summary.futureCount === 1 ? 'entry' : 'entries'} dated after today.</p>}
     </>}
   </section>;
 }
@@ -129,7 +155,9 @@ export function RecentEntries({ entries, status, moodsByEntry = new Map() }) {
             : <span className="aj-kicker">Date unavailable</span>}
           <h3>{entryTitle(typeof entry.content === 'string' ? entry.content : '')}</h3>
           {entry.content && <p>{dashboardPreview(entry.content)}</p>}
-          <span className="dashboard-recent-open">Open entry ↗{mood && <span style={{ background: mood.color }}>{mood.label}</span>}</span>
+          <span className="dashboard-recent-open">Open entry ↗{mood
+            ? <span style={{ background: mood.color }}>{mood.label}</span>
+            : <span className="dashboard-mood-missing">Mood unavailable</span>}</span>
         </Link></li>;
       })}</ul>}
   </section>;

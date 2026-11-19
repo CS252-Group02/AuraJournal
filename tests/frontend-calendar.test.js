@@ -305,7 +305,7 @@ async function calendarInteraction(query, entries = []) {
       mounted.forEach(node => node.props.ref(null));
       tree = Component({ ...calendarViewState(params, '2024-03-19'), todayKey: '2024-03-19',
         byDay: groupEntriesByDay(entries).byDay, status: 'ready',
-        onMonthChange: date => update({ type: 'month', month: monthKey(date) }),
+        onMonthChange: (date, offset) => update({ type: 'month', month: monthKey(date), offset }),
         onSelectDate: key => update({ type: 'date', key }), onToday: () => update({ type: 'today' }),
         onModeChange: mode => update({ type: 'mode', mode }),
       });
@@ -367,4 +367,41 @@ test('month picker, display toggle and Today share URL selection state', async (
   assert.equal(f.params.get('month'), '2024-03');
   assert.equal(f.params.get('date'), '2024-03-19');
   assert.equal(f.day('2024-03-19').props['aria-current'], 'date');
+});
+
+test('the view hook composes rapid month/mode actions before render and accepts external URL changes', async () => {
+  let params = new URLSearchParams('month=2024-01&date=2024-01-31'), ref;
+  const navigations = [];
+  const result = await build({ entryPoints: [fileURLToPath(new URL('../src/frontend/src/features/calendar/useCalendarView.js', import.meta.url))],
+    bundle: true, write: false, platform: 'node', format: 'cjs', packages: 'external',
+    plugins: [{ name: 'fixed-calendar-clock', setup(builder) {
+      builder.onLoad({ filter: /useLocalDay.js$/ }, () => ({ contents: 'export const useLocalDay=()=>({todayKey:"2024-03-19",timezone:"UTC",refresh:()=>({todayKey:"2024-03-20"})});', loader: 'js' }));
+    } }],
+  });
+  const module = { exports: {} }, require = createRequire(import.meta.url);
+  const mockedRequire = name => name === 'react' ? { useRef: initial => ref ??= { current: initial } }
+    : name === 'react-router-dom' ? { useSearchParams: () => {
+      const rendered = params;
+      return [rendered, (value, options) => {
+        params = typeof value === 'function' ? value(rendered) : value;
+        navigations.push({ params, options });
+      }];
+    } } : require(name);
+  new Function('require', 'module', 'exports', result.outputFiles[0].text)(mockedRequire, module, module.exports);
+  const view = module.exports.useCalendarView();
+  view.changeMonth(new Date(2024, 1, 1), 1);
+  view.changeMonth(new Date(2024, 1, 1), 1); // Same rendered button, before router rerenders.
+  view.changeMode('mood');
+  assert.equal(params.get('month'), '2024-03');
+  assert.equal(params.get('date'), '2024-03-29');
+  assert.equal(params.get('mode'), 'mood');
+  assert.ok(navigations.every(call => call.options.replace));
+  params = new URLSearchParams('month=2023-12&date=2023-12-31&mode=heatmap');
+  const back = module.exports.useCalendarView();
+  assert.equal(back.selectedKey, '2023-12-31');
+  back.changeMonth(new Date(2024, 0, 1), 1);
+  assert.equal(params.get('date'), '2024-01-31');
+  back.goToday();
+  assert.equal(params.get('date'), '2024-03-20');
+  assert.equal(params.get('month'), '2024-03');
 });

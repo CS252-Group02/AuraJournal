@@ -59,10 +59,10 @@ export default function Calendar({ month, todayKey, selectedKey, mode, byDay, st
       <div className="calendar-navigation">
         <div role="group" aria-label="Calendar month navigation">
           <button type="button" aria-label="Previous month" disabled={monthKey(previous) === displayedMonth}
-            onClick={() => onMonthChange(previous)}>←</button>
+            onClick={() => onMonthChange(previous, -1)}>←</button>
           <button type="button" onClick={onToday}>Today</button>
           <button type="button" aria-label="Next month" disabled={monthKey(next) === displayedMonth}
-            onClick={() => onMonthChange(next)}>→</button>
+            onClick={() => onMonthChange(next, 1)}>→</button>
         </div>
         <label className="calendar-month-picker"><span className="visually-hidden">Jump to month</span>
           <input type="month" aria-label="Jump to month" value={displayedMonth} min="1000-01" max="9999-12"

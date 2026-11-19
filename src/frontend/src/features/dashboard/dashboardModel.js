@@ -5,7 +5,7 @@ import { addDays, parseDateKey, toDateKey } from '../../lib/localDate.js';
 // Keep existing imports working while Calendar and Dashboard share one policy.
 export { journalDayKey, groupEntriesByDay as indexJournalDays } from '../calendar/calendarModel.js';
 
-export function activitySummary(entries, byDay, todayKey, displayedMonth) {
+export function activitySummary(entries, byDay, todayKey, displayedMonth = todayKey.slice(0, 7)) {
   const today = parseDateKey(todayKey);
   const days = [...byDay.keys()].filter(key => key <= todayKey).sort();
   let longest = 0, run = 0, previous;
