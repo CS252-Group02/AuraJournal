@@ -62,8 +62,11 @@ loaded journal's ID and saved journal date. It does not truncate the response to
 seven records. Malformed or contradictory metadata is unavailable, with a refresh
 action, rather than a substitute illustration.
 
-Each day initially shows the image with the latest image `created_at`, breaking
-ties by journal creation time and ID. A day's expandable list links to every
+Each day initially shows the first successfully stored image, using the earliest
+image `created_at` and entry ID to break timestamp ties. Later generations do not
+replace that default, including after a page reload. If its image is invalidated,
+deleted, or moved to another date, the earliest remaining image becomes the default.
+A day's expandable list links to every
 journal, identifies additional stored images, and lets the user choose which
 image to view. Only the currently selected thumbnail for each day is fetched;
 changing it releases the previous thumbnail. Empty dates and saved journals
@@ -87,8 +90,47 @@ Refresh memories reloads journals and metadata together, reconciling edits,
 moved dates, deletions, and changes made in another tab. The gallery is a snapshot;
 it does not subscribe to live server changes. Changing journal content invalidates
 its stored image on the backend; an already displayed snapshot is replaced on
-refresh or navigation. No generation action is included in this gallery. Opening,
-selecting dates/images, retrying reads, and refreshing make only GET requests.
+refresh or navigation. Opening, selecting dates/images, retrying reads, and
+refreshing make only GET requests.
+
+### Explicit generation from the Dashboard
+
+For a saved journal without an image, choose **Generate pixel memory** in its day
+card. When several journals share a date without an image, the card has a labeled
+journal selector, initially matching its displayed journal. The caption/link
+follows the selection. Once a day has images, its expandable journal list provides
+generation buttons for other journals without images and `Show image` controls
+for stored images. The first generated image remains the default for that date;
+`Show image` temporarily selects another image until the gallery is reopened.
+
+The controls disclose that generation sends the selected journal text to the AI
+service and may incur charges. Only a button activation submits
+`POST /api/entries/{entry_id}/pixel-art` with `{}` through the existing JSON helper.
+Both 201 new-image and 200 existing-image responses must identify the requested
+entry and contain valid private PNG metadata. A confirmed save refreshes journals,
+metadata, and then private PNG content. Generation feedback stays above the
+gallery during the refresh. A thumbnail failure after a confirmed save offers a
+read retry rather than another generation. A fresh `symbolic` response is labeled
+as a symbolic journal illustration in the success message.
+
+One generation/check request at a time is allowed across the gallery; duplicate
+activations are locked synchronously. The POST has a 180-second client deadline,
+allowing for the backend's moment extraction and image generation time. Check
+requests have a 30-second deadline. Unmount, account/period/source changes abort
+local requests and ignore late results. Aborting a browser request cannot cancel
+provider work or undo charges; the pending message explains that the server may
+still finish. Saving a journal and opening/refreshing the gallery never generate
+images. Neither failures nor deadlines cause automatic generation retries.
+
+Session/security errors, missing journals, invalid content, capacity limits,
+invalid provider output, and disabled/unavailable services have actionable
+messages. Lost connections, malformed success responses, 409 conflicts, and
+timeouts require **Check for saved image** before another submission. That action
+uses the existing metadata GET for the entry. A found image refreshes the gallery;
+read failures keep the check available. A 404 enables an explicitly labeled
+**Retry generation (may incur a charge)** action and explains that the previous
+request might still finish. No private image or generation state is stored in
+localStorage. Other tabs/devices rely on the existing backend concurrency locks.
 
 ### Manual Dashboard verification
 
@@ -101,10 +143,10 @@ needed, use the separate, explicitly billable verification procedure below.
    including two or more on one date. Refresh and distinguish `No journal` from
    `No pixel image yet`; check every journal link.
 2. With existing stored images, check correct saved dates, crisp 128px thumbnails,
-   captions, latest-image selection, additional-image counts, and every `Show
+   captions, first-generated-image selection, additional-image counts, and every `Show
    image`/journal link in the expanded day. In DevTools, confirm metadata GET
    uses `as_of`, PNG GETs include cookies, `<img>` uses `blob:` URLs, and no
-   generation POST occurs on any gallery action.
+   generation POST occurs on reads, date/image selection, or refresh.
 3. Choose end dates across a month/year boundary and February 29 in a leap year.
    Always count seven consecutive dates. Navigate Calendar independently, then
    use Today in the gallery. Leave the current period open across local midnight,
@@ -125,6 +167,36 @@ needed, use the separate, explicitly billable verification procedure below.
    gallery strip scrolls horizontally. Tab through date controls, thumbnails,
    details, image selectors and retries; use Enter/Space on native controls and
    confirm visible focus and meaningful screen-reader labels.
+
+### Manual generation verification (explicitly billable)
+
+With generation enabled, valid backend-only PixelLab/Groq credentials, available
+credits, persistent image storage, and fictional journals in a test account:
+
+1. Save one fictional journal, open Dashboard, and choose `Generate pixel memory`.
+   Expect processing feedback, then a real stored PNG on that journal's date.
+   Confirm the browser sent one POST with `{}` and authenticated GETs afterward.
+2. Create several fictional journals on the same date. Before any image exists,
+   choose journal B in the selector and generate. Then expand the day and generate
+   from journal A. B remains the default after refreshing/reopening Dashboard;
+   A can be viewed through `Show image`. Check both captions and journal links.
+3. During generation, quickly activate controls again; all generation buttons
+   should be disabled and no duplicate POST should appear. Navigate away or
+   switch the period/account while waiting; late results must not repopulate the
+   current gallery. Return and refresh to discover any completed server work.
+4. Use request interception for timeout/lost-response/409/malformed-success
+   scenarios. Check for a saved image before retrying. Simulate check failures and
+   404: only explicit retry may send another POST, with the charge warning visible.
+   Separately simulate 403/404/429/502/503 generation errors; verify the journal and
+   existing images remain intact. A content-load failure after successful generation
+   must offer image-read recovery, without resubmitting generation.
+5. Edit or delete the journal providing the default image, then refresh. Its
+   invalidated image disappears and the next earliest stored image becomes the
+   default. Verify native keyboard operation for the selector and generation,
+   check, and retry controls at both mobile and desktop widths.
+
+These provider checks require an explicit human action and can incur charges.
+Automated tests use fake transport/image bytes and never call PixelLab/Groq.
 
 Automated coverage lives in `tests/frontend-pixel-memories.test.js` and the
 Dashboard/Calendar regression suites. It uses fake transport/image bytes and

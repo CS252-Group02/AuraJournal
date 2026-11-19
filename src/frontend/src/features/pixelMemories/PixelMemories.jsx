@@ -4,6 +4,7 @@ import { parseDateKey } from '../../lib/localDate.js';
 import { entryTitle } from '../journal/entryText.js';
 import { createMemoriesLoader, createMemoryImageLoader } from './pixelMemoriesApi.js';
 import { mapPixelMemories, memoryDates } from './pixelMemoriesModel.js';
+import { createPixelGeneration, generationBlocked } from './pixelGeneration.js';
 
 const titleOf = entry => entryTitle(typeof entry?.content === 'string' ? entry.content : '');
 const journalUrl = entry => `/journal/${encodeURIComponent(entry.id)}`;
@@ -31,10 +32,21 @@ export function MemoryImage({ memory, label }) {
   </>;
 }
 
-export function MemoryDay({ day, status }) {
+export function GenerateMemoryButton({ entry, generation, onGenerate }) {
+  const processing = generation?.status === 'generating' && generation.entryId === entry.id;
+  return <button type="button" className="pixel-generate-button" disabled={generationBlocked(generation)}
+    aria-describedby="pixel-generation-help" onClick={() => onGenerate(entry)}>
+    {processing ? 'Generating pixel memory…' : 'Generate pixel memory'}
+    <span className="visually-hidden">: {titleOf(entry)}</span>
+  </button>;
+}
+
+export function MemoryDay({ day, status, generation, onGenerate }) {
   const [selected, setSelected] = useState(null);
+  const [sourceId, setSourceId] = useState(null);
   const memory = day.images.find(item => item.entry_id === selected) || day.images[0];
-  const entry = memory?.entry || day.entries[0];
+  const source = day.entries.find(item => item.id === sourceId) || day.entries[0];
+  const entry = memory?.entry || source;
   const label = dateLabel(day.key);
   const pending = status === 'loading';
   const unknown = status !== 'ready';
@@ -51,6 +63,15 @@ export function MemoryDay({ day, status }) {
     {entry ? <Link className="pixel-memory-caption" to={journalUrl(entry)}>{titleOf(entry)}</Link>
       : <p className="pixel-memory-caption">{status === 'ready' || status === 'loading' ? 'A little space in your story' : 'Your memories will be here'}</p>}
     {entry && !memory && !unknown && !day.invalid && <p className="pixel-memory-note">Journal saved</p>}
+    {entry && !memory && !unknown && !day.invalid && onGenerate && <div className="pixel-generation-source">
+      {day.entries.length > 1 && <label>Journal for this image
+        <select value={entry.id} disabled={generationBlocked(generation)}
+          aria-label={`Journal for pixel image on ${label}`} onChange={event => setSourceId(event.target.value)}>
+          {day.entries.map(item => <option key={item.id} value={item.id}>{titleOf(item)}</option>)}
+        </select>
+      </label>}
+      <GenerateMemoryButton entry={entry} generation={generation} onGenerate={onGenerate} />
+    </div>}
     {day.entries.length > 1 && <details className="pixel-memory-more">
       <summary>{day.entries.length - 1} more {day.entries.length === 2 ? 'journal' : 'journals'}
         {day.images.length > 1 && <> · {day.images.length - 1} more pixel {day.images.length === 2 ? 'memory' : 'memories'}</>}</summary>
@@ -60,20 +81,22 @@ export function MemoryDay({ day, status }) {
           <Link to={journalUrl(item)}>{titleOf(item)}</Link>
           {image ? <button type="button" aria-pressed={memory?.entry_id === item.id}
             onClick={() => setSelected(item.id)}>Show image<span className="visually-hidden">: {titleOf(item)}</span></button>
-            : <span>{unknown || day.invalid ? 'Image status unavailable' : 'No pixel image yet'}</span>}
+            : <><span>{unknown || day.invalid ? 'Image status unavailable' : 'No pixel image yet'}</span>
+              {memory && !unknown && !day.invalid && onGenerate && <GenerateMemoryButton entry={item}
+                generation={generation} onGenerate={onGenerate} />}</>}
         </li>;
       })}</ul>
     </details>}
   </li>;
 }
 
-export function MemoryDays({ days, status }) {
+export function MemoryDays({ days, status, generation, onGenerate }) {
   return <ol className="pixel-memory-days" aria-label="Seven calendar days of memories">
-    {days.map(day => <MemoryDay key={day.key} day={day} status={status} />)}
+    {days.map(day => <MemoryDay key={day.key} day={day} status={status} generation={generation} onGenerate={onGenerate} />)}
   </ol>;
 }
 
-export function MemoriesGallery({ entries, asOf, onRefresh }) {
+export function MemoriesGallery({ entries, asOf, onRefresh, generation, onGenerate }) {
   const [state, setState] = useState({ status: 'loading' });
   const [loader] = useState(() => createMemoriesLoader({ onChange: setState }));
   const [attempt, setAttempt] = useState(0);
@@ -98,8 +121,25 @@ export function MemoriesGallery({ entries, asOf, onRefresh }) {
         ? 'Your journals are here. No pixel images have been saved for these seven days yet.'
         : 'No journals are dated in these seven days. Choose an earlier end date or keep a new moment.'}</p>}
     </div>
-    <MemoryDays days={days} status={state.status} />
+    <MemoryDays days={days} status={state.status} generation={generation} onGenerate={onGenerate} />
   </>;
+}
+
+export function GenerationStatus({ state, entry, onCheck, onRetry, onRefresh }) {
+  if (state.status === 'idle') return null;
+  return <div className="pixel-generation-status" aria-live="polite" aria-atomic="true">
+    {state.status === 'generating' || state.status === 'checking' ? <p role="status">
+      {state.status === 'checking' ? 'Checking for a saved image…' : 'Generating pixel memory… This may take a few minutes.'}
+      {entry && <> For: <strong>{titleOf(entry)}</strong>.</>}
+      {' '}Leaving this period stops waiting here; the server may still finish generation.
+    </p> : state.status === 'saved' ? <p role="status">Pixel memory saved{entry ? ` for “${titleOf(entry)}”` : ''}. Refreshing your gallery.
+      {state.representation === 'symbolic' && ' This is a symbolic journal illustration rather than a depicted event.'}
+      {' '}If its thumbnail is unavailable, use Refresh memories or Retry image.</p>
+      : <p role={state.status === 'expired' ? 'status' : 'alert'}>{state.message || 'Your session changed. Sign in to view your memories.'}</p>}
+    {['uncertain', 'missing'].includes(state.status) && <button type="button" className="aj-btn aj-btn-outline" onClick={onCheck}>Check for saved image</button>}
+    {state.status === 'missing' && <button type="button" className="aj-btn aj-btn-outline" onClick={onRetry}>Retry generation (may incur a charge)</button>}
+    {['saved', 'error', 'uncertain', 'missing'].includes(state.status) && <button type="button" className="aj-btn aj-btn-quiet" onClick={onRefresh}>Refresh memories</button>}
+  </div>;
 }
 
 export default function PixelMemories({ entries, status, todayKey, timezone, userId, onRefresh }) {
@@ -110,6 +150,14 @@ export default function PixelMemories({ entries, status, todayKey, timezone, use
   const dates = memoryDates(asOf);
   const scope = JSON.stringify([userId, timezone, asOf, entries.map(entry =>
     [entry.id, entry.journal_date, entry.created_at, entry.updated_at, entry.content])]);
+  const [generation, setGeneration] = useState({ status: 'idle' });
+  const [generator] = useState(() => createPixelGeneration({ onChange: setGeneration, onSaved: () => onRefresh() }));
+  useEffect(() => {
+    generator.cancel();
+    setGeneration({ scope, status: 'idle' });
+    return () => generator.cancel();
+  }, [generator, scope]);
+  const currentGeneration = generation.scope === scope ? generation : { status: 'idle' };
   return <section className="pixel-memories" aria-labelledby="pixel-memories-heading">
     <div className="pixel-memories-heading">
       <div><span className="aj-kicker">Seven days, little keepsakes</span><h2 id="pixel-memories-heading">Moments in Pixels</h2></div>
@@ -124,12 +172,17 @@ export default function PixelMemories({ entries, status, todayKey, timezone, use
       </div>
     </div>
     <p className="pixel-memories-intro">Small illustrations from your saved journals. Open a memory to return to its words.</p>
+    <p className="pixel-memories-intro" id="pixel-generation-help">Generate sends the selected journal’s text to the AI service and may incur charges.
+      The first image generated for each date stays its default memory.</p>
+    <GenerationStatus state={currentGeneration} entry={entries.find(entry => entry.id === currentGeneration.entryId)}
+      onCheck={() => generator.checkSaved()} onRetry={() => generator.retry()} onRefresh={onRefresh} />
     <p className="visually-hidden">{dateLabel(dates[0])} through {dateLabel(asOf)}. Journal dates determine placement.</p>
-    {status === 'ready' ? <MemoriesGallery key={scope} entries={entries} asOf={asOf} onRefresh={onRefresh} />
+    {status === 'ready' ? <MemoriesGallery key={scope} entries={entries} asOf={asOf} onRefresh={onRefresh}
+      generation={currentGeneration} onGenerate={entry => generator.generate(entry.id, scope)} />
       : <>
         <p role="status" className="pixel-memory-status">{status === 'loading' ? 'Loading journals for your memories…' : 'Memories are unavailable until your journals can be loaded. Use Refresh memories to try again.'}</p>
         <MemoryDays days={dates.map(key => ({ key, entries: [], images: [] }))} status={`journals-${status}`} />
       </>}
-    <p className="pixel-memories-footnote">Stored images only · Nothing is generated when you open or refresh this gallery.</p>
+    <p className="pixel-memories-footnote">Images are generated only when you choose Generate. Saving journals, opening this gallery, and refreshing never generate images.</p>
   </section>;
 }

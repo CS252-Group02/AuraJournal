@@ -31,8 +31,15 @@ a.pixel-memory-caption:hover { text-decoration: underline; text-underline-offset
 .pixel-memory-more li { display: grid; gap: 4px; padding-block: 10px; border-top: 1px solid var(--aj-line); }
 .pixel-memories :is(.pixel-memory-more, .pixel-memory-failure, .pixel-memory-status) button { min-height: 44px; padding: 6px 2px; border-radius: 6px; background: transparent; color: #356b51; font: inherit; text-align: left; text-decoration: underline; text-underline-offset: 3px; }
 .pixel-memory-more button[aria-pressed="true"] { font-weight: 650; }
+.pixel-generation-source { display: grid; gap: 10px; margin-top: 10px; }
+.pixel-generation-source label { display: grid; gap: 6px; font-size: .72rem; color: var(--aj-muted); }
+.pixel-generation-source select { width: 100%; min-width: 0; min-height: 44px; padding: 8px; border: 1px solid var(--aj-line); border-radius: 8px; background: var(--aj-surface); color: var(--aj-ink); font: inherit; }
+.pixel-memories button.pixel-generate-button { min-height: 44px; padding: 10px; border: 1px solid #c8d8c6; border-radius: 10px; background: #edf2e9; color: #28583f; font-size: .74rem; line-height: 1.5; text-decoration: none; text-align: left; }
+.pixel-generation-status { margin-top: 16px; padding: 14px; border: 1px solid var(--aj-line); border-radius: 12px; background: #f6f5ef; font-size: .82rem; }
+.pixel-generation-status p { margin: 0; }
+.pixel-generation-status button { margin: 10px 8px 0 0; }
 .pixel-memories-footnote { margin: 16px 0 0; padding-top: 14px; border-top: 1px solid var(--aj-line); font-size: .72rem; color: var(--aj-muted); }
-.pixel-memories :is(a, button, input, summary):focus-visible { outline: 3px solid #356b51; outline-offset: 3px; }
+.pixel-memories :is(a, button, input, select, summary):focus-visible { outline: 3px solid #356b51; outline-offset: 3px; }
 @media (max-width: 600px) {
   .pixel-memories { margin-inline: 6px; padding: 20px 16px; }
   .pixel-memory-controls { gap: 10px; }

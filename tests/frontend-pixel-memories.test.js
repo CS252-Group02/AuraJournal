@@ -35,7 +35,7 @@ async function settleView(f, predicate) {
 
 async function loadFeature(hooks) {
   const result = await build({
-    stdin: { contents: 'export * from "./PixelMemories.jsx"; export {default as PixelMemories} from "./PixelMemories.jsx"; export * from "./pixelMemoriesApi.js"; export * from "../../lib/api.js";', resolveDir: feature, loader: 'jsx' },
+    stdin: { contents: 'export * from "./PixelMemories.jsx"; export {default as PixelMemories} from "./PixelMemories.jsx"; export * from "./pixelMemoriesApi.js"; export * from "./pixelGeneration.js"; export * from "../../lib/api.js";', resolveDir: feature, loader: 'jsx' },
     bundle: true, write: false, platform: 'node', format: 'cjs', packages: 'external', jsx: 'automatic',
     define: { 'import.meta.env.VITE_API_URL': '"https://api.example.test"' },
   });
@@ -78,17 +78,21 @@ test('occupied-date metadata is filtered by calendar date without truncating sam
   assert.ok(!mapped.days.some(day => day.images.some(image => image.entry_id === older.id)));
 });
 
-test('newest image represents its own journal, with stable ties and every other journal retained', () => {
+test('first generated image represents its own journal across reloads and later generations', () => {
   const newestJournal = entry(1), olderJournal = entry(2, '2026-11-19', { created_at: '2026-11-19T07:00:00Z' });
   const first = record(newestJournal, 101, '2026-11-19T09:00:00Z');
   const recentImage = record(olderJournal, 102, '2026-11-19T11:00:00Z');
   const rows = Object.freeze([Object.freeze(newestJournal), Object.freeze(olderJournal)]);
   const result = mapPixelMemories(rows, Object.freeze([first, recentImage, recentImage]), '2026-11-19').days.at(-1);
-  assert.equal(result.images[0].entry.id, olderJournal.id);
+  assert.equal(result.images[0].entry.id, newestJournal.id);
   assert.equal(result.images.length, 2);
   assert.deepEqual(result.entries, rows);
   const ties = mapPixelMemories(rows, [record(olderJournal, 102), record(newestJournal, 101)], '2026-11-19').days.at(-1);
   assert.equal(ties.images[0].entry_id, newestJournal.id);
+  assert.equal(mapPixelMemories(rows, [recentImage, first], '2026-11-19').days.at(-1).images[0].entry_id, newestJournal.id);
+  // Once the first image is invalidated/deleted, the next saved image represents the day.
+  assert.equal(mapPixelMemories(rows, [recentImage], '2026-11-19').days.at(-1).images[0].entry_id, olderJournal.id);
+  assert.equal(mapPixelMemories([olderJournal], [recentImage], '2026-11-19').days.at(-1).images[0].entry_id, olderJournal.id);
 });
 
 test('missing, malformed, foreign, moved and ambiguous metadata never become a wrong memory', () => {
@@ -484,4 +488,240 @@ test('gallery styles preserve crisp 128px art, native focus visibility and a con
   assert.match(css, /overflow-x: auto/); assert.match(css, /grid-template-columns: repeat\(7,/);
   assert.match(css, /:focus-visible/); assert.match(css, /@media \(max-width: 600px\)/);
   assert.doesNotMatch(css, /animation:|scroll-behavior: smooth/);
+});
+
+test('generation adapter sends an explicit authenticated POST with empty JSON and accepts 200/201', async () => {
+  const { generatePixelMemory, checkPixelMemory } = await featureModule;
+  const original = globalThis.fetch, saved = record(entry(1)), signal = new AbortController().signal;
+  const calls = [];
+  try {
+    globalThis.fetch = async (url, options) => {
+      calls.push({ url, ...options });
+      return new Response(JSON.stringify(saved), { status: calls.length === 1 ? 201 : 200 });
+    };
+    assert.deepEqual(await generatePixelMemory(id(1), { signal }), saved);
+    assert.deepEqual(await generatePixelMemory(id(1)), saved);
+    assert.deepEqual(await checkPixelMemory(id(1)), saved);
+    assert.equal(calls.length, 3);
+    for (const call of calls) {
+      assert.equal(call.url, `https://api.example.test/api/entries/${id(1)}/pixel-art`);
+      assert.equal(call.credentials, 'include');
+      assert.equal(call.headers['X-AuraJournal-CSRF'], '1');
+    }
+    assert.equal(calls[0].method, 'POST'); assert.equal(calls[0].body, '{}'); assert.equal(calls[0].signal, signal);
+    assert.equal(calls[2].method, 'GET'); assert.equal(calls[2].body, undefined);
+    await assert.rejects(generatePixelMemory('../other'));
+    assert.equal(calls.length, 3);
+    for (const result of [null, {}, { ...saved, entry_id: id(2) }, { ...saved, image: null },
+      { ...saved, image: { ...saved.image, content_url: 'https://foreign.test/image' } }]) {
+      globalThis.fetch = async () => new Response(JSON.stringify(result));
+      await assert.rejects(generatePixelMemory(id(1)), /Invalid image generation response/);
+    }
+    globalThis.fetch = async () => new Response('{"detail":"not found"}', { status: 404 });
+    assert.equal(await checkPixelMemory(id(1)), null);
+  } finally { globalThis.fetch = original; }
+});
+
+function generationFixture(module, overrides = {}) {
+  const session = sessionFixture(), states = [], saved = [];
+  const controller = module.createPixelGeneration({ ...session, onChange: state => states.push(state),
+    onSaved: result => saved.push(result), request: async entryId => record({ ...entry(1), id: entryId }), ...overrides });
+  return { controller, states, saved, session };
+}
+
+test('generation is locked synchronously across journals and refreshes only after a validated save', async () => {
+  const module = await featureModule, held = deferred();
+  let calls = 0;
+  const f = generationFixture(module, { request: () => { calls++; return held.promise; } });
+  assert.equal(calls, 0);
+  const pending = f.controller.generate(id(1), 'scope');
+  assert.equal(f.states.at(-1).status, 'generating');
+  await f.controller.generate(id(1), 'scope'); await f.controller.generate(id(2), 'scope');
+  assert.equal(calls, 1);
+  held.resolve(record(entry(1))); await pending;
+  assert.equal(f.states.at(-1).status, 'saved'); assert.equal(f.saved.length, 1);
+  await f.controller.generate(id(1), 'scope'); assert.equal(calls, 1); // Stale missing-image button cannot resubmit.
+  f.controller.cancel(); assert.equal(f.session.listeners.size, 0);
+});
+
+test('generation HTTP failures give fixed actionable messages without retries or journal mutations', async () => {
+  const module = await featureModule, original = globalThis.fetch, oldWindow = globalThis.window;
+  const events = []; globalThis.window = { dispatchEvent: event => events.push(event.type) };
+  try {
+    for (const status of [401, 403, 404, 409, 422, 429, 502, 503, 504]) {
+      let calls = 0;
+      globalThis.fetch = async () => { calls++; return new Response('{"detail":"sensitive provider detail"}', { status }); };
+      const f = generationFixture(module, { request: module.generatePixelMemory });
+      await f.controller.generate(id(1), 'scope');
+      const state = f.states.at(-1);
+      assert.equal(state.status, status === 401 ? 'expired' : [409, 504].includes(status) ? 'uncertain' : 'error');
+      assert.ok(state.message.length > 10); assert.doesNotMatch(state.message, /sensitive provider/);
+      if (status === 503) assert.match(state.message, /disabled|credits/);
+      assert.equal(calls, 1); assert.deepEqual(f.saved, []); f.controller.cancel();
+    }
+    assert.deepEqual(events, ['aurajournal:unauthorized']);
+  } finally { globalThis.fetch = original; globalThis.window = oldWindow; }
+});
+
+test('uncertain generation requires GET check, then an explicitly billable retry only after confirmed absence', async () => {
+  const module = await featureModule;
+  for (const problem of [new TypeError('network lost'), new Error('Malformed success'), Object.assign(new Error(), { status: 504 })]) {
+    let posts = 0, reads = 0;
+    const f = generationFixture(module, {
+      request: async () => { if (++posts === 1) throw problem; return record(entry(1)); },
+      check: async () => { reads++; return null; },
+    });
+    await f.controller.generate(id(1), 'scope'); assert.equal(f.states.at(-1).status, 'uncertain');
+    await f.controller.generate(id(1), 'scope'); await f.controller.generate(id(2), 'scope'); await f.controller.retry();
+    assert.equal(posts, 1); assert.equal(reads, 0);
+    await f.controller.checkSaved(); assert.equal(f.states.at(-1).status, 'missing');
+    assert.equal(posts, 1); assert.equal(reads, 1);
+    await f.controller.generate(id(1), 'scope'); assert.equal(posts, 1);
+    await f.controller.retry(); assert.equal(posts, 2); assert.equal(f.states.at(-1).status, 'saved');
+    f.controller.cancel();
+  }
+});
+
+test('checking an uncertain result recovers a stored image or preserves uncertainty when reads fail', async () => {
+  const module = await featureModule;
+  let reads = 0, posts = 0;
+  const f = generationFixture(module, { request: async () => { posts++; throw new TypeError('lost response'); },
+    check: async () => { if (++reads === 1) throw Object.assign(new Error('read failed'), { status: 503 }); return record(entry(1)); } });
+  await f.controller.generate(id(1), 'scope');
+  await f.controller.checkSaved(); assert.equal(f.states.at(-1).status, 'uncertain');
+  assert.match(f.states.at(-1).message, /No new generation/);
+  await f.controller.retry(); assert.equal(posts, 1);
+  await f.controller.checkSaved(); assert.equal(f.states.at(-1).status, 'saved');
+  assert.equal(posts, 1); assert.equal(reads, 2); assert.equal(f.saved.length, 1); f.controller.cancel();
+});
+
+test('saved-image checks are locked and canceled without allowing a duplicate POST', async () => {
+  const module = await featureModule, held = deferred();
+  let posts = 0, reads = 0, signal;
+  const f = generationFixture(module, { request: async () => { posts++; throw new TypeError('lost response'); },
+    check: (id, options) => { reads++; signal = options.signal; return held.promise; } });
+  await f.controller.generate(id(1), 'scope');
+  const check = f.controller.checkSaved();
+  assert.equal(f.states.at(-1).status, 'checking');
+  await f.controller.checkSaved(); await f.controller.retry(); await f.controller.generate(id(2), 'scope');
+  assert.equal(posts, 1); assert.equal(reads, 1);
+  f.session.change(); await check; assert.equal(signal.aborted, true);
+  held.resolve(record(entry(1))); await flush();
+  assert.equal(f.states.at(-1).status, 'expired'); assert.equal(f.saved.length, 0); f.controller.cancel();
+});
+
+test('generation deadlines, cancellation and account changes settle without applying late results', async () => {
+  const module = await featureModule, oldSet = globalThis.setTimeout, oldClear = globalThis.clearTimeout;
+  try {
+    let timeout, delay;
+    globalThis.setTimeout = (callback, ms) => { timeout = callback; delay = ms; return 1; };
+    globalThis.clearTimeout = () => {};
+    for (const reason of ['timeout', 'unmount', 'account', 'source', 'period']) {
+      const held = deferred(); let signal;
+      const f = generationFixture(module, { request: (id, options) => { signal = options.signal; return held.promise; } });
+      const pending = f.controller.generate(id(1), 'scope'); assert.equal(delay, 180000);
+      if (reason === 'timeout') timeout();
+      else if (reason === 'account') f.session.change();
+      else f.controller.cancel();
+      await pending; assert.equal(signal.aborted, true);
+      assert.equal(f.saved.length, 0);
+      if (reason === 'timeout') assert.equal(f.states.at(-1).status, 'uncertain');
+      if (reason === 'account') assert.equal(f.states.at(-1).status, 'expired');
+      const count = f.states.length;
+      held.resolve(record(entry(1))); await flush(); assert.equal(f.states.length, count); f.controller.cancel();
+    }
+  } finally { globalThis.setTimeout = oldSet; globalThis.clearTimeout = oldClear; }
+});
+
+test('day source selector sends exactly the journal selected and updates its caption link', async () => {
+  const module = await featureModule, rows = [entry(1), entry(2)], generated = [];
+  const day = mapPixelMemories(rows, [], '2026-11-19').days.at(-1);
+  const f = await interaction('MemoryDay', { day, status: 'ready', generation: { status: 'idle' }, onGenerate: row => generated.push(row.id) });
+  const selector = f.nodes().find(node => node.type === 'select');
+  assert.equal(selector.props.value, id(1)); assert.match(selector.props['aria-label'], /Journal for pixel image on/);
+  selector.props.onChange({ target: { value: id(2) } }); f.update();
+  const button = f.nodes().find(node => node.type.name === 'GenerateMemoryButton');
+  assert.equal(button.props.entry.id, id(2));
+  assert.equal(f.nodes().find(node => node.props.className === 'pixel-memory-caption').props.to, `/journal/${id(2)}`);
+  const html = render(module.GenerateMemoryButton, button.props);
+  assert.match(html, /aria-describedby="pixel-generation-help"/);
+  const b = await interaction('GenerateMemoryButton', button.props);
+  b.nodes().find(node => node.type === 'button').props.onClick(); assert.deepEqual(generated, [id(2)]);
+  f.unmount(); b.unmount();
+  const stored = mapPixelMemories(rows, [record(rows[0])], '2026-11-19').days.at(-1);
+  const more = await interaction('MemoryDay', { day: stored, status: 'ready', onGenerate() {} });
+  assert.equal(more.nodes().filter(node => node.type.name === 'GenerateMemoryButton').length, 1);
+  assert.equal(more.nodes().find(node => node.type.name === 'GenerateMemoryButton').props.entry.id, id(2)); more.unmount();
+  for (const status of ['loading', 'error']) {
+    assert.doesNotMatch(render(module.MemoryDay, { day, status, onGenerate() {} }), /Generate pixel memory/);
+  }
+});
+
+test('generation UI disables all submissions while pending and exposes only explicit uncertainty recovery', async () => {
+  const { GenerateMemoryButton, GenerationStatus } = await featureModule;
+  for (const status of ['generating', 'checking', 'uncertain', 'missing', 'expired']) {
+    assert.match(render(GenerateMemoryButton, { entry: entry(2), generation: { status, entryId: id(1) } }), /disabled/);
+  }
+  assert.match(render(GenerateMemoryButton, { entry: entry(1), generation: { status: 'generating', entryId: id(1) } }), /Generating pixel memory/);
+  const uncertain = render(GenerationStatus, { state: { status: 'uncertain', message: 'Check first' } });
+  assert.match(uncertain, /Check for saved image/); assert.doesNotMatch(uncertain, /Retry generation/);
+  const missing = render(GenerationStatus, { state: { status: 'missing', message: 'Nothing saved yet' } });
+  assert.match(missing, /Retry generation \(may incur a charge\)/);
+  assert.match(render(GenerationStatus, { state: { status: 'saved', representation: 'symbolic' } }), /symbolic journal illustration/);
+});
+
+test('Dashboard generation refreshes metadata and private PNG while preserving feedback and preventing regeneration on image failure', async () => {
+  const original = globalThis.fetch, oldCreate = URL.createObjectURL, oldRevoke = URL.revokeObjectURL;
+  let posts = 0, refreshes = 0, pngReads = 0, f, gallery, image;
+  const rows = [entry(1), entry(2)], saved = record(rows[1], 102), base = { entries: rows, status: 'ready',
+    todayKey: '2026-11-19', timezone: 'UTC', userId: 'a', onRefresh() { refreshes++; } };
+  try {
+    globalThis.fetch = async (url, options) => {
+      if (options.method === 'POST') { posts++; return new Response(JSON.stringify(saved), { status: 201 }); }
+      if (url.endsWith('/content')) { pngReads++; assert.equal(options.credentials, 'include'); return new Response(png()); }
+      assert.match(url, /pixel-art\/recent\?as_of=2026-11-19$/); return new Response(JSON.stringify([saved]));
+    };
+    URL.createObjectURL = () => 'blob:generated-fixture'; URL.revokeObjectURL = () => {};
+    f = await interaction('PixelMemories', base);
+    const child = () => f.nodes().find(node => node.type.name === 'MemoriesGallery');
+    assert.equal(posts, 0);
+    await child().props.onGenerate(rows[1]); f.update(); assert.equal(posts, 1); assert.equal(refreshes, 1);
+    f.update({ ...base, status: 'loading' });
+    assert.equal(f.nodes().find(node => node.type.name === 'GenerationStatus').props.state.status, 'saved');
+    f.update({ ...base, entries: rows.map(row => ({ ...row })) }); // GET journals returns fresh objects.
+    assert.equal(f.nodes().find(node => node.type.name === 'GenerationStatus').props.state.status, 'saved');
+    gallery = await interaction('MemoriesGallery', child().props);
+    await settleView(gallery, nodes => nodes.some(node => node.type.name === 'MemoryDays' && node.props.status === 'ready'));
+    const day = gallery.nodes().find(node => node.type.name === 'MemoryDays').props.days.at(-1);
+    assert.equal(day.images[0].entry_id, id(2)); assert.equal(day.images[0].image.id, id(102));
+    image = await interaction('MemoryImage', { memory: day.images[0], label: 'November 19' });
+    await settleView(image, nodes => nodes.some(node => node.type === 'img'));
+    assert.equal(image.nodes().find(node => node.type === 'img').props.src, 'blob:generated-fixture');
+    assert.equal(image.nodes().find(node => node.props.className === 'pixel-memory-art').props.to, `/journal/${id(2)}`);
+    image.nodes().find(node => node.type === 'img').props.onError(); image.update();
+    assert.ok(image.nodes().some(node => node.type === 'button'));
+    await child().props.onGenerate(rows[1]); // A stale source button cannot repeat the successful generation.
+    assert.equal(posts, 1); assert.equal(pngReads, 1);
+  } finally { f?.unmount(); gallery?.unmount(); image?.unmount(); globalThis.fetch = original; URL.createObjectURL = oldCreate; URL.revokeObjectURL = oldRevoke; }
+});
+
+test('pending Dashboard generation aborts on period, source and account changes and unmount', async () => {
+  const original = globalThis.fetch; let f;
+  const base = { entries: [entry(1)], status: 'ready', todayKey: '2026-11-19', timezone: 'UTC', userId: 'a', onRefresh() { assert.fail('Stale generation refreshed journals'); } };
+  try {
+    for (const change of ['period', 'source', 'account', 'unmount']) {
+      let signal; const held = deferred();
+      globalThis.fetch = (url, options) => { signal = options.signal; return held.promise; };
+      f = await interaction('PixelMemories', base);
+      const pending = f.nodes().find(node => node.type.name === 'MemoriesGallery').props.onGenerate(base.entries[0]);
+      if (change === 'period') {
+        f.nodes().find(node => node.type === 'input').props.onChange({ target: { value: '2026-11-18' } }); f.update();
+      } else if (change === 'source') f.update({ ...base, entries: [entry(1, '2026-11-19', { content: 'Edited fictional words.' })] });
+      else if (change === 'account') f.module.changeAuthEpoch();
+      else f.unmount();
+      await pending; assert.equal(signal.aborted, true);
+      held.resolve(new Response(JSON.stringify(record(entry(1))))); await flush(); f.update();
+      assert.notEqual(f.nodes().find(node => node.type.name === 'GenerationStatus').props.state.status, 'saved'); f.unmount();
+    }
+  } finally { f?.unmount(); globalThis.fetch = original; }
 });

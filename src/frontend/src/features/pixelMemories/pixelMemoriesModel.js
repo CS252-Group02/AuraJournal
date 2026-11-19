@@ -45,9 +45,9 @@ export function mapPixelMemories(entries, records, asOf) {
     match.day.images.push({ ...record, entry: match.entry });
   }
   for (const day of days) {
-    day.images.sort((a, b) => Date.parse(b.image.created_at) - Date.parse(a.image.created_at) ||
-      (Date.parse(b.entry.created_at) || 0) - (Date.parse(a.entry.created_at) || 0) ||
-      b.entry_id.localeCompare(a.entry_id));
+    // First successfully stored image stays the daily default across reloads.
+    day.images.sort((a, b) => Date.parse(a.image.created_at) - Date.parse(b.image.created_at) ||
+      a.entry_id.localeCompare(b.entry_id));
     // The backend stores one current image per entry. Contradictory versions
     // cannot safely identify the bytes at its entry-based content endpoint.
     const counts = new Map();
