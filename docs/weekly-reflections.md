@@ -1,5 +1,11 @@
 # Weekly reflections
 
+The reflection page also displays a saved reflection panel. It reads the selected
+period without generating on mount and offers explicit generation/regeneration.
+Switching account or period aborts outstanding actions; empty results preserve a
+previous saved snapshot. See the [data and security overview](data-and-security-overview.md)
+for the storage model, lifecycle and defense guide.
+
 `POST /api/weekly-reflections` generates a summary and exactly two reflection
 questions plus supporting journal dates from the authenticated user's journals,
 and saves the validated result.

@@ -2,6 +2,10 @@
 
 Start with the repository [README](../README.md) for prerequisites and startup.
 
+For the project defense, start with the [Data and security architecture overview](data-and-security-overview.md).
+It explains the implemented capabilities, data model, relationships, request/data
+flows, security controls, limitations, and reproducible verification.
+
 | Guide | Contents |
 | --- | --- |
 | [HTTP audio upload](audio-upload.md) | Authenticated raw WebM/Opus transcription, browser request contract, safe errors, and real-provider verification status |

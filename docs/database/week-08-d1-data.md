@@ -1,5 +1,9 @@
 # W8-D1: journal dates, migrations, and reflection storage
 
+This is the historical W8-D1 handoff. For the current provider/frontend integration,
+schema head and security implementation, use the
+[Data and security overview](../data-and-security-overview.md).
+
 Scope: Sec + Data backend completion. Journal dates and reflection storage were
 already implemented in revisions `0005` and `0006`; the current head is `0007`.
 This work removes a duplicate response-schema declaration and adds a populated

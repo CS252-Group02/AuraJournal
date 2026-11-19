@@ -19,6 +19,20 @@ from test_api import app, application_for, request  # noqa: F401
 from test_pixellab import png
 
 
+def test_database_owner_deletion_leaves_file_for_safe_reconciliation(pixel_app):
+    app = pixel_app
+    entry = create(app)
+    assert call(app, "POST", path(entry), json={}).status_code == 201
+    with Session(app.state.engine) as session:
+        key = session.scalar(select(JournalImage.image_url))
+        session.delete(session.get(User, app.user_id))
+        session.commit()
+        assert session.scalar(select(JournalImage.id)) is None
+    assert app.state.image_storage.read(key) is not None
+    assert reconcile_images(app.state.engine, app.state.image_storage) == 1
+    assert app.state.image_storage.read(key) is None
+
+
 @pytest.fixture
 def pixel_app(app, tmp_path):
     app.state.pixel_art_enabled = True

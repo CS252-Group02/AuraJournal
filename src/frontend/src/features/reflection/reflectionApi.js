@@ -1,5 +1,15 @@
 import { api } from '../../lib/api.js';
 
+export function readSavedReflection(start, { signal } = {}) {
+  return api(`/api/weekly-reflections/${start}`, { signal });
+}
+
+export function generateSavedReflection(start, { signal } = {}) {
+  return api('/api/weekly-reflections', {
+    method: 'POST', body: { period_start: start }, signal,
+  });
+}
+
 export function fetchWeeklyRecap(weekStartKey, timezone, { signal } = {}) {
   return api('/api/reflections/weekly', {
     method: 'POST', body: { start: weekStartKey, timezone }, signal,

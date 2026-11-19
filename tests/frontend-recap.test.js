@@ -20,6 +20,22 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
+test('saved reflections load privately and generate only through an explicit POST', async () => {
+  const calls = [];
+  const { readSavedReflection, generateSavedReflection } = await loadApi((path, options) => {
+    calls.push({ path, options });
+    return Promise.resolve({ summary: 'Saved', questions: ['One?', 'Two?'] });
+  });
+  assert.equal(calls.length, 0);
+  const signal = new AbortController().signal;
+  await readSavedReflection('2026-11-09', { signal });
+  await generateSavedReflection('2026-11-09', { signal });
+  assert.deepEqual(calls, [
+    { path: '/api/weekly-reflections/2026-11-09', options: { signal } },
+    { path: '/api/weekly-reflections', options: { method: 'POST', body: { period_start: '2026-11-09' }, signal } },
+  ]);
+});
+
 test('weekly recap uses explicit POST with timezone, cookies handled by shared API', async () => {
   let called = 0;
   const signal = new AbortController().signal;

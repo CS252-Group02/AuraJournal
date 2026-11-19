@@ -1,5 +1,11 @@
 # Journal and account security rules
 
+For current implementation status and defense preparation, read the
+[Data and security architecture overview](data-and-security-overview.md).
+This document preserves the original product requirements; the overview and
+[security rollout](security-hardening.md) distinguish implemented controls from
+remaining product and deployment work.
+
 Owner: Security & Data team. Status: ready for peer review; approval pending. Updated: 2026-11-02.
 
 Based on AuraJournal Website Blueprint v0.67 in *CS252 - Capstone Defense (1).zip* (Scope, Requirements, Architecture, Security, QA, and Project Plan) and the kickoff meeting minutes. These are requirements; implementation and verification remain separate tasks.
@@ -11,8 +17,10 @@ FR-01–FR-05 are **Must**: Email/Google/Facebook authentication, voice transcri
 The backend implements email/password registration, Argon2id hashing, seven-day
 revocable cookie sessions, login throttling, origin/header CSRF checks, and
 session-derived journal ownership. Google/Facebook login, email verification,
-password recovery, account deletion, AI/media workflows, and production encryption
-remain unimplemented. Tests cover authentication and journal isolation; these do
+password recovery, account deletion, and application-level journal encryption
+remain unimplemented. Private AI/media persistence and production configuration
+guards are now implemented; deployed encryption and recovery still need operator
+verification. Tests cover authentication and journal isolation; these do
 not certify the broader acceptance checks below. See [authentication](authentication.md).
 
 ## Security rules

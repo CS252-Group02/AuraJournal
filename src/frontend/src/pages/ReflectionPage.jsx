@@ -7,6 +7,7 @@ import { Skeleton, StatePanel } from '../components/ui/StatePanel.jsx';
 import { entryTitle, entryTone } from '../features/journal/entryText.js';
 import { useJournalEntries } from '../features/journal/useJournalEntries.js';
 import { createRecapLoader } from '../features/reflection/reflectionApi.js';
+import SavedReflection from '../features/reflection/SavedReflection.jsx';
 import { addDays, entriesByDay, parseDateKey, startOfWeek, toDateKey, weekDays, weekLabel } from '../features/reflection/week.js';
 
 function WeekPicker({ start, isCurrentWeek, onMove }) {
@@ -198,6 +199,7 @@ export default function ReflectionPage() {
           <WeekPicker start={start} isCurrentWeek={isCurrentWeek} onMove={move} />
         </header>
         {content}
+        <SavedReflection key={`${user.id}:${weekKey}`} periodStart={weekKey} />
       </div>
     </main>
   );
