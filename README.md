@@ -165,6 +165,11 @@ existing tracked database before its first automatic upgrade.
 
 Entries now store a required `journal_date` using the MVP's UTC+7 calendar (`Asia/Bangkok`). Existing entries use their local creation day; new entries default to the current local day. See [journal dates and timestamps](docs/database/migrations.md#journal-dates-and-timestamps) for migration behavior and Backend date-selection integration.
 
+Calendar APIs provide per-day counts, selected-day journals and current streaks.
+Streak/dashboard requests accept an optional IANA `timezone`; the default remains
+`Asia/Bangkok`, and stored journal dates never shift. See the
+[calendar API guide](docs/calendar-api.md) for parameters and verification.
+
 The old development user remains disabled and its entries stay private. Register a real account in the browser. See [accounts and sessions](docs/authentication.md) for configuration and API details.
 
 ## Run

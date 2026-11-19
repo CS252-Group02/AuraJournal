@@ -8,7 +8,7 @@ calendar day of a backdated journal.
 | --- | --- |
 | `/api/calendar?year=2026&month=11` | Every date in the month, with a journal count including zeros |
 | `/api/entries/by-date?date=2026-11-01` | Only the current owner's entries on that day |
-| `/api/stats/streak` | Current streak and the server's UTC+7 comparison date |
+| `/api/stats/streak?timezone=Asia/Ho_Chi_Minh` | Current streak and the comparison date in the selected timezone |
 | `/api/dashboard?year=2026&month=11` | Monthly entry count, active days, and current streak |
 
 The dashboard's streak is current, regardless of the month selected for its counts.
@@ -47,15 +47,19 @@ today, current/longest streaks, weekly activity and mood periods. The clock
 updates at midnight and when the tab regains focus/visibility. This policy
 matches the existing frontend and is disclosed beside the overview statistics.
 
-The server's `/api/stats/streak` and `/api/dashboard` still report
-`timezone: "Asia/Bangkok"` and that zone's `as_of` date. Their current streak can
-differ from the Dashboard near midnight when the browser and Bangkok disagree
-on today. For example, at `2026-11-19T00:30:00Z`, New York is still November 18
-while Bangkok is November 19. Comparing streaks requires the same `as_of` date;
-the distinct-day/yesterday/gap rules themselves agree. The Dashboard deliberately
-does not mix server streaks with browser-local highlights or make a redundant
-statistics request. The database's Bangkok default for omitted journal dates
-remains unchanged, as do author-selected dates.
+The server's `/api/stats/streak` and `/api/dashboard` now accept an optional
+IANA `timezone`, for example `?timezone=America/New_York` (or `&timezone=...`
+when year/month are already present). They derive `as_of` in that zone and echo
+its name. Omitting the parameter preserves the existing `Asia/Bangkok` default.
+Pass the browser's timezone when comparing API streaks with local Dashboard
+statistics; the distinct-day/yesterday/gap rules agree when the comparison date
+agrees. For example, at `2026-11-19T00:30:00Z`, New York is still November 18
+while Bangkok is November 19. Stored journal dates do not move between days.
+
+The Dashboard continues using its entry list and browser-local clock, without
+mixing server streaks into local highlights or making a redundant statistics
+request. The database default for omitted journal dates remains unchanged, as do
+author-selected dates. See [API parameters and examples](calendar-api.md).
 
 ### Counts and insights
 
@@ -148,9 +152,13 @@ because its existing timezone tests launch child Node processes. A regression
 also matches frontend streaks against the published Alice/Bob backend calendar
 sample expectations at the same `as_of` dates, including leap day.
 
-No backend files changed. The existing PostgreSQL calendar/sample/user-isolation
-suites below were inspected but could not be rerun because `TEST_DATABASE_URL`
-was not configured. Automated frontend tests do not substitute for that evidence.
+That U05/U06 frontend-only verification changed no backend files. At that time,
+the PostgreSQL suites were inspected but not rerun because `TEST_DATABASE_URL`
+was not configured. The subsequent calendar API verification on November 20,
+2026 ran the real isolated PostgreSQL suites: 87 focused tests passed, with
+793 passed and 2 environment-dependent skips in the full backend run. See the
+[current API verification](calendar-api.md#verification). Automated frontend
+checks alone do not substitute for that backend evidence.
 
 Browser checks still pending:
 

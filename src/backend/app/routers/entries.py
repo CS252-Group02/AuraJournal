@@ -9,8 +9,8 @@ from sqlalchemy.orm import Session
 from app.database import get_session
 from app.auth import current_user
 from app.models import JournalEntry, User
-from app.schemas.entries import EntryCreate, EntryResponse, EntryUpdate
-from app.services.journal_history import search_entries
+from app.schemas.entries import EntryCreate, EntryResponse, EntryUpdate, JournalDate
+from app.services.journal_history import entries_in_range, search_entries
 
 router = APIRouter(prefix="/api/entries", tags=["entries"])
 
@@ -50,8 +50,7 @@ def list_entries(q: str | None = Query(default=None, max_length=5000),
 
 
 @router.get("/by-date", response_model=list[EntryResponse])
-def entries_by_date(date: date, session: Session = Depends(get_session), user: User = Depends(current_user)):
-    from app.services.journal_history import entries_in_range
+def entries_by_date(date: JournalDate, session: Session = Depends(get_session), user: User = Depends(current_user)):
     return entries_in_range(session, user.id, date, date)
 
 

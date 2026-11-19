@@ -1,9 +1,10 @@
 """Authenticated calendar and dashboard APIs."""
 import calendar
-from datetime import date, datetime, timedelta
-from zoneinfo import ZoneInfo
+from datetime import date, datetime, timedelta, timezone as datetime_timezone
+from typing import Annotated
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -16,8 +17,21 @@ router = APIRouter(prefix="/api", tags=["calendar"])
 ZONE = "Asia/Bangkok"
 
 
-def today() -> date:
-    return datetime.now(ZoneInfo(ZONE)).date()
+def calendar_timezone(timezone: Annotated[str, Query(min_length=1, max_length=100)] = ZONE) -> str:
+    """Use the caller's IANA timezone without changing stored journal dates."""
+    try:
+        ZoneInfo(timezone)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise HTTPException(422, "Choose a valid IANA timezone.") from None
+    return timezone
+
+
+def utc_now() -> datetime:
+    return datetime.now(datetime_timezone.utc)
+
+
+def today(zone: str = Depends(calendar_timezone), now: datetime = Depends(utc_now)) -> date:
+    return now.astimezone(ZoneInfo(zone)).date()
 
 
 class DayCount(BaseModel):
@@ -62,14 +76,14 @@ def monthly_calendar(year: int = Query(ge=1, le=9999), month: int = Query(ge=1, 
 
 @router.get("/stats/streak", response_model=StreakResponse)
 def streak(session: Session = Depends(get_session), user: User = Depends(current_user),
-           as_of: date = Depends(today)):
-    return dict(as_of=as_of, timezone=ZONE, current_streak=current_streak(session, user.id, as_of))
+           zone: str = Depends(calendar_timezone), as_of: date = Depends(today)):
+    return dict(as_of=as_of, timezone=zone, current_streak=current_streak(session, user.id, as_of))
 
 
 @router.get("/dashboard", response_model=DashboardResponse)
 def dashboard(year: int = Query(ge=1, le=9999), month: int = Query(ge=1, le=12),
               session: Session = Depends(get_session), user: User = Depends(current_user),
-              as_of: date = Depends(today)):
+              zone: str = Depends(calendar_timezone), as_of: date = Depends(today)):
     _, _, counts = month_counts(session, user.id, year, month)
     return dict(year=year, month=month, entry_count=sum(counts.values()), active_days=len(counts),
-                as_of=as_of, timezone=ZONE, current_streak=current_streak(session, user.id, as_of))
+                as_of=as_of, timezone=zone, current_streak=current_streak(session, user.id, as_of))
