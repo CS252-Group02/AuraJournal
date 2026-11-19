@@ -4,6 +4,7 @@ import { createRecordFlow } from '../src/frontend/src/features/record/recordFlow
 import { createAudioRecorder } from '../src/frontend/src/features/record/audioRecorder.js';
 import { createTranscript, mergeSegment, transcriptSegments, transcriptText, contentLength, validContent } from '../src/frontend/src/features/record/transcriptState.js';
 import { createTranscriptionSession } from '../src/frontend/src/features/record/transcriptionSession.js';
+import { AUDIO_UPLOAD_TIMEOUT, createAudioUpload } from '../src/frontend/src/features/record/audioUpload.js';
 
 const deferred = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
 const tick = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
@@ -12,17 +13,22 @@ const result = (id, order, text, is_final = true, revision = 0) => ({ segment_id
 function fixture(overrides = {}) {
   const track = Object.assign(new EventTarget(), { readyState: 'live', stop() { this.readyState = 'ended'; }, getSettings: () => ({ sampleRate: 48000 }) });
   let mediaRequests = 0, device, callbacks, segmentCount = 0, epoch = 0, keys = 0;
-  const sent = [], proofreads = [], saves = [], revoked = [], order = [];
+  const sent = [], proofreads = [], saves = [], revoked = [], order = [], uploads = [], authListeners = new Set();
   const stream = { getTracks: () => [track], getAudioTracks: () => [track] };
   class Recorder extends EventTarget {
-    static isTypeSupported(type) { return type === 'audio/webm;codecs=opus'; }
+    static isTypeSupported(type) { return type === (overrides.mimeType || 'audio/webm;codecs=opus'); }
     constructor(input, options) { super(); device = this; this.mimeType = options.mimeType; this.state = 'inactive'; }
     start() { this.state = 'recording'; }
     chunk(value) { this.dispatchEvent(Object.assign(new Event('dataavailable'), { data: new Blob([value], { type: this.mimeType }) })); }
     stop() { this.state = 'inactive'; queueMicrotask(() => { this.chunk('last-audio'); this.dispatchEvent(new Event('stop')); }); }
   }
   const recorder = createAudioRecorder({
-    mediaDevices: { getUserMedia: async () => { mediaRequests++; return stream; } }, MediaRecorder: Recorder,
+    mediaDevices: { getUserMedia: async () => {
+      mediaRequests++;
+      if (overrides.mediaError?.()) throw new DOMException('Capture failed', 'NotAllowedError');
+      track.readyState = 'live';
+      return stream;
+    } }, MediaRecorder: Recorder,
     urls: { createObjectURL: () => 'blob:test-take', revokeObjectURL: url => revoked.push(url) },
   });
   const session = {
@@ -38,17 +44,22 @@ function fixture(overrides = {}) {
   const services = {
     transcriptionAvailable: true, proofreadAvailable: true, idempotentSaveAvailable: true,
     getAuthEpoch: () => epoch,
+    subscribeAuthChanges(listener) { authListeners.add(listener); return () => authListeners.delete(listener); },
     createSession: handlers => { callbacks = handlers; return session; },
     proofread: async (content, options) => { proofreads.push({ content, options }); return { proofread_content: `${content}.` }; },
     save: async (content, options) => { saves.push({ content, options }); return { id: 'entry-1', content: content.trim() }; },
     ...overrides.services,
+    uploadAudio(blob, options) {
+      uploads.push({ blob, options });
+      return overrides.services?.uploadAudio?.(blob, options) ?? Promise.resolve({ transcript: 'Hôm nay I feel happy.', outcome: 'transcribed' });
+    },
   };
   const flow = createRecordFlow({ recorder, services, makeKey: () => `key-${++keys}`, ...overrides.flow });
   const cleanup = flow.connect();
-  return { flow, recorder, track, sent, proofreads, saves, revoked, order, cleanup,
+  return { flow, recorder, track, sent, proofreads, saves, revoked, order, cleanup, uploads,
     get mediaRequests() { return mediaRequests; }, get device() { return device; },
     emit(event) { callbacks.onSegment(event); segmentCount = transcriptText(flow.getSnapshot().transcript).finalCount; },
-    failure(error) { callbacks.onFailure(error); }, changeAccount() { epoch++; },
+    failure(error) { callbacks.onFailure(error); }, changeAccount() { epoch++; authListeners.forEach(listener => listener()); },
   };
 }
 
@@ -296,6 +307,304 @@ test('Reset, unmount, account change and late responses cannot update another ta
   await other.flow.start(); other.changeAccount(); other.emit(result('a', 0, 'Previous account'));
   assert.equal(transcriptText(other.flow.getSnapshot().transcript).finalizedTranscript, '');
   other.cleanup(); assert.equal(other.track.readyState, 'ended');
+});
+
+test('permission denial can retry the same existing flow, then stop and transcribe', async () => {
+  let denied = true;
+  const f = fixture({ mediaError: () => denied, services: { transcriptionAvailable: false, uploadAvailable: true } });
+  await f.flow.start();
+  assert.equal(f.flow.getSnapshot().phase, 'error');
+  assert.match(f.flow.getSnapshot().error, /access was denied/);
+  denied = false;
+  await f.flow.start();
+  assert.equal(f.flow.getSnapshot().phase, 'recording');
+  await f.flow.stop();
+  assert.equal(f.flow.getSnapshot().phase, 'review');
+  assert.equal(f.uploads.length, 1);
+  assert.equal(f.mediaRequests, 2);
+  f.cleanup();
+});
+
+test('the existing local recovery after a failed live connection uploads once after Stop', async () => {
+  const f = fixture({ services: { uploadAvailable: true }, session: { open: async () => { throw new Error('Live unavailable'); } } });
+  await f.flow.start();
+  assert.equal(f.flow.getSnapshot().phase, 'error');
+  assert.equal(f.mediaRequests, 0);
+  assert.equal(f.uploads.length, 0);
+  await f.flow.start({ localOnly: true });
+  assert.equal(f.flow.getSnapshot().uploadAfterStop, true);
+  await f.flow.stop();
+  assert.equal(f.uploads.length, 1);
+  assert.equal(f.flow.getSnapshot().editorText, 'Hôm nay I feel happy.');
+  assert.equal(f.mediaRequests, 1);
+  f.cleanup();
+});
+
+test('completed local recording reaches the HTTP adapter as raw WebM bytes and enters review exactly', async () => {
+  const calls = [], transcript = '  Hôm nay\nI feel happy. 😀  ';
+  const uploadAudio = createAudioUpload({ apiUrl: 'http://api.test', getAuthEpoch: () => 0,
+    fetch: async (url, options) => {
+      calls.push({ url, ...options });
+      return new Response(JSON.stringify({ transcript, outcome: 'transcribed' }));
+    },
+  });
+  const f = fixture({ services: { transcriptionAvailable: false, uploadAvailable: true, uploadAudio } });
+  await f.flow.start();
+  f.device.chunk(new Uint8Array([0x1a, 0x45, 0xdf, 0xa3])); f.device.chunk('audio-body');
+  await f.flow.stop();
+  const state = f.flow.getSnapshot(), call = calls[0];
+  assert.equal(state.phase, 'review');
+  assert.equal(state.editorText, transcript);
+  assert.equal(state.originalTranscript, transcript);
+  assert.equal(state.incomplete, false);
+  assert.equal(state.uploadStatus, 'succeeded');
+  assert.equal(call.body, state.capture.blob);
+  assert.equal(call.headers['Content-Type'], 'audio/webm;codecs=opus');
+  assert.equal(call.headers['X-AuraJournal-CSRF'], '1');
+  assert.equal(call.credentials, 'include');
+  assert.equal(await call.body.slice(4).text(), 'audio-bodylast-audio');
+  assert.deepEqual(new Uint8Array(await call.body.slice(0, 4).arrayBuffer()), new Uint8Array([0x1a, 0x45, 0xdf, 0xa3]));
+  assert.ok(state.capture.url);
+  assert.equal(f.track.readyState, 'ended');
+  assert.equal(f.mediaRequests, 1);
+  assert.equal(f.proofreads.length, 0);
+  assert.equal(f.saves.length, 0);
+  await f.flow.transcribe(); assert.equal(calls.length, 1);
+  f.flow.edit('My reviewed correction'); await f.flow.save();
+  assert.equal(f.saves[0].content, 'My reviewed correction');
+  assert.equal(calls.length, 1);
+  assert.equal(f.flow.getSnapshot().phase, 'saved');
+  f.cleanup();
+});
+
+test('slow HTTP transcription shows processing, retains playback, locks submission and honors the deadline', async () => {
+  const timers = new Map(), delays = [];
+  const f = fixture({ services: { transcriptionAvailable: false, uploadAvailable: true, uploadAudio: () => new Promise(() => {}) },
+    flow: { schedule: (callback, delay) => { delays.push(delay); timers.set(delay, callback); return delay; }, cancel: id => timers.delete(id) } });
+  await f.flow.start(); const stopping = f.flow.stop(); await tick();
+  assert.equal(f.flow.getSnapshot().phase, 'transcribing');
+  assert.ok(f.flow.getSnapshot().capture.url);
+  assert.ok(f.flow.getSnapshot().capture.blob);
+  assert.deepEqual(delays, [AUDIO_UPLOAD_TIMEOUT]);
+  f.flow.edit('Draft while waiting');
+  await f.flow.transcribe(); await f.flow.save();
+  assert.equal(f.uploads.length, 1);
+  assert.equal(f.saves.length, 0);
+  timers.get(AUDIO_UPLOAD_TIMEOUT)(); await stopping;
+  assert.equal(f.flow.getSnapshot().phase, 'review');
+  assert.match(f.flow.getSnapshot().error, /took too long/);
+  assert.equal(f.flow.getSnapshot().editorText, 'Draft while waiting');
+  assert.equal(f.uploads[0].options.signal.aborted, true);
+  assert.ok(f.flow.getSnapshot().canUpload);
+  assert.ok(f.flow.getSnapshot().capture.url);
+  assert.equal(timers.size, 0);
+  f.cleanup();
+});
+
+test('HTTP no_speech enters manual review, retains playback and never saves or proofreads automatically', async () => {
+  const f = fixture({ services: { transcriptionAvailable: false, uploadAvailable: true,
+    uploadAudio: async () => ({ transcript: '', outcome: 'no_speech' }) } });
+  await f.flow.start(); await f.flow.stop();
+  const state = f.flow.getSnapshot();
+  assert.equal(state.phase, 'review');
+  assert.equal(state.editorText, '');
+  assert.equal(state.incomplete, false);
+  assert.match(state.warning, /No speech was recognized/);
+  assert.ok(state.capture.url);
+  assert.equal(f.proofreads.length, 0);
+  await f.flow.save(); assert.equal(f.saves.length, 0);
+  f.flow.edit('Written after listening'); await f.flow.save();
+  assert.equal(f.saves[0].content, 'Written after listening');
+  f.cleanup();
+});
+
+test('HTTP failures preserve the same Blob and edits; only explicit retry makes one new request', async () => {
+  for (const status of [undefined, 401, 403, 413, 415, 422, 429, 502, 503, 504]) {
+    const retry = deferred(); let calls = 0;
+    const f = fixture({ services: { transcriptionAvailable: false, uploadAvailable: true, uploadAudio: () => {
+      if (++calls === 1) throw Object.assign(new Error('Upload failed'), { status });
+      return retry.promise;
+    } } });
+    await f.flow.start(); await f.flow.stop();
+    const blob = f.flow.getSnapshot().capture.blob;
+    assert.equal(f.flow.getSnapshot().phase, 'review');
+    assert.equal(f.flow.getSnapshot().uploadStatus, 'failed');
+    assert.ok(f.flow.getSnapshot().capture.url);
+    f.flow.edit('Kept manual draft'); await tick();
+    assert.equal(calls, 1);
+    const pending = f.flow.transcribe(); await f.flow.transcribe();
+    assert.equal(calls, 2);
+    assert.equal(f.uploads[1].blob, blob);
+    retry.resolve({ transcript: 'Full uploaded text', outcome: 'transcribed' }); await pending;
+    assert.equal(f.flow.getSnapshot().editorText, 'Kept manual draft');
+    assert.equal(f.flow.getSnapshot().uploadTranscript, 'Full uploaded text');
+    await f.flow.transcribe(); assert.equal(calls, 2);
+    f.flow.useUploadTranscript();
+    assert.equal(f.flow.getSnapshot().editorText, 'Full uploaded text');
+    assert.equal(f.saves.length, 0);
+    f.cleanup();
+  }
+});
+
+test('server rejections that need a new recording do not offer an unsafe retry', async () => {
+  for (const status of [413, 415, 422]) {
+    const uploadAudio = createAudioUpload({ apiUrl: 'http://api.test', getAuthEpoch: () => 0,
+      fetch: async () => new Response('rejected', { status }) });
+    const f = fixture({ services: { transcriptionAvailable: false, uploadAvailable: true, uploadAudio } });
+    await f.flow.start(); await f.flow.stop();
+    assert.equal(f.flow.getSnapshot().canUpload, false);
+    assert.ok(f.flow.getSnapshot().capture.blob);
+    f.flow.edit('Manually reviewed'); await f.flow.save();
+    assert.equal(f.saves[0].content, 'Manually reviewed');
+    f.cleanup();
+  }
+});
+
+test('cancel keeps audio and edits; a late result cannot replace a newer retry', async () => {
+  const old = deferred(), retry = deferred(); let calls = 0;
+  const f = fixture({ services: { transcriptionAvailable: false, uploadAvailable: true,
+    uploadAudio: () => ++calls === 1 ? old.promise : retry.promise } });
+  await f.flow.start(); const stopping = f.flow.stop(); await tick();
+  f.flow.edit('My draft');
+  const blob = f.flow.getSnapshot().capture.blob;
+  f.flow.cancelUpload(); await stopping;
+  assert.equal(f.flow.getSnapshot().phase, 'review');
+  assert.equal(f.flow.getSnapshot().uploadStatus, 'cancelled');
+  assert.equal(f.uploads[0].options.signal.aborted, true);
+  assert.equal(f.flow.getSnapshot().capture.blob, blob);
+  const pending = f.flow.transcribe(); await f.flow.transcribe();
+  old.resolve({ transcript: 'Stale old result', outcome: 'transcribed' }); await tick();
+  assert.equal(f.flow.getSnapshot().phase, 'transcribing');
+  assert.equal(f.flow.getSnapshot().editorText, 'My draft');
+  retry.resolve({ transcript: 'New result', outcome: 'transcribed' }); await pending;
+  assert.equal(f.flow.getSnapshot().editorText, 'My draft');
+  assert.equal(f.flow.getSnapshot().uploadTranscript, 'New result');
+  assert.equal(calls, 2);
+  assert.equal(f.mediaRequests, 1);
+  f.cleanup();
+});
+
+test('edits during HTTP transcription are never replaced automatically, including intentionally cleared text', async () => {
+  for (const edited of ['My correction', '']) {
+    const work = deferred();
+    const f = fixture({ services: { transcriptionAvailable: false, uploadAvailable: true, uploadAudio: () => work.promise } });
+    await f.flow.start(); const stopping = f.flow.stop(); await tick();
+    f.flow.edit(edited);
+    work.resolve({ transcript: 'Recognized text', outcome: 'transcribed' }); await stopping;
+    assert.equal(f.flow.getSnapshot().editorText, edited);
+    assert.equal(f.flow.getSnapshot().uploadTranscript, 'Recognized text');
+    f.flow.useUploadTranscript();
+    assert.equal(f.flow.getSnapshot().editorText, 'Recognized text');
+    f.cleanup();
+  }
+});
+
+test('Reset and unmount abort HTTP; late results cannot populate a newer recording', async () => {
+  for (const unmount of [false, true]) {
+    const work = deferred();
+    const f = fixture({ services: { transcriptionAvailable: false, uploadAvailable: true, uploadAudio: () => work.promise } });
+    await f.flow.start(); const stopping = f.flow.stop(); await tick();
+    if (unmount) f.cleanup(); else f.flow.reset();
+    await stopping;
+    assert.equal(f.uploads[0].options.signal.aborted, true);
+    if (!unmount) await f.flow.start();
+    work.resolve({ transcript: 'Old private recording', outcome: 'transcribed' }); await tick();
+    assert.equal(f.flow.getSnapshot().editorText, '');
+    assert.equal(f.flow.getSnapshot().phase, unmount ? 'ready' : 'recording');
+    assert.equal(f.saves.length, 0);
+    if (!unmount) f.cleanup();
+  }
+});
+
+test('authentication changes abort pending transcription and prevent uploading or saving the old take', async () => {
+  const work = deferred();
+  const f = fixture({ services: { transcriptionAvailable: false, uploadAvailable: true, uploadAudio: () => work.promise } });
+  await f.flow.start(); const stopping = f.flow.stop(); await tick();
+  f.flow.edit('Private draft'); const blob = f.flow.getSnapshot().capture.blob;
+  f.changeAccount(); await stopping;
+  assert.equal(f.uploads[0].options.signal.aborted, true);
+  assert.equal(f.flow.getSnapshot().phase, 'review');
+  assert.equal(f.flow.getSnapshot().uploadStatus, 'session_changed');
+  assert.match(f.flow.getSnapshot().warning, /session changed/);
+  assert.equal(f.flow.getSnapshot().editorText, 'Private draft');
+  assert.equal(f.flow.getSnapshot().capture.blob, blob);
+  work.resolve({ transcript: 'Old account', outcome: 'transcribed' }); await tick();
+  await f.flow.transcribe(); await f.flow.save();
+  assert.equal(f.uploads.length, 1);
+  assert.equal(f.saves.length, 0);
+  assert.equal(f.flow.getSnapshot().editorText, 'Private draft');
+  f.cleanup();
+});
+
+test('successful live transcription and live no_speech never trigger HTTP, even when enabled', async () => {
+  for (const text of ['Live confirmed text', '']) {
+    const f = fixture({ services: { uploadAvailable: true, proofreadAvailable: false } });
+    await f.flow.start(); if (text) f.emit(result('a', 0, text)); await f.flow.stop();
+    await f.flow.transcribe();
+    assert.equal(f.flow.getSnapshot().editorText, text);
+    assert.equal(f.flow.getSnapshot().canUpload, false);
+    assert.equal(f.uploads.length, 0);
+    f.cleanup();
+  }
+});
+
+test('failed live transcription offers explicit whole-audio fallback and preserves confirmed text and edits', async () => {
+  const live = fixture({ services: { uploadAvailable: true } });
+  await live.flow.start();
+  live.emit(result('a', 0, 'Confirmed live words'));
+  live.emit(result('b', 1, 'Unconfirmed tail', false)); live.failure(new Error('Connection lost'));
+  await live.flow.stop();
+  assert.equal(live.uploads.length, 0);
+  assert.equal(live.flow.getSnapshot().canUpload, true);
+  live.flow.edit('My corrected journal');
+  await live.flow.transcribe();
+  assert.equal(live.uploads.length, 1);
+  assert.equal(live.flow.getSnapshot().originalTranscript, 'Confirmed live words');
+  assert.equal(live.flow.getSnapshot().unconfirmedText, 'Unconfirmed tail');
+  assert.equal(live.flow.getSnapshot().editorText, 'My corrected journal');
+  assert.equal(live.flow.getSnapshot().uploadTranscript, 'Hôm nay I feel happy.');
+  live.flow.useUploadTranscript();
+  assert.equal(live.flow.getSnapshot().editorText, 'Hôm nay I feel happy.');
+  assert.equal(live.flow.getSnapshot().originalTranscript, 'Confirmed live words');
+  assert.equal(live.proofreads.length, 0);
+  assert.equal(live.saves.length, 0);
+  live.cleanup();
+  const f = fixture({ services: { uploadAvailable: true, uploadAudio: async () => ({ transcript: '', outcome: 'no_speech' }) } });
+  await f.flow.start(); f.emit(result('a', 0, 'Keep confirmed')); f.failure(new Error('Lost'));
+  await f.flow.stop(); f.flow.edit('Keep my draft'); await f.flow.transcribe();
+  assert.equal(f.flow.getSnapshot().editorText, 'Keep my draft');
+  assert.equal(f.flow.getSnapshot().originalTranscript, 'Keep confirmed');
+  assert.equal(f.flow.getSnapshot().uploadTranscript, null);
+  f.cleanup();
+});
+
+test('unsupported or oversized local audio stays playable and editable without any HTTP request', async () => {
+  for (const oversized of [false, true]) {
+    const f = fixture({ mimeType: oversized ? undefined : 'audio/mp4',
+      services: { transcriptionAvailable: false, uploadAvailable: true } });
+    await f.flow.start(); if (oversized) f.device.chunk(new Uint8Array(10 * 1024 * 1024));
+    await f.flow.stop();
+    assert.equal(f.flow.getSnapshot().phase, 'review');
+    assert.equal(f.flow.getSnapshot().uploadStatus, 'unavailable');
+    assert.match(f.flow.getSnapshot().error, oversized ? /10 MiB/ : /format/);
+    assert.ok(f.flow.getSnapshot().capture.url);
+    assert.equal(f.uploads.length, 0);
+    f.flow.edit('Manual review'); await f.flow.save();
+    assert.equal(f.saves[0].content, 'Manual review');
+    f.cleanup();
+  }
+});
+
+test('overlong HTTP transcripts are retained exactly and use existing save validation', async () => {
+  const transcript = '😀'.repeat(5001);
+  const f = fixture({ services: { transcriptionAvailable: false, uploadAvailable: true,
+    uploadAudio: async () => ({ transcript, outcome: 'transcribed' }) } });
+  await f.flow.start(); await f.flow.stop();
+  assert.equal(f.flow.getSnapshot().editorText, transcript);
+  await f.flow.save(); assert.equal(f.saves.length, 0);
+  f.flow.edit('Shortened after review'); await f.flow.save();
+  assert.equal(f.saves[0].content, 'Shortened after review');
+  f.cleanup();
 });
 
 function socketFixture(options = {}) {

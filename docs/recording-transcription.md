@@ -2,8 +2,10 @@
 
 The recording service reuses the existing Deepgram transport, transcript normalizer
 and session helper. The HTTP endpoint exposes `POST /api/transcriptions` with the same raw
-WebM/Opus request and `{transcript, outcome}` response. No database migration,
-new dependency, frontend change or separate speech provider is needed.
+WebM/Opus request and `{transcript, outcome}` response. The Record screen uses
+this endpoint for completed local recordings and explicit live-failure recovery;
+see the [integrated Record flow](audio-upload.md#record-flow). No database
+migration, new dependency or separate speech provider is needed.
 
 ## Reusable helper contract
 
@@ -134,10 +136,11 @@ interruption. CER normalizes Unicode, case, whitespace and punctuation; it is a
 diagnostic metric, not proof of meaning or a pass threshold. Review the important
 phrases and final sentence manually.
 
-Then send the same Blobs through the authenticated HTTP example in
-[audio-upload.md](audio-upload.md#browser-integration). Confirm the payload,
-session behavior and safe errors. The existing Record page's WebSocket path is
-a separate integration; confirm that its final text agrees with the recording.
+Then use the authenticated Record screen and the
+[U03 end-to-end checklist](audio-upload.md#manual-u03-end-to-end-checklist-pending).
+Confirm raw upload bytes, session behavior, safe errors, playback and manual
+review/save. With live transcription enabled, confirm that its final text agrees
+with the recording and that successful live completion does not also upload it.
 
 ## Completion evidence
 

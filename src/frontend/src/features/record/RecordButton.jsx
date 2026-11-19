@@ -1,5 +1,5 @@
 export default function RecordButton({ model, onReset }) {
-  const { phase, capture, error, warning, flow, capabilities, elapsedSeconds, transcriptionActive } = model;
+  const { phase, capture, error, warning, flow, capabilities, elapsedSeconds, transcriptionActive, uploadAfterStop } = model;
   const captureLayout = ['ready', 'connecting', 'recording', 'error'].includes(phase);
   const duration = `${String(Math.floor(elapsedSeconds / 60)).padStart(2, '0')}:${String(elapsedSeconds % 60).padStart(2, '0')}`;
   const recording = phase === 'recording' && capture.status === 'recording';
@@ -10,12 +10,17 @@ export default function RecordButton({ model, onReset }) {
   const message = {
     ready: capabilities.transcriptionAvailable
       ? `Audio is sent for live transcription. Stop well before five minutes to allow finalization.${capabilities.proofreadAvailable ? ' Final text may be sent for AI proofreading.' : ''} Your journal is saved only when you choose Save journal.`
-      : 'Record locally and write your journal after stopping. Your journal is saved only when you choose Save journal.',
+      : capabilities.uploadAvailable
+        ? 'Record locally. After Stop, WebM/Opus audio is uploaded for transcription. Review and edit before choosing Save journal.'
+        : 'Record locally and write your journal after stopping. Your journal is saved only when you choose Save journal.',
     connecting: 'Preparing your recording…',
     recording: transcriptionActive
       ? 'Recording… Stop well before five minutes; the live limit includes finalization.'
-      : 'Recording locally… Select Stop to review your audio and write your journal.',
+      : uploadAfterStop ? 'Recording locally… Select Stop to transcribe and review your audio.'
+        : capabilities.uploadAvailable ? 'Recording locally… Select Stop to review your audio and choose whether to transcribe it.'
+        : 'Recording locally… Select Stop to review your audio and write your journal.',
     finalizing: 'Finishing audio and waiting for final speech results…',
+    transcribing: 'Uploading audio and transcribing… This can take up to 100 seconds. You can listen, edit, or cancel; your recording is kept.',
     proofreading: 'Proofreading the confirmed transcript…',
     review: 'Review your draft below. Your changes are the version that will be saved.',
     saving: 'Saving your journal…',
@@ -29,7 +34,7 @@ export default function RecordButton({ model, onReset }) {
           disabled={waiting || (!recording && !canStart)} onClick={recording ? flow.stop : () => flow.start()} />
       </div>}
       {captureLayout && <p className="record-label">{label}</p>}
-      {!captureLayout && <h2 className="record-phase-title">{{ finalizing: 'Finishing recording', proofreading: 'AI proofreading', review: 'Review your journal', saving: 'Saving your journal', saved: 'Journal saved' }[phase]}</h2>}
+      {!captureLayout && <h2 className="record-phase-title">{{ finalizing: 'Finishing recording', transcribing: 'Transcribing recording', proofreading: 'AI proofreading', review: 'Review your journal', saving: 'Saving your journal', saved: 'Journal saved' }[phase]}</h2>}
       {!['ready', 'connecting', 'error'].includes(phase) && <p className="record-duration" aria-live="off">
         {recording ? 'Recording time' : 'Recorded duration'} <span>{duration}</span>
       </p>}
@@ -37,6 +42,7 @@ export default function RecordButton({ model, onReset }) {
         {error || (capture.status === 'requesting_permission' ? 'Allow microphone access in your browser, or select Cancel.' : message)}
       </p>
       {warning && <p className="record-feedback" role="status">{warning}</p>}
+      {phase === 'transcribing' && <button className="record-action" type="button" onClick={flow.cancelUpload}>Cancel transcription</button>}
       {phase === 'error' && capabilities.transcriptionAvailable && !capture.blob && (
         <button className="record-action" type="button" onClick={() => flow.start({ localOnly: true })}>Record locally instead</button>
       )}
