@@ -74,13 +74,20 @@ generations overlap, the last database write wins for that owner and period.
 ## Generator integration
 
 The backend implements querying, saving, reading, validation, and error handling.
-The provider-specific reflection generator is not implemented or connected yet.
-`app.state.weekly_reflection_generator` defaults to `None`: nonempty periods
-return `503` until a real generator is assigned during application setup.
-There is no production placeholder that invents a summary or questions.
+`GroqWeeklyReflectionGenerator` is connected during application setup. Configure
+backend `GROQ_API_KEY` and optionally `GROQ_MODEL`. Missing credentials and provider
+failures return `503`; saved reads do not require the provider. The implementation
+uses the shared JSON client, input budget, structural validation and provider
+timeout/retry settings. It instructs the model to treat journals as untrusted
+sources and preserve the predominant language; prompts do not guarantee factuality.
 
-Implement `WeeklyReflectionGenerator` in `app/services/weekly_reflection.py` and
-assign its instance in `create_app()`. Its synchronous method is:
+The reflection page loads saved snapshots and provides explicit generation and
+regeneration actions. No AI generation occurs on page load. Switching account/week
+aborts outstanding reads/actions and discards late responses. Empty generation
+preserves an existing snapshot. The older recap UI remains separate.
+
+The `WeeklyReflectionGenerator` protocol in `app/services/weekly_reflection.py`
+allows replacement providers and test doubles. Its synchronous method is:
 
 ```python
 def generate(self, entries: list[WeeklyReflectionSource]) -> WeeklyReflectionContent:
@@ -138,5 +145,6 @@ cover owner/date boundaries, chronological ordering, empty periods, invalid
 contracts, input budgets, source changes, browser security, regeneration,
 persistence across application instances, private saved reads, and preservation
 of saved results after generation or commit errors. They do not call
-Groq or establish real-model quality. End-to-end AI verification is pending the
-generator integration.
+Groq or establish real-model quality. `test_weekly_reflection_provider.py` checks
+the connected provider contract with a fake client. Live-model evaluation remains
+a separate explicit verification step.

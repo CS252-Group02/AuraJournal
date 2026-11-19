@@ -2,6 +2,10 @@
 
 Start with the repository [README](../README.md) for prerequisites and startup.
 
+For the project defense, start with the [Data and security architecture overview](data-and-security-overview.md).
+It explains the implemented capabilities, data model, relationships, request/data
+flows, security controls, limitations, and reproducible verification.
+
 | Guide | Contents |
 | --- | --- |
 | [Speech-to-text streaming service and API](speech-to-text.md) | Provider transport, transcript normalization, authenticated WebSocket protocol, frontend configuration, and offline tests |

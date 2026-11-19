@@ -1,5 +1,9 @@
 # Backend and database security rollout
 
+The [Data and security architecture overview](data-and-security-overview.md)
+consolidates the current data model, user flows, implemented controls and defense
+questions. This guide retains the detailed deployment/role-provisioning procedure.
+
 This change addresses the local assessment of main at `6318dfd`. Code changes are
 on `security/backend-database-hardening`. Applying this branch is not equivalent
 to changing a machine's PostgreSQL authentication rules: follow the operator steps
