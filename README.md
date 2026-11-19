@@ -175,6 +175,11 @@ Pixel-art APIs generate and retrieve private journal-linked images. The grouped
 recent journal days and explicit missing-image placeholders. See the
 [pixel-art and memory API guide](docs/pixel-art.md) for contracts and verification.
 
+`POST /api/entries/ask` answers questions from bounded, owner-scoped journal
+excerpts and returns supporting dates or an insufficient-evidence result. It
+uses the existing Groq configuration and shared AI quota. See the
+[journal question API guide](docs/journal-questions.md) for contracts and limits.
+
 The old development user remains disabled and its entries stay private. Register a real account in the browser. See [accounts and sessions](docs/authentication.md) for configuration and API details.
 
 ## Run

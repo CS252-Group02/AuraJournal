@@ -11,6 +11,8 @@ from sqlalchemy.orm import sessionmaker
 from app.config import database_url as configured_database_url, frontend_origin
 from app.database import make_engine
 from app.routers.entries import router as entries_router
+from app.routers.journal_qa import router as journal_qa_router
+from app.services.journal_qa import GroqJournalQuestionAnswerer
 from app.routers.auth import router as auth_router
 from app.routers.summaries import router as summaries_router
 from app.routers.titles import router as titles_router
@@ -53,6 +55,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
     app.state.journal_title_generator = JournalTitleGenerator()
     app.state.weekly_recap_generator = WeeklyRecapGenerator()
     app.state.weekly_reflection_generator = GroqWeeklyReflectionGenerator()
+    app.state.journal_question_answerer = GroqJournalQuestionAnswerer()
     app.state.deepgram_streaming_client = DeepgramStreamingClient(open_timeout=8)
     app.state.moment_extractor = MomentExtractor()
     app.state.pixellab_client = PixelLabClient()
@@ -95,6 +98,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
 
     from app.routers.calendar import router as calendar_router
     app.include_router(calendar_router)
+    app.include_router(journal_qa_router)
     app.include_router(entries_router)
     app.include_router(summaries_router)
     app.include_router(titles_router)
