@@ -9,6 +9,7 @@ an authenticated session cookie. POST also requires the configured Origin,
 | `POST /api/entries/{entry_id}/pixel-art` with `{}` | 201 new image; 200 existing image without another provider call |
 | `GET /api/entries/{entry_id}/pixel-art` | 200 image metadata |
 | `GET /api/entries/{entry_id}/pixel-art/content` | 200 private PNG bytes |
+| `GET /api/entries/pixel-art/recent?as_of=YYYY-MM-DD` | Image metadata on the latest seven occupied journal dates through `as_of` |
 
 Example generation response:
 
@@ -42,6 +43,94 @@ There are no automatic generation retries. A timeout can still incur a provider
 charge and cannot be recovered through this synchronous API. Retrying is a new
 explicit billable submission if no image was saved. Repeating a successful
 request returns existing metadata. Existing records are never silently replaced.
+
+## Dashboard: Moments in Pixels (U08)
+
+The Dashboard reuses its authenticated `GET /api/entries` result and existing
+local-day clock. It shows exactly seven consecutive calendar dates ending today,
+or ending on the date chosen in the gallery. Calendar month/date selection is
+independent. Today follows browser local midnight and focus/timezone changes;
+an earlier selected end date stays fixed. The date picker supports end dates
+from `1000-01-07` through today.
+
+The recent endpoint returns an array of `{journal_date, entry_id, image}` records,
+with the same image metadata as above. It selects the latest seven **occupied
+journal dates**, including dates without images, and returns all images on those
+dates. Those dates may span more than seven calendar days. The gallery filters
+the complete response to its calendar range and requires each image to match a
+loaded journal's ID and saved journal date. It does not truncate the response to
+seven records. Malformed or contradictory metadata is unavailable, with a refresh
+action, rather than a substitute illustration.
+
+Each day initially shows the image with the latest image `created_at`, breaking
+ties by journal creation time and ID. A day's expandable list links to every
+journal, identifies additional stored images, and lets the user choose which
+image to view. Only the currently selected thumbnail for each day is fetched;
+changing it releases the previous thumbnail. Empty dates and saved journals
+without an image have distinct labels. Captions come from the associated
+journal's first sentence, using the existing title helper.
+
+`apiPng()` is a binary companion to the JSON `api()` helper. It uses configured
+`API_URL`, session cookies, `cache: 'no-store'`, and rejects redirects. It accepts
+only canonical `/api/entries/{uuid}/pixel-art/content` paths. Metadata also binds
+that path to its entry ID. Successful responses must have PNG content type, a PNG
+signature, and a nonempty body of at most 2 MiB. The browser's decoder handles
+remaining PNG validation; decode failure offers an explicit retry. Images use
+temporary Blob object URLs, never public content URLs or localStorage. Request
+cancellation, authentication epochs, and component cleanup prevent late responses
+from replacing another period/account and revoke completed object URLs on logout,
+replacement, refresh, or unmount. A content 401 uses the existing global expired
+session handler. Gallery metadata and PNG requests have 30-second client deadlines
+and no automatic retry.
+
+Refresh memories reloads journals and metadata together, reconciling edits,
+moved dates, deletions, and changes made in another tab. The gallery is a snapshot;
+it does not subscribe to live server changes. Changing journal content invalidates
+its stored image on the backend; an already displayed snapshot is replaced on
+refresh or navigation. No generation action is included in this gallery. Opening,
+selecting dates/images, retrying reads, and refreshing make only GET requests.
+
+### Manual Dashboard verification
+
+Use a test account and fictional journals. Existing stored images are sufficient;
+the checks below do not require paid generation. If new provider images are
+needed, use the separate, explicitly billable verification procedure below.
+
+1. Open `/dashboard` with an empty test account. Confirm seven dated slots and
+   the empty-period message. Save fictional journals on some of those dates,
+   including two or more on one date. Refresh and distinguish `No journal` from
+   `No pixel image yet`; check every journal link.
+2. With existing stored images, check correct saved dates, crisp 128px thumbnails,
+   captions, latest-image selection, additional-image counts, and every `Show
+   image`/journal link in the expanded day. In DevTools, confirm metadata GET
+   uses `as_of`, PNG GETs include cookies, `<img>` uses `blob:` URLs, and no
+   generation POST occurs on any gallery action.
+3. Choose end dates across a month/year boundary and February 29 in a leap year.
+   Always count seven consecutive dates. Navigate Calendar independently, then
+   use Today in the gallery. Leave the current period open across local midnight,
+   or change the test browser's clock/timezone and refocus; verify it advances.
+4. Throttle the network, quickly change end dates, leave Dashboard, and log out
+   while images are pending. Sign in to a second test account. Confirm no previous
+   account images/captions appear and no late request repopulates the gallery.
+5. Use browser request interception to simulate metadata network failure and PNG
+   403/404/429/503/504 responses. Verify meaningful unavailable states, retained
+   journal links, and recovery only after explicit retry/refresh. Expire the test
+   session to check the existing sign-in redirect on 401. Test malformed metadata
+   and invalid PNG bytes without altering production data.
+6. Edit, redate, or delete a fictional journal in another tab, then refresh the
+   gallery. Verify the old placement/image disappears and content edits show a
+   saved journal without its invalidated image. Check Calendar, heatmap, streaks,
+   monthly overview, recent entries, History links, and weekly recap still work.
+7. At mobile and desktop widths (including 320px and 1440px), check that only the
+   gallery strip scrolls horizontally. Tab through date controls, thumbnails,
+   details, image selectors and retries; use Enter/Space on native controls and
+   confirm visible focus and meaningful screen-reader labels.
+
+Automated coverage lives in `tests/frontend-pixel-memories.test.js` and the
+Dashboard/Calendar regression suites. It uses fake transport/image bytes and
+component effect tests; it does not prove browser decoding, visual layout, or
+real PixelLab/Groq provider behavior. Run `npm run test:frontend` and
+`npm run build` from the repository root.
 
 ## Configuration and deployment
 
