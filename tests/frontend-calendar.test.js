@@ -9,9 +9,10 @@ import { build } from 'esbuild';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
-import { toDateKey } from '../src/frontend/src/lib/localDate.js';
-import { currentStreak, dateInMonth, groupEntriesByDay, HEATMAP, heatLevel, moodPresentation,
+import { parseDateKey, toDateKey } from '../src/frontend/src/lib/localDate.js';
+import { calendarKeyboardDate, currentStreak, dateInMonth, groupEntriesByDay, HEATMAP, heatLevel, moodPresentation,
   monthCells, monthKey, parseMonthKey, shiftMonth } from '../src/frontend/src/features/calendar/calendarModel.js';
+import { calendarViewParams, calendarViewState } from '../src/frontend/src/features/calendar/useCalendarView.js';
 
 const entry = (id, year, month, day, extra = {}) => ({ id, content: `Entry ${id}. More about this day.`,
   created_at: new Date(year, month - 1, day, 12).toISOString(), ...extra });
@@ -59,6 +60,69 @@ test('day grouping keeps complete entry objects, source ordering and invalid ent
   assert.equal(byDay.get('2026-11-12')[0], first);
   assert.equal(byDay.get('2026-11-12')[0].ai_summary, 'A note');
   assert.equal(byDay.has('NaN-NaN-NaN'), false);
+});
+
+test('Calendar uses saved journal dates for backdated entries and rejects malformed dates instead of normalizing them', () => {
+  const rows = [entry('backdated', 2026, 11, 12, { journal_date: '2024-02-29' }),
+    entry('same-day', 2026, 10, 1, { journal_date: '2024-02-29' }), entry('legacy', 2026, 11, 12, { journal_date: null }),
+    ...['2026-02-29', '2026-11-31', '2026-11-12T12:00:00Z', '', 20261112].map(journal_date => ({ journal_date, created_at: '2026-11-12T12:00:00Z' })),
+    ...['2026-02-30T12:00:00Z', '2026-11-12T24:00:00Z', '2026-11-12', '2026-11-12T12:00:00'].map(created_at => ({ created_at }))];
+  const { byDay, invalidCount } = groupEntriesByDay(rows);
+  assert.deepEqual(byDay.get('2024-02-29'), rows.slice(0, 2));
+  assert.deepEqual(byDay.get('2026-11-12'), [rows[2]]);
+  assert.equal(invalidCount, 9);
+  assert.equal(byDay.size, 2);
+});
+
+test('date-only URLs open their month, explicit months win conflicts, and Heatmap is the reliable default', () => {
+  const state = query => calendarViewState(new URLSearchParams(query), '2026-11-19');
+  assert.equal(monthKey(state('date=2024-02-29').month), '2024-02');
+  assert.equal(state('date=2024-02-29').selectedKey, '2024-02-29');
+  assert.equal(state('month=2026-10&date=2024-02-29').selectedKey, null);
+  assert.equal(monthKey(state('month=invalid&date=2024-02-29').month), '2024-02');
+  assert.equal(monthKey(state('date=2026-02-29').month), '2026-11');
+  assert.equal(state('').mode, 'heatmap');
+  assert.equal(state('mode=unknown').mode, 'heatmap');
+  assert.equal(state('mode=mood').mode, 'mood');
+});
+
+test('URL transitions retain and clamp selection, preserve unrelated params and stay stable through repeated actions', () => {
+  const today = '2026-11-19';
+  let params = new URLSearchParams('month=2026-01&date=2026-01-31&mode=heatmap&keep=private');
+  const update = action => { params = calendarViewParams(params, action, today); return calendarViewState(params, today); };
+  assert.equal(update({ type: 'month', month: '2026-02' }).selectedKey, '2026-02-28');
+  assert.equal(update({ type: 'month', month: '2026-03' }).selectedKey, '2026-03-28');
+  assert.equal(update({ type: 'date', key: '2024-02-29' }).selectedKey, '2024-02-29');
+  assert.equal(update({ type: 'month', month: '2025-02' }).selectedKey, '2025-02-28');
+  update({ type: 'mode', mode: 'mood' });
+  assert.equal(params.get('date'), '2025-02-28');
+  assert.equal(params.get('keep'), 'private');
+  const before = params.toString();
+  for (const action of [{ type: 'month', month: 'bad' }, { type: 'date', key: '2026-02-29' }, { type: 'mode', mode: 'bad' }]) {
+    update(action); assert.equal(params.toString(), before);
+  }
+  update({ type: 'date', key: '2025-02-28' });
+  assert.equal(params.toString(), before);
+  assert.equal(update({ type: 'today' }).selectedKey, today);
+  assert.equal(params.get('month'), '2026-11');
+  assert.equal(params.get('mode'), 'mood');
+  params = new URLSearchParams('month=2026-01&date=2026-01-01');
+  for (let i = 1; i <= 120; i++) update({ type: 'month', month: monthKey(shiftMonth(parseMonthKey('2026-01'), i)) });
+  assert.equal(params.get('date'), '2036-01-01');
+});
+
+test('calendar keyboard movements respect week, month, leap day, year and supported-year boundaries', () => {
+  const move = (key, day) => calendarKeyboardDate(parseDateKey(day), key);
+  for (const [key, day, expected] of [
+    ['ArrowLeft', '2026-01-01', '2025-12-31'], ['ArrowRight', '2026-12-31', '2027-01-01'],
+    ['ArrowUp', '2024-03-01', '2024-02-23'], ['ArrowDown', '2024-02-23', '2024-03-01'],
+    ['Home', '2026-11-01', '2026-11-01'], ['End', '2026-11-30', '2026-11-30'],
+    ['Home', '2026-11-19', '2026-11-16'], ['End', '2026-11-19', '2026-11-22'],
+    ['PageDown', '2024-01-31', '2024-02-29'], ['PageUp', '2026-03-31', '2026-02-28'],
+  ]) assert.equal(toDateKey(move(key, day)), expected);
+  assert.equal(move('ArrowLeft', '1000-01-01'), null);
+  assert.equal(move('ArrowRight', '9999-12-31'), null);
+  assert.equal(move('Enter', '2026-11-19'), null);
 });
 
 test('grouping follows local midnight and streaks use calendar days across DST in different timezones', () => {
@@ -198,5 +262,109 @@ test('Dashboard reads month, mode and selected day from URL and rejects invalid 
   assert.match(html, /Entries per day/);
   const invalid = render(DashboardPage, {}, '/dashboard?month=2026-10&date=2026-10-99&mode=invalid');
   assert.doesNotMatch(invalid, /dashboard-day-entries/);
-  assert.match(invalid, /Mood color legend/);
+  assert.match(invalid, /Entries per day/);
+});
+
+// Exercise real component event handlers and effects without a browser or an
+// extra DOM dependency. Refs expose only the focus operation Calendar uses.
+async function calendarInteraction(query, entries = []) {
+  const slots = [], focusCalls = [];
+  let cursor = 0, effects = [], dirty = false, tree, mounted = [];
+  let params = new URLSearchParams(query);
+  const hooks = { ...React,
+    useMemo: compute => compute(),
+    useState(initial) {
+      const index = cursor++;
+      slots[index] ??= { value: typeof initial === 'function' ? initial() : initial };
+      return [slots[index].value, value => {
+        const next = typeof value === 'function' ? value(slots[index].value) : value;
+        if (!Object.is(next, slots[index].value)) { slots[index].value = next; dirty = true; }
+      }];
+    },
+    useRef(value) { const index = cursor++; return slots[index] ??= { current: value }; },
+    useEffect(effect, deps) {
+      const index = cursor++, previous = slots[index];
+      if (!previous || deps.some((value, i) => !Object.is(previous[i], value))) {
+        effects.push(effect); slots[index] = deps;
+      }
+    },
+  };
+  const result = await build({ entryPoints: [fileURLToPath(new URL('../src/frontend/src/features/calendar/Calendar.jsx', import.meta.url))],
+    bundle: true, write: false, platform: 'node', format: 'cjs', packages: 'external', jsx: 'automatic' });
+  const module = { exports: {} }, require = createRequire(import.meta.url);
+  new Function('require', 'module', 'exports', result.outputFiles[0].text)(name => name === 'react' ? hooks : require(name), module, module.exports);
+  const Component = module.exports.default;
+  function nodes(value) {
+    if (Array.isArray(value)) return value.flatMap(child => nodes(child));
+    return React.isValidElement(value) ? [value, ...nodes(value.props.children)] : [];
+  }
+  function update(action) { params = calendarViewParams(params, action, '2024-03-19'); dirty = true; }
+  function render() {
+    for (let count = 0; count < 10; count++) {
+      dirty = false; cursor = 0; effects = [];
+      mounted.forEach(node => node.props.ref(null));
+      tree = Component({ ...calendarViewState(params, '2024-03-19'), todayKey: '2024-03-19',
+        byDay: groupEntriesByDay(entries).byDay, status: 'ready',
+        onMonthChange: date => update({ type: 'month', month: monthKey(date) }),
+        onSelectDate: key => update({ type: 'date', key }), onToday: () => update({ type: 'today' }),
+        onModeChange: mode => update({ type: 'mode', mode }),
+      });
+      mounted = nodes(tree).filter(node => typeof node.props.ref === 'function');
+      mounted.forEach(node => node.props.ref({ focus: () => focusCalls.push(node.props['data-date']) }));
+      effects.forEach(effect => effect());
+      if (!dirty) return;
+    }
+    assert.fail('Calendar effects failed to settle');
+  }
+  render();
+  return { nodes: () => nodes(tree), render, focusCalls, get params() { return params; },
+    day(key) { return nodes(tree).find(node => node.props['data-date'] === key); },
+    select(key) { update({ type: 'date', key }); render(); },
+  };
+}
+
+test('calendar keyboard handlers move the actual tab stop and focus across leap day and month changes', async () => {
+  const f = await calendarInteraction('month=2024-02&date=2024-02-28');
+  let prevented = 0;
+  f.day('2024-02-28').props.onKeyDown({ key: 'ArrowRight', preventDefault() { prevented++; } }); f.render();
+  assert.equal(f.day('2024-02-29').props.tabIndex, 0);
+  assert.equal(f.focusCalls.at(-1), '2024-02-29');
+  f.day('2024-02-29').props.onKeyDown({ key: 'ArrowRight', preventDefault() { prevented++; } }); f.render();
+  assert.equal(f.params.get('month'), '2024-03');
+  assert.equal(f.day('2024-03-01').props.tabIndex, 0);
+  assert.equal(f.focusCalls.at(-1), '2024-03-01');
+  assert.equal(prevented, 2);
+  assert.equal(f.nodes().filter(node => node.props['data-date'] && node.props.tabIndex === 0).length, 1);
+  const before = f.focusCalls.length;
+  f.select('2024-03-19');
+  assert.equal(f.day('2024-03-19').props.tabIndex, 0);
+  assert.equal(f.focusCalls.length, before); // Selection does not steal focus from the picker.
+});
+
+test('single-entry activation retains selection and modified clicks leave the current URL alone', async () => {
+  const f = await calendarInteraction('month=2024-03&mode=heatmap', [entry('one', 2024, 3, 1)]);
+  const day = f.day('2024-03-01');
+  assert.equal(day.props.to, '/journal/one');
+  for (const event of [{ button: 1 }, { button: 0, ctrlKey: true }, { button: 0, metaKey: true },
+    { button: 0, shiftKey: true }, { button: 0, altKey: true }, { button: 0, defaultPrevented: true }]) {
+    day.props.onClick(event); assert.equal(f.params.get('date'), null);
+  }
+  day.props.onClick({ button: 0 }); f.render();
+  assert.equal(f.params.get('date'), '2024-03-01');
+  assert.match(f.day('2024-03-01').props.className, /is-selected/);
+  f.nodes().find(node => node.type === 'input' && node.props.type === 'date').props.onChange({ target: { value: '2024-03-01' } }); f.render();
+  assert.equal(f.params.get('date'), '2024-03-01');
+});
+
+test('month picker, display toggle and Today share URL selection state', async () => {
+  const f = await calendarInteraction('month=2024-01&date=2024-01-31');
+  f.nodes().find(node => node.type === 'input' && node.props.type === 'month').props.onChange({ target: { value: '2024-02' } }); f.render();
+  assert.equal(f.params.get('date'), '2024-02-29');
+  f.nodes().find(node => node.type === 'button' && node.props.children === 'Mood').props.onClick(); f.render();
+  assert.equal(f.params.get('mode'), 'mood');
+  assert.equal(f.params.get('date'), '2024-02-29');
+  f.nodes().find(node => node.type === 'button' && node.props.children === 'Today').props.onClick(); f.render();
+  assert.equal(f.params.get('month'), '2024-03');
+  assert.equal(f.params.get('date'), '2024-03-19');
+  assert.equal(f.day('2024-03-19').props['aria-current'], 'date');
 });

@@ -10,7 +10,8 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { activitySummary, companionMessage, dashboardPreview, indexJournalDays, journalDayKey,
-  moodAnalytics, reflectionScope, weeklyActivity } from '../src/frontend/src/features/dashboard/dashboardModel.js';
+  monthlyActivity, moodAnalytics, reflectionScope, weeklyActivity } from '../src/frontend/src/features/dashboard/dashboardModel.js';
+import { groupEntriesByDay } from '../src/frontend/src/features/calendar/calendarModel.js';
 
 const row = (id, day, extra = {}) => ({ id, journal_date: day, created_at: `${day}T12:00:00Z`, content: `Memory ${id}. A small moment.`, ...extra });
 
@@ -47,12 +48,65 @@ test('streaks count distinct days through yesterday across years, while totals r
   const entries = [row('a', '2026-12-30'), row('b', '2026-12-31'), row('c', '2027-01-01'), row('d', '2027-01-01'),
     row('future', '2027-01-03'), row('old', '2026-05-01'), { id: 'undated' }];
   const summary = activitySummary(entries, indexJournalDays(entries).byDay, '2027-01-02', '2027-01');
-  assert.deepEqual(summary, { total: 7, current: { count: 3, throughKey: '2027-01-01' }, longest: 3, monthDays: 1 });
+  assert.deepEqual(summary, { total: 7, activeDays: 4, todayCount: 0, current: { count: 3, throughKey: '2027-01-01' }, longest: 3, monthDays: 1 });
   const empty = activitySummary([], new Map(), '2027-01-02', '2026-12');
   assert.equal(empty.longest, 0);
   assert.equal(empty.current.count, 0);
   const leap = ['2024-02-28', '2024-02-29', '2024-03-01'].map((day, i) => row(i, day));
   assert.equal(activitySummary(leap, indexJournalDays(leap).byDay, '2024-03-01', '2024-02').longest, 3);
+});
+
+test('Dashboard and Calendar share one day index without mutating entries or moving saved dates', () => {
+  assert.equal(indexJournalDays, groupEntriesByDay);
+  const entries = Object.freeze([Object.freeze(row('backdated', '2024-02-29', { created_at: '2026-11-19T12:00:00Z' })),
+    Object.freeze(row('invalid', '2026-02-30')), Object.freeze({ id: 'legacy', created_at: '2026-11-19T12:00:00Z' })]);
+  assert.deepEqual(indexJournalDays(entries), groupEntriesByDay(entries));
+  assert.equal(indexJournalDays(entries).invalidCount, 1);
+});
+
+test('monthly overview counts all saved dates, handles ties deterministically and keeps future activity separate', () => {
+  const entries = [row('late', '2026-11-12'), row('early', '2026-11-01'), row('late-again', '2026-11-12'),
+    row('early-again', '2026-11-01'), row('future', '2026-11-30'), row('previous', '2026-10-01')];
+  const byDay = indexJournalDays(entries).byDay;
+  const month = monthlyActivity(byDay, '2026-11', '2026-11-19');
+  assert.equal(month.count, 5);
+  assert.equal(month.activeDays, 3);
+  assert.equal(month.futureCount, 1);
+  assert.deepEqual(month.mostActive, { key: '2026-11-01', count: 2, tiedDays: 2 });
+  assert.deepEqual(month.comparison, { previousMonth: '2026-10', throughDay: 19, currentCount: 4, previousCount: 1, delta: 3 });
+  assert.equal(monthlyActivity(byDay, '2026-12', '2026-11-19').comparison, null);
+  assert.equal(monthlyActivity(new Map(), '2026-11', '2026-11-19').mostActive, null);
+});
+
+test('monthly comparisons use equal elapsed days through short months and whole historical months', () => {
+  for (const [year, last] of [[2024, 29], [2026, 28]]) {
+    const entries = [row('feb', `${year}-02-${last}`), row('march', `${year}-03-${last}`),
+      row('outside', `${year}-03-31`), row('april', `${year}-04-01`)];
+    const byDay = indexJournalDays(entries).byDay;
+    const current = monthlyActivity(byDay, `${year}-03`, `${year}-03-31`);
+    assert.equal(current.count, 2);
+    assert.equal(current.comparison.throughDay, last);
+    assert.equal(current.comparison.currentCount, 1);
+    assert.equal(current.comparison.previousCount, 1);
+    assert.equal(current.comparison.delta, 0);
+    const historical = monthlyActivity(byDay, `${year}-03`, `${year}-04-15`);
+    assert.equal(historical.comparison.throughDay, null);
+    assert.equal(historical.comparison.delta, 1);
+  }
+  const byDay = indexJournalDays([row('december', '2025-12-01'), row('january', '2026-01-01')]).byDay;
+  assert.equal(monthlyActivity(byDay, '2026-01', '2026-01-01').comparison.previousMonth, '2025-12');
+});
+
+test('reloading edited, moved or deleted entries rebuilds heatmap, monthly highlights and streaks', () => {
+  const original = [row('a', '2024-02-28'), row('b', '2024-02-29'), row('c', '2024-03-01')];
+  const moved = original.map(entry => entry.id === 'b' ? { ...entry, journal_date: '2024-03-01' } : entry);
+  const deleted = moved.filter(entry => entry.id !== 'a');
+  for (const [entries, longest, februaryDays, marchCount] of [[original, 3, 2, 1], [moved, 1, 1, 2], [deleted, 1, 0, 2]]) {
+    const byDay = indexJournalDays(entries).byDay;
+    assert.equal(activitySummary(entries, byDay, '2024-03-01', '2024-03').longest, longest);
+    assert.equal(monthlyActivity(byDay, '2024-02', '2024-03-01').activeDays, februaryDays);
+    assert.equal(monthlyActivity(byDay, '2024-03', '2024-03-01').count, marchCount);
+  }
 });
 
 test('weekly recap compares equal elapsed portions and keeps future sources separate from activity', () => {
