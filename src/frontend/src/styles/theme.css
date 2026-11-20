@@ -1,0 +1,165 @@
+/* Shared defaults also serve auth/session screens and the portaled account panel.
+   Existing page-specific Light values remain in their original stylesheets. */
+:root {
+  color-scheme: light;
+  --aj-bg: #f8f7f1;
+  --aj-surface: #fffefa;
+  --aj-elevated: #fffefa;
+  --aj-ink: #283d36;
+  --aj-body-text: #46564e;
+  --aj-muted: #64786b;
+  --aj-line: #dfe5dd;
+  --aj-green: #527d65;
+  --aj-green-dark: #356b51;
+  --aj-soft: #e3ece4;
+  --aj-hover: #d6e4d8;
+  --aj-focus: #356b51;
+  --aj-on-accent: #fffefa;
+  --aj-danger: #a33b32;
+  --aj-danger-soft: #fbefed;
+  --aj-danger-line: #ecd3cf;
+  --aj-success: #356b51;
+  --aj-sans: 'AuraJournal Record Inter', ui-sans-serif, system-ui, sans-serif;
+  --aj-serif: 'AuraJournal Record Cormorant', Georgia, serif;
+  background: var(--aj-bg);
+  color: var(--aj-ink);
+}
+
+/* :is() deliberately covers local token scopes in journal-pages/home/dashboard.
+   Themes load last so pages cannot reset the selected palette to Light. */
+:root[data-theme="dark"],
+:root[data-theme="dark"] :is(.aj-page, .home-page, .dashboard-page) {
+  color-scheme: dark;
+  --aj-bg: #1c2823;
+  --aj-surface: #26352d;
+  --aj-elevated: #2d3e34;
+  --aj-ink: #f0eee4;
+  --aj-body-text: #d1dacf;
+  --aj-muted: #b1c2b5;
+  --aj-line: #4a6051;
+  --aj-green: #a2c6ab;
+  --aj-green-dark: #bbd8bf;
+  --aj-soft: #344a3c;
+  --aj-hover: #405b49;
+  --aj-focus: #c0ddad;
+  --aj-on-accent: #1c3023;
+  --aj-danger: #f0b0a6;
+  --aj-danger-soft: #503630;
+  --aj-danger-line: #8d5b51;
+  --aj-success: #bbd8bf;
+  --tone-rose: #513c3a;
+  --tone-butter: #494632;
+  --tone-lavender: #453e51;
+  --tone-sky: #354654;
+  --tone-sage: #374e3e;
+}
+
+/* Shared surfaces and feedback. */
+:root[data-theme="dark"] :is(.app-shell, .record-page) { background: var(--aj-bg); color: var(--aj-ink); }
+:root[data-theme="dark"] textarea { background: var(--aj-surface); border-color: var(--aj-line); }
+:root[data-theme="dark"] :is(.aj-btn, .record-save, .floating-record) { color: var(--aj-on-accent); }
+:root[data-theme="dark"] .aj-btn:hover:not(:disabled) { background: var(--aj-green-dark); }
+:root[data-theme="dark"] :is(.aj-btn-outline, .aj-btn-quiet) { color: var(--aj-ink); }
+:root[data-theme="dark"] :is(.aj-btn-outline, .aj-btn-quiet):hover:not(:disabled) { background: var(--aj-hover); }
+:root[data-theme="dark"] :is(.aj-btn-danger, .aj-error, .dashboard-reflection-error, .record-page .record-error) { color: var(--aj-danger); }
+:root[data-theme="dark"] .aj-btn-danger { border-color: var(--aj-danger-line); }
+:root[data-theme="dark"] .aj-btn-danger:hover:not(:disabled) { background: var(--aj-danger-soft); }
+:root[data-theme="dark"] .aj-btn-danger-solid { background: var(--aj-danger); }
+:root[data-theme="dark"] .aj-btn-danger-solid:hover:not(:disabled) { background: #f7c8ba; }
+:root[data-theme="dark"] .aj-state-error { border-color: var(--aj-danger-line); }
+:root[data-theme="dark"] .aj-state-error .aj-state-icon { background: var(--aj-danger-soft); }
+:root[data-theme="dark"] :is(.journal-card-body p, .entry-note-question, .entry-note-empty p, .memory-caption, .aj-dialog blockquote) { color: var(--aj-body-text); }
+:root[data-theme="dark"] :is(.aj-state, .memory-art-empty, .aj-dialog blockquote) { border-color: var(--aj-line); }
+:root[data-theme="dark"] .journal-card-top h3 { border-color: var(--aj-line); }
+:root[data-theme="dark"] .recent-paper-line { background: var(--aj-line); }
+:root[data-theme="dark"] :is(.aj-back:hover, .recent-card:hover) { background-color: var(--aj-hover); border-color: var(--aj-line); }
+:root[data-theme="dark"] .memory-art { color: var(--aj-muted); }
+:root[data-theme="dark"] .aj-skeleton { background-image: linear-gradient(90deg, var(--aj-surface) 25%, var(--aj-soft) 50%, var(--aj-surface) 75%); }
+:root[data-theme="dark"] :is(.aj-notice, .status) { color: var(--aj-success); }
+:root[data-theme="dark"] :is(input, textarea)::placeholder { color: var(--aj-muted); opacity: 1; }
+
+/* Main keeps its layout, typography, and gentle recording halo. */
+:root[data-theme="dark"] :is(.home-nav a, .home-date-label, .home-page .home-date h1, .home-page .home-write-link,
+  .home-page .home-text-button, .home-notice, .home-streak, .home-section-head a, .home-empty a) { color: var(--aj-green-dark); }
+:root[data-theme="dark"] :is(.home-companion > p, .record-page .record-mascot-speech) { background: var(--aj-surface); color: var(--aj-ink); }
+:root[data-theme="dark"] :is(.home-journey, .home-footer, .home-page .home-recent .journal-card) { border-color: var(--aj-line); }
+:root[data-theme="dark"] .home-record-halo { background: var(--aj-soft); }
+:root[data-theme="dark"] .home-record-circle { background: #709a7b; }
+:root[data-theme="dark"] .home-record-link:hover .home-record-halo { background: var(--aj-hover); }
+:root[data-theme="dark"] .home-record-link:hover .home-record-circle { background: #86ad8f; }
+:root[data-theme="dark"] .home-calendar-day.has-entries { background: var(--aj-soft); color: var(--aj-ink); }
+:root[data-theme="dark"] .home-calendar a.home-calendar-day:hover { background: var(--aj-hover); }
+:root[data-theme="dark"] .home-calendar-day.is-today { outline-color: var(--aj-focus); }
+:root[data-theme="dark"] .home-activity-dot { background: var(--aj-green); }
+
+/* Dashboard: data colors stay unchanged. Dark ink remains on pastel cells/badges. */
+:root[data-theme="dark"] .dashboard-page :is(.calendar-mode button, .calendar-navigation button) { background: var(--aj-soft); color: var(--aj-ink); }
+:root[data-theme="dark"] .dashboard-page .calendar-mode button[aria-pressed="true"] { background: var(--aj-green); color: var(--aj-on-accent); }
+:root[data-theme="dark"] .dashboard-page .calendar-mode button:last-child[aria-pressed="true"] { background: #d6acbf; color: #30262b; }
+:root[data-theme="dark"] .dashboard-page .calendar-day,
+:root[data-theme="dark"] .dashboard-page .calendar-day:disabled,
+:root[data-theme="dark"] .dashboard-recent-open > span { color: #283d36; }
+:root[data-theme="dark"] .dashboard-page .calendar-day:is(.is-today, :hover:not(:disabled)) { border-color: #356b51; }
+:root[data-theme="dark"] .dashboard-page .calendar-day.is-selected { box-shadow: inset 0 0 0 2px #356b51; }
+:root[data-theme="dark"] :is(.dashboard-week, .dashboard-period) { background: var(--aj-soft); }
+:root[data-theme="dark"] .dashboard-page :is(.calendar-text-action, .dashboard-text-action, .dashboard-week-days button.has-entries,
+  .dashboard-period button[aria-pressed="true"], .dashboard-recent-open) { color: var(--aj-green-dark); }
+:root[data-theme="dark"] :is(.dashboard-reflection-invite, .dashboard-reflection-result, .dashboard-reflection-error) { border-color: var(--aj-line); }
+:root[data-theme="dark"] :is(.dashboard-mood-track, .dashboard-mood-timeline .dashboard-mood-gap) { background: var(--aj-soft); }
+:root[data-theme="dark"] .dashboard-recent-open > .dashboard-mood-missing { color: var(--aj-muted); }
+:root[data-theme="dark"] .pixel-memory-art { background: var(--aj-soft); border-color: var(--aj-line); }
+:root[data-theme="dark"] :is(.pixel-memory-empty, .pixel-generation-status) { background: var(--aj-bg); }
+:root[data-theme="dark"] .pixel-memory-empty.has-journal { background: var(--tone-lavender); }
+:root[data-theme="dark"] .pixel-memory-art > span { color: var(--aj-muted); }
+:root[data-theme="dark"] :is(.pixel-memory-more summary, .pixel-memories :is(.pixel-memory-more, .pixel-memory-failure, .pixel-memory-status) button) { color: var(--aj-green-dark); }
+:root[data-theme="dark"] .pixel-memories button.pixel-generate-button { background: var(--aj-soft); border-color: var(--aj-line); color: var(--aj-green-dark); }
+
+/* Navigation rail and drawer. */
+:root[data-theme="dark"] :is(.app-sidebar, .shell-navigation-dialog) { background: var(--aj-surface); color: var(--aj-ink); }
+:root[data-theme="dark"] :is(.sidebar-link, .app-sidebar .sidebar-pin, .app-sidebar .sidebar-close, .sidebar-note) { color: var(--aj-green-dark); }
+:root[data-theme="dark"] .sidebar-link .sidebar-label { color: var(--aj-ink); }
+:root[data-theme="dark"] :is(.sidebar-link:hover, .sidebar-close:hover, .sidebar-pin:hover) { background: var(--aj-soft); }
+:root[data-theme="dark"] .sidebar-link.is-active { background: var(--aj-hover); color: var(--aj-ink); }
+:root[data-theme="dark"] .app-sidebar .sidebar-secondary { border-color: var(--aj-line); }
+:root[data-theme="dark"] :is(.shell-mobile-toggle, .shell-skip) { background: var(--aj-soft); color: var(--aj-ink); }
+:root[data-theme="dark"] .floating-record { background: var(--aj-green); }
+:root[data-theme="dark"] .floating-record:hover { background: var(--aj-green-dark); }
+
+/* Record's background layers and concentric recording visuals remain distinct.
+   Image assets keep their pixels; a background gradient supplies text readability. */
+:root[data-theme="dark"] .record-background { background: #202e27; }
+:root[data-theme="dark"] .record-background::before { background: rgb(65 89 69 / 50%); }
+:root[data-theme="dark"] .record-background::after { background: rgb(168 152 96 / 12%); }
+:root[data-theme="dark"] .record-page[data-has-record-image="true"] .record-background::before {
+  inset: 0; z-index: 1; background: linear-gradient(180deg, rgb(28 40 35 / 82%), rgb(28 40 35 / 72%) 35%, #1c2823);
+}
+:root[data-theme="dark"] .record-orbit { background: #304836; }
+:root[data-theme="dark"] .record-orbit::before { background: #47684e; }
+:root[data-theme="dark"] .record-page .record-trigger { background: #739a7e; }
+:root[data-theme="dark"] .record-page .record-sidebar-toggle { background: var(--aj-surface); color: var(--aj-green); }
+:root[data-theme="dark"] :is(.record-transcript, .record-page .record-action) { color: var(--aj-ink); }
+:root[data-theme="dark"] .record-page .record-action { background: var(--aj-surface); border-color: var(--aj-line); }
+:root[data-theme="dark"] .record-page .record-save { background: var(--aj-green); color: var(--aj-on-accent); }
+:root[data-theme="dark"] :is(.record-brand p, .record-interim, .record-transcript-hint, .record-duration,
+  .record-page .record-draft-help, .record-journal-link, .record-back, .record-page .record-feedback) { color: var(--aj-muted); }
+:root[data-theme="dark"] .record-page .record-error { color: var(--aj-danger); }
+
+/* Explicit focus wins over older page-specific rules. */
+:root[data-theme="dark"] :is(a, button, input, select, textarea, summary, [tabindex]):focus-visible,
+:root[data-theme="dark"] .record-editor:focus { outline: 3px solid var(--aj-focus); outline-offset: 3px; }
+
+/* Use the same semantic palette for the existing authentication design. */
+:root[data-theme="dark"] .login {
+  color-scheme: dark;
+  --background: var(--aj-bg);
+  --foreground: var(--aj-ink);
+  --card: var(--aj-surface);
+  --primary: var(--aj-green);
+  --primary-foreground: var(--aj-on-accent);
+  --muted: var(--aj-soft);
+  --muted-foreground: var(--aj-muted);
+  --destructive: var(--aj-danger);
+  --border: var(--aj-line);
+  --input: var(--aj-line);
+  --ring: var(--aj-focus);
+}

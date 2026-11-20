@@ -23,16 +23,7 @@
 .home-nav { display: flex; flex-wrap: wrap; gap: 26px; }
 .home-nav a { padding-block: 10px; font-size: 12px; text-decoration: none; color: #52695c; }
 .home-nav a:hover, .home-section-head a:hover { color: var(--aj-green-dark); text-decoration: underline; text-underline-offset: 5px; }
-.home-account { position: relative; z-index: 2; }
-.home-account summary {
-  display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%;
-  background: #cee1d3; color: #365f49; font: 600 24px var(--aj-serif); cursor: pointer; list-style: none;
-}
-.home-account summary::-webkit-details-marker { display: none; }
-.home-account summary:focus-visible, .home-page button:focus-visible { outline: 2px solid var(--aj-green-dark); outline-offset: 4px; }
-.home-account-menu { position: absolute; right: 0; top: 56px; width: min(280px, calc(100vw - 40px)); padding: 22px; background: #fffefa; border: 1px solid var(--aj-line); border-radius: 16px; box-shadow: 0 10px 35px rgb(40 61 54 / 9%); }
-.home-account-menu > span { color: var(--aj-muted); font-size: 12px; }
-.home-account-menu p { overflow-wrap: anywhere; line-height: 1.5; margin: 8px 0 18px; }
+.home-page button:focus-visible { outline: 2px solid var(--aj-green-dark); outline-offset: 4px; }
 .home-invitation { position: relative; max-width: 1450px; margin: 0 auto; padding: 12px 0 20px; display: flex; flex-direction: column; align-items: center; text-align: center; }
 .home-date { display: flex; flex-direction: column; align-items: center; }
 .home-date time { display: flex; flex-direction: column; align-items: center; }

@@ -50,7 +50,7 @@ function DashboardContent({ user }) {
   return (
     <main className="aj-page dashboard-page">
       <div className="aj-inner">
-        <PageHeader initial={user.email[0]?.toUpperCase()} />
+        <PageHeader />
         <header className="aj-title dashboard-title">
           <div><h1>Your journey</h1><p>Every day tells a story. Here’s yours.</p></div>
         </header>

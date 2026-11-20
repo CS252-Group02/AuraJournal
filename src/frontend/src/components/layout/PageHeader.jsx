@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
+import AccountMenu from './AccountMenu.jsx';
 
-export default function PageHeader({ initial }) {
+export default function PageHeader() {
   return (
     <div className="aj-topbar">
       <nav className="aj-breadcrumb" aria-label="Breadcrumb">
@@ -8,7 +9,7 @@ export default function PageHeader({ initial }) {
         <span aria-hidden="true">/</span>
         <span>Your private space</span>
       </nav>
-      {initial && <span className="aj-avatar" aria-hidden="true">{initial}</span>}
+      <AccountMenu />
     </div>
   );
 }

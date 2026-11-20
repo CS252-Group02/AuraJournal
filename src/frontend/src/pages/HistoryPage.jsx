@@ -142,7 +142,7 @@ export default function HistoryPage() {
   return (
     <main className="aj-page history-page">
       <div className="aj-inner">
-        <PageHeader initial={user.email[0]?.toUpperCase()} />
+        <PageHeader />
         <header className="aj-title">
           <h1>Your journal history</h1>
         </header>

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { api, changeAuthEpoch } from '../lib/api.js';
 
@@ -7,8 +7,9 @@ export function useAuth() { return useContext(AuthContext); }
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState('Loading your account…');
   const [error, setError] = useState('');
+  const loggingOut = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -37,8 +38,10 @@ export function AuthProvider({ children }) {
   }
 
   async function logout() {
+    if (loggingOut.current) return;
+    loggingOut.current = true;
     changeAuthEpoch();
-    setLoading(true);
+    setLoading('Logging out…');
     setUser(null);
     setError('');
     try {
@@ -46,11 +49,12 @@ export function AuthProvider({ children }) {
     } catch {
       setError('Logout could not be confirmed by the server. Retry before leaving this browser.');
     } finally {
+      loggingOut.current = false;
       setLoading(false);
     }
   }
 
-  if (loading) return <main className="page" role="status">Loading your account…</main>;
+  if (loading) return <main className="page" role="status">{loading}</main>;
   if (error) return (
     <main className="page" role="alert">
       <p>{error}</p>
