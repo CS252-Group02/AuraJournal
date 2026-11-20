@@ -119,7 +119,31 @@ def test_messages_in_wrong_protocol_phase_never_complete(setup, phase):
 @pytest.mark.parametrize("phase,code", [("start", "timeout"), ("recording", "limit_exceeded")])
 def test_start_and_recording_deadlines_are_bounded(setup, monkeypatch, phase, code):
     client, provider, connector, _, _ = setup
-    monkeypatch.setattr(transcriptions, "START_TIMEOUT" if phase == "start" else "MAX_RECORDING_SECONDS", 0.02)
+    if phase == "start":
+        monkeypatch.setattr(transcriptions, "START_TIMEOUT", 0.02)
+    else:
+        # Exercise the recording timeout only after the handshake has finished.
+        # A 20 ms wall-clock deadline can expire before `started` on busy runners.
+        recording_started = asyncio.Event()
+        original_send = transcriptions._send
+
+        async def observe_started(websocket, event):
+            await original_send(websocket, event)
+            if event["type"] == "started":
+                recording_started.set()
+
+        async def wait_for_recording_deadline(tasks, *, timeout=None,
+                                              return_when=asyncio.ALL_COMPLETED):
+            if timeout == transcriptions.MAX_RECORDING_SECONDS:
+                await recording_started.wait()
+                timeout = 0
+            return await asyncio.wait(tasks, timeout=timeout, return_when=return_when)
+
+        # Keep the override local to the router, leaving asyncio and the test
+        # client's scheduling untouched.
+        monkeypatch.setattr(transcriptions, "asyncio", SimpleNamespace(
+            **(vars(asyncio) | {"wait": wait_for_recording_deadline})))
+        monkeypatch.setattr(transcriptions, "_send", observe_started)
     with client.websocket_connect(PATH, headers=ORIGIN.copy()) as ws:
         ready = ws.receive_json()
         if phase == "recording":
