@@ -33,13 +33,11 @@
 .aj-page label { display: block; margin: 0; font-weight: inherit; }
 .aj-page time { color: inherit; font-size: inherit; }
 .aj-page a { color: inherit; }
+.aj-page a.aj-btn:not(.aj-btn-outline, .aj-btn-quiet) { color: var(--aj-on-accent, #fffdf8); }
 
 .aj-page .aj-kicker { display: inline-block; color: var(--aj-green-dark); font-size: .72rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
 
-.aj-topbar { display: flex; align-items: center; justify-content: space-between; min-height: 44px; margin-bottom: 28px; }
-.aj-breadcrumb { display: flex; gap: 10px; color: var(--aj-muted); font-size: .78rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
-.aj-breadcrumb a { text-decoration: none; }
-.aj-breadcrumb a:hover { color: var(--aj-green-dark); }
+.aj-topbar { display: flex; align-items: center; justify-content: flex-end; min-height: 44px; margin-bottom: 28px; }
 
 .aj-page .aj-title { margin-bottom: 28px; }
 .aj-title h1 { font-size: clamp(2rem, 5vw, 3rem); line-height: 1.15; }
@@ -198,7 +196,6 @@ a.memory-tile:hover .memory-art { outline: 2px solid #b9cdb9; outline-offset: 2p
   .entry-paper { padding: 26px 22px; }
   .reflection-story { padding: 24px; }
   .memory-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .aj-breadcrumb span { display: none; }
 }
 
 .saved-reflection { display: grid; gap: 22px; margin-top: 28px; padding: 32px 36px; border: 1px solid var(--aj-line); border-radius: 6px; background: var(--aj-surface); }

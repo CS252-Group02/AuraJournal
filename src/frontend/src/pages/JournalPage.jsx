@@ -83,7 +83,6 @@ function HomeContent() {
   return (
     <main className="aj-page home-page" onClickCapture={protectDraft}>
       <header className="home-header">
-        <Link className="home-brand" to="/">AuraJournal <span>/ Your private space</span></Link>
         <nav className="home-nav" aria-label="Your journal">
           <Link to="/dashboard">Dashboard</Link><Link to="/history">History</Link><Link to="/reflection">Weekly recap</Link>
         </nav>

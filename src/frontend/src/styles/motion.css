@@ -1,0 +1,81 @@
+:root {
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-exit: cubic-bezier(0.55, 0, 1, 0.45);
+}
+
+.page-move[data-direction="forward"] { animation: page-in-right 340ms var(--ease-drawer) backwards; }
+.page-move[data-direction="back"] { animation: page-in-left 340ms var(--ease-drawer) backwards; }
+@keyframes page-in-right { from { opacity: 0; translate: 48px 0; } }
+@keyframes page-in-left { from { opacity: 0; translate: -48px 0; } }
+@keyframes rise { from { opacity: 0; translate: 0 10px; filter: blur(4px); } }
+
+.page-move > .aj-page > .aj-inner > *, .page-move > .home-page > * { animation: rise 520ms var(--ease-drawer) backwards; }
+.page-move > .aj-page > .aj-inner > :nth-child(2), .page-move > .home-page > :nth-child(2) { animation-delay: 70ms; }
+.page-move > .aj-page > .aj-inner > :nth-child(n + 3), .page-move > .home-page > :nth-child(n + 3) { animation-delay: 140ms; }
+
+.aj-btn, .login-button, .account-action, .appearance-toggle button, .dashboard-period button, .calendar-mode button {
+  transition: background-color 150ms, color 150ms, border-color 150ms, scale 150ms;
+}
+.aj-btn:active:not(:disabled), .account-action:active:not(:disabled) { scale: .97; }
+
+.has-pill { position: relative; }
+.has-pill > button { position: relative; z-index: 1; }
+.appearance-toggle.has-pill > button[aria-pressed="true"],
+.dashboard-page .dashboard-period.has-pill > button[aria-pressed="true"] { background: transparent; box-shadow: none; }
+.aj-pill {
+  position: absolute; top: 0; left: 0; z-index: 0; border-radius: 4px; pointer-events: none; opacity: 0;
+  transition: translate 300ms var(--ease-drawer), width 300ms var(--ease-drawer), opacity 150ms;
+}
+.appearance-toggle .aj-pill { background: var(--aj-elevated); box-shadow: 0 1px 3px rgb(20 35 27 / 12%); }
+.dashboard-period .aj-pill { background: var(--aj-surface); }
+.dashboard-page .calendar-mode.has-pill { gap: 4px; padding: 4px; border-radius: 4px; background: #f8f7f1; }
+.dashboard-page .calendar-mode.has-pill > button { min-height: 36px; background: transparent; }
+.dashboard-page .calendar-mode.has-pill > button[aria-pressed="true"] { background: transparent; }
+.calendar-mode .aj-pill { transition: translate 300ms var(--ease-drawer), width 300ms var(--ease-drawer), background-color 300ms var(--ease-drawer), opacity 150ms; }
+.calendar-mode .aj-pill[data-tone="mood"] { background: #dceade; }
+.calendar-mode .aj-pill[data-tone="heatmap"] { background: #f6d9e5; }
+:root[data-theme="dark"] .dashboard-page .calendar-mode.has-pill { background: var(--aj-soft); }
+:root[data-theme="dark"] .dashboard-page .calendar-mode.has-pill > button { background: transparent; }
+:root[data-theme="dark"] .dashboard-page .calendar-mode.has-pill > button[aria-pressed="true"] { background: transparent; }
+:root[data-theme="dark"] .calendar-mode .aj-pill[data-tone="mood"] { background: var(--aj-green); }
+:root[data-theme="dark"] .calendar-mode .aj-pill[data-tone="heatmap"] { background: #d6acbf; }
+
+.account-panel { transform-origin: top right; animation: menu-in 240ms var(--ease-drawer); }
+.account-panel.is-leaving { animation: menu-out 110ms var(--ease-exit) forwards; }
+@keyframes menu-in { from { opacity: 0; translate: 0 4px; scale: .94; } }
+@keyframes menu-out { to { opacity: 0; translate: 0 4px; scale: .96; } }
+
+.history-sort > span { transition: opacity 280ms var(--ease-drawer), translate 280ms var(--ease-drawer), filter 280ms var(--ease-drawer); }
+.history-sort > span[aria-hidden="true"] { visibility: visible; opacity: 0; translate: 0 -6px; filter: blur(4px); transition-duration: 160ms; transition-timing-function: var(--ease-exit); }
+.history-refreshing .history-grid { transition: opacity 200ms var(--ease-drawer); }
+.history-page section[aria-labelledby="all-heading"] { position: relative; }
+
+.aj-dialog, .aj-dialog::backdrop, .confirm-dialog, .confirm-dialog::backdrop {
+  opacity: 0;
+  transition: opacity 120ms var(--ease-exit), scale 120ms var(--ease-exit), display 120ms allow-discrete, overlay 120ms allow-discrete;
+}
+.aj-dialog, .confirm-dialog { scale: .97; }
+.aj-dialog[open], .aj-dialog[open]::backdrop, .confirm-dialog[open], .confirm-dialog[open]::backdrop {
+  opacity: 1; transition-duration: 200ms, 260ms, 0s, 0s; transition-timing-function: ease-out, var(--ease-drawer);
+}
+.aj-dialog[open], .confirm-dialog[open] { scale: 1; }
+@starting-style {
+  .aj-dialog[open], .aj-dialog[open]::backdrop, .confirm-dialog[open], .confirm-dialog[open]::backdrop { opacity: 0; }
+  .aj-dialog[open], .confirm-dialog[open] { scale: .96; }
+}
+
+.shell-navigation-dialog[open] { animation: drawer-in 300ms var(--ease-drawer); }
+.shell-navigation-dialog[open]::backdrop { animation: fade-in 260ms var(--ease-drawer); }
+@keyframes drawer-in { from { opacity: 0; translate: -24px 0; } }
+@keyframes fade-in { from { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after, ::backdrop {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+  }
+}

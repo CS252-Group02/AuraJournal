@@ -157,7 +157,7 @@ test('account menu, appearance, and existing guards work in a real browser', {
     await browser.call('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 400, y: 400, button: 'left', clickCount: 1 });
     assert.equal(await evaluate("document.querySelector('.account-panel')"), null);
     await openMenu();
-    await evaluate("document.querySelector('.aj-breadcrumb a').focus()");
+    await evaluate("document.querySelector('.sidebar-link').focus()");
     assert.equal(await evaluate("document.querySelector('.account-panel')"), null);
   });
 

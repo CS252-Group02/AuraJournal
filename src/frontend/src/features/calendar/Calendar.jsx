@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { parseDateKey, toDateKey } from '../../lib/localDate.js';
 import { calendarKeyboardDate, HEATMAP, heatLevel, moodPresentation, MOODS, monthCells, monthKey, parseMonthKey, shiftMonth } from './calendarModel.js';
+import SlidingPill from '../../components/ui/SlidingPill.jsx';
 
 const EMPTY_MOODS = new Map();
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -51,7 +52,8 @@ export default function Calendar({ month, todayKey, selectedKey, mode, byDay, st
     <section className="calendar" aria-label="Journal calendar">
       <div className="calendar-heading">
         <h2 id="calendar-month" aria-live="polite" aria-atomic="true">{monthLabel}</h2>
-        <div className="calendar-mode" role="group" aria-label="Calendar display">
+        <div className="calendar-mode has-pill" role="group" aria-label="Calendar display">
+          <SlidingPill active={mode} tone={mode} />
           <button type="button" aria-pressed={mode === 'mood'} onClick={() => onModeChange('mood')}>Mood</button>
           <button type="button" aria-pressed={mode === 'heatmap'} onClick={() => onModeChange('heatmap')}>Heatmap</button>
         </div>

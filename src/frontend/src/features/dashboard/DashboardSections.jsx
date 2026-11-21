@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import JournalCompanion from '../../components/ui/JournalCompanion.jsx';
+import SlidingPill from '../../components/ui/SlidingPill.jsx';
 import { moodPresentation, MOODS } from '../calendar/calendarModel.js';
 import { entryTitle } from '../journal/entryText.js';
 import { weekLabel } from '../reflection/week.js';
@@ -111,7 +112,7 @@ export function MoodAnalytics({ byDay, todayKey, status, timezone, moodsByEntry 
   const analytics = useMemo(() => moodAnalytics(byDay, todayKey, period, moodsByEntry), [byDay, todayKey, period, moodsByEntry, timezone]);
   return <section className="dashboard-moods" aria-labelledby="dashboard-moods-heading" aria-busy={status === 'loading'}>
     <div className="dashboard-section-heading"><h2 id="dashboard-moods-heading">Moods</h2>
-      <div className="dashboard-period" role="group" aria-label="Mood analytics period">{[7, 30].map(days => <button type="button" key={days}
+      <div className="dashboard-period has-pill" role="group" aria-label="Mood analytics period"><SlidingPill active={period} />{[7, 30].map(days => <button type="button" key={days}
         aria-pressed={period === days} disabled={status !== 'ready'} onClick={() => setPeriod(days)}>{days} days</button>)}</div>
     </div>
     {status !== 'ready' ? <PendingSection status={status} /> : <>

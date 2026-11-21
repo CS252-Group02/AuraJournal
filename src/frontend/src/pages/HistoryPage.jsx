@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 
 import { useAuth } from '../auth/Auth.jsx';
@@ -9,6 +9,7 @@ import { entryPreview, entryTitle, readMinutes } from '../features/journal/entry
 import { entrySearchPath, hasServerFilters, invalidRange, readSearchParams } from '../features/journal/journalSearch.js';
 import { getLastOpened } from '../features/journal/recentlyOpened.js';
 import { useJournalEntries } from '../features/journal/useJournalEntries.js';
+import { useFlip } from '../lib/motion.js';
 
 const FILTERS = { all: 'All entries', ai: 'With AI reflection' };
 
@@ -106,6 +107,10 @@ export default function HistoryPage() {
     () => listed.filter((entry) => filter !== 'ai' || entry.ai_summary),
     [listed, filter],
   );
+  const resultsBox = useRef(null);
+  useFlip(resultsBox, visible.map((entry) => entry.id).join(','), {
+    selector: '.journal-card', keyOf: (element) => element.getAttribute('href'),
+  });
 
   const lastOpened = getLastOpened(user.id);
   const recentEntry = lastOpened && all.entries.find((entry) => entry.id === lastOpened.id);
@@ -145,7 +150,7 @@ export default function HistoryPage() {
     content = (
       <>
         {recentEntry && !searching && <RecentlyOpened entry={recentEntry} openedAt={lastOpened.openedAt} />}
-        <section aria-labelledby="all-heading" aria-busy={refreshing} className={refreshing ? 'history-refreshing' : undefined}>
+        <section ref={resultsBox} aria-labelledby="all-heading" aria-busy={refreshing} className={refreshing ? 'history-refreshing' : undefined}>
           <div className="aj-section-head">
             <h2 id="all-heading">{searching ? 'Results' : 'All entries'}</h2>
             <span className="visually-hidden" role="status">
