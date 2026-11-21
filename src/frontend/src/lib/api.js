@@ -11,10 +11,10 @@ export function subscribeAuthChanges(listener) {
   return () => authListeners.delete(listener);
 }
 
-export async function api(path, { method = 'GET', body, signal, idempotencyKey } = {}) {
+export async function api(path, { method = 'GET', body, signal, idempotencyKey, cache } = {}) {
   const started = epoch;
   const response = await fetch(`${API_URL}${path}`, {
-    method, credentials: 'include', signal,
+    method, credentials: 'include', signal, ...(cache ? { cache } : {}),
     headers: { 'Content-Type': 'application/json', 'X-AuraJournal-CSRF': '1',
       ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),

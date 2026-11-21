@@ -1,11 +1,18 @@
 import { api, apiPng, getAuthEpoch, subscribeAuthChanges } from '../../lib/api.js';
-import { memoryDates } from './pixelMemoriesModel.js';
+import { hasPendingMemories, memoryDates, validateMemoryFeed, validateMemoryJournals } from './pixelMemoriesModel.js';
 
-export async function fetchRecentMemories(asOf, { signal } = {}) {
+export const MEMORY_POLL_INTERVAL = 5000;
+export const MEMORY_POLL_WINDOW = 120000;
+
+export async function fetchMemoryFeed(asOf, { signal } = {}) {
   memoryDates(asOf);
-  const records = await api(`/api/entries/pixel-art/recent?as_of=${encodeURIComponent(asOf)}`, { signal });
-  if (!Array.isArray(records)) throw new Error('Invalid pixel memory metadata.');
-  return records;
+  return validateMemoryFeed(await api(`/api/entries/pixel-art/memories?as_of=${encodeURIComponent(asOf)}`,
+    { signal, cache: 'no-store' }), asOf);
+}
+
+export async function fetchMemoryJournals({ signal, asOf } = {}) {
+  const dates = memoryDates(asOf);
+  return validateMemoryJournals(await api(`/api/entries?start=${dates[0]}&end=${asOf}`, { signal, cache: 'no-store' }));
 }
 
 export function pixelMemoryError(error) {
@@ -20,37 +27,98 @@ export function pixelMemoryError(error) {
   }
 }
 
-export function createMemoriesLoader({ onChange, request = fetchRecentMemories,
-  subscribe = subscribeAuthChanges, getEpoch = getAuthEpoch }) {
-  let version = 0, controller, unsubscribe, timer;
-  function cancel() {
-    version++;
-    controller?.abort();
-    clearTimeout(timer);
-    unsubscribe?.();
-    controller = unsubscribe = undefined;
+// Only reads. A polling window belongs to one date range and auth epoch.
+// Unchanged feeds reuse the snapshot and never repeat the journal-list request.
+export function createMemoriesLoader({ onChange, request = fetchMemoryFeed, requestEntries = fetchMemoryJournals,
+  subscribe = subscribeAuthChanges, getEpoch = getAuthEpoch, visibility = globalThis.document,
+  focus = globalThis.window, now = Date.now, setTimer = setTimeout, clearTimer = clearTimeout }) {
+  let version = 0, sequence = 0, controller, pollTimer, requestTimer, windowTimer, unsubscribe;
+  let asOf, epoch, expires = 0, data = null, fingerprint = null, watching = false, running = false;
+  const visible = () => visibility?.visibilityState !== 'hidden';
+  const publish = (status, extra = {}) => onChange({ asOf, status, data, refreshing: false, windowExpired: false, ...extra });
+  function abortRead() {
+    sequence++;
+    controller?.abort(); controller = undefined;
+    clearTimer(requestTimer); clearTimer(pollTimer);
   }
-  async function load(asOf) {
-    cancel();
-    const current = version, epoch = getEpoch(), pending = new AbortController();
-    controller = pending;
-    unsubscribe = subscribe(() => { cancel(); onChange({ status: 'expired' }); });
-    timer = setTimeout(() => {
-      cancel();
-      onChange({ status: 'error', error: 'The memory request timed out. Please try again.' });
-    }, 30000);
-    const active = () => current === version && !pending.signal.aborted && epoch === getEpoch();
-    onChange({ status: 'loading' });
-    try {
-      const records = await request(asOf, { signal: pending.signal });
-      if (active()) onChange({ status: 'ready', records });
-    } catch (error) {
-      if (active()) onChange({ status: 'error', error: pixelMemoryError(error) });
-    } finally {
-      if (current === version) clearTimeout(timer);
+  function pause() {
+    abortRead(); clearTimer(windowTimer);
+    if (running) publish(data ? 'ready' : 'loading');
+  }
+  function cancel() {
+    running = false; version++; pause();
+    unsubscribe?.(); unsubscribe = undefined;
+    if (watching) {
+      visibility?.removeEventListener('visibilitychange', visibilityChanged);
+      focus?.removeEventListener('focus', focused);
+      watching = false;
     }
   }
-  return { load, cancel };
+  function expireWindow() {
+    abortRead();
+    publish(data ? 'ready' : 'error', { windowExpired: Boolean(data && hasPendingMemories(data.feed, asOf)) });
+  }
+  async function read(forceEntries = false) {
+    if (!running || !visible() || epoch !== getEpoch()) return;
+    abortRead();
+    const current = version, requestId = sequence, pending = new AbortController();
+    controller = pending;
+    const active = () => running && current === version && requestId === sequence &&
+      !pending.signal.aborted && epoch === getEpoch() && visible();
+    publish(data ? 'ready' : 'loading', { refreshing: Boolean(data) });
+    requestTimer = setTimer(() => {
+      if (!active()) return;
+      abortRead();
+      clearTimer(windowTimer);
+      publish('error', { error: 'The memory request timed out. Please try again.' });
+    }, 30000);
+    try {
+      const feed = validateMemoryFeed(await request(asOf, { signal: pending.signal }), asOf);
+      if (!active()) return;
+      const nextFingerprint = JSON.stringify(feed);
+      let entries = data?.entries;
+      if (forceEntries || !entries || nextFingerprint !== fingerprint) {
+        entries = validateMemoryJournals(await requestEntries({ signal: pending.signal, asOf }));
+      }
+      if (!active()) return;
+      if (!data || nextFingerprint !== fingerprint || forceEntries) data = { feed, entries };
+      fingerprint = nextFingerprint;
+      publish('ready');
+      if (hasPendingMemories(feed, asOf)) {
+        if (now() + MEMORY_POLL_INTERVAL < expires) pollTimer = setTimer(() => read(), MEMORY_POLL_INTERVAL);
+        else publish('ready', { windowExpired: true });
+      } else clearTimer(windowTimer);
+    } catch (error) {
+      if (active()) {
+        clearTimer(windowTimer);
+        if (error?.status === 401) { cancel(); data = null; publish('expired'); }
+        else publish('error', { error: pixelMemoryError(error) });
+      }
+    } finally {
+      if (current === version && requestId === sequence) {
+        clearTimer(requestTimer); controller = undefined;
+      }
+    }
+  }
+  function refresh() {
+    if (!running || !visible() || epoch !== getEpoch()) return;
+    abortRead(); clearTimer(windowTimer);
+    expires = now() + MEMORY_POLL_WINDOW;
+    windowTimer = setTimer(expireWindow, MEMORY_POLL_WINDOW);
+    return read(true);
+  }
+  function focused() { if (visible()) refresh(); }
+  function visibilityChanged() { if (visible()) refresh(); else pause(); }
+  function load(value) {
+    cancel(); memoryDates(value);
+    asOf = value; epoch = getEpoch(); data = null; fingerprint = null; running = true;
+    unsubscribe = subscribe(() => { cancel(); data = null; publish('expired'); });
+    visibility?.addEventListener('visibilitychange', visibilityChanged);
+    focus?.addEventListener('focus', focused); watching = true;
+    if (!visible()) { publish('loading'); return Promise.resolve(); }
+    return refresh();
+  }
+  return { load, refresh, cancel };
 }
 
 // One visible thumbnail owns one object URL. Keep the auth subscription after

@@ -9,6 +9,7 @@ import HistoryPage from './pages/HistoryPage.jsx';
 import EntryPage from './pages/EntryPage.jsx';
 import ReflectionPage from './pages/ReflectionPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
+import PixelMemoriesPage from './pages/PixelMemoriesPage.jsx';
 import AppShell from './components/layout/AppShell.jsx';
 import './styles/index.css';
 import { AuthProvider, GuestPage, PrivatePage } from './auth/Auth.jsx';
@@ -23,6 +24,7 @@ createRoot(document.getElementById('root')).render(
             <Route element={<PrivatePage><AppShell /></PrivatePage>}>
               <Route index element={<JournalPage />} />
               <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/memories" element={<PixelMemoriesPage />} />
               <Route path="/history" element={<HistoryPage />} />
               <Route path="/journal/:id" element={<EntryPage />} />
               <Route path="/reflection" element={<ReflectionPage />} />

@@ -5,7 +5,7 @@ export function navigationMode(pathname) {
   const path = pathname.replace(/\/+$/, '') || '/';
   return {
     record: path === '/record',
-    floatingRecord: ['/dashboard', '/history', '/reflection'].includes(path) || Boolean(matchPath('/journal/:id', path)),
+    floatingRecord: ['/dashboard', '/history', '/memories', '/reflection'].includes(path) || Boolean(matchPath('/journal/:id', path)),
   };
 }
 
