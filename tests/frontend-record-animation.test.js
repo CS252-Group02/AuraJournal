@@ -250,7 +250,7 @@ test('HTTP retry and proposed replacement remain separate from the current edite
     capture: { url: 'blob:kept' }, capabilities: {}, flow: {}, canUpload: true, uploadStatus: 'failed' };
   const render = updates => renderToStaticMarkup(React.createElement(MemoryRouter, {}, React.createElement(View, { model: { ...model, ...updates } })));
   assert.match(render({}), /Retry transcription/);
-  assert.match(render({}), /new request.*transcription allowance/);
+  assert.match(render({}), /New request.*transcription allowance/);
   const comparison = render({ canUpload: false, uploadStatus: 'succeeded', uploadTranscript: 'Full recognized text' });
   assert.match(comparison, /<textarea[^>]*>My corrected draft<\/textarea>/);
   assert.match(comparison, /Confirmed live text/);

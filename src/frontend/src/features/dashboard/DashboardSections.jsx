@@ -34,7 +34,7 @@ export function MonthlyOverview({ summary, month, status, onSelectDate }) {
   const comparison = summary.comparison;
   const previousLabel = comparison && parseDateKey(`${comparison.previousMonth}-01`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
   return <section className="dashboard-month" aria-labelledby="dashboard-month-heading" aria-busy={status === 'loading'}>
-    <h2 id="dashboard-month-heading">{label}, in moments</h2>
+    <h2 id="dashboard-month-heading">{label}</h2>
     {status !== 'ready' ? <PendingSection status={status} /> : <>
       <p className="dashboard-month-counts"><strong>{summary.count}</strong> {summary.count === 1 ? 'entry' : 'entries'} across{' '}
         <strong>{summary.activeDays}</strong> {summary.activeDays === 1 ? 'journal day' : 'journal days'}.</p>
@@ -45,7 +45,7 @@ export function MonthlyOverview({ summary, month, status, onSelectDate }) {
         {summary.mostActive.tiedDays > 1 ? ` (${summary.mostActive.tiedDays} dates tied; earliest shown)` : ''}.</p>
         : <p className="dashboard-fine">No journals this month.</p>}
       {comparison && <p className="dashboard-fine">{comparison.delta === 0 ? 'The same number of entries' : `${Math.abs(comparison.delta)} ${Math.abs(comparison.delta) === 1 ? 'entry' : 'entries'} ${comparison.delta > 0 ? 'more' : 'fewer'}`}{' '}
-        than {previousLabel}{comparison.throughDay ? ` across the first ${comparison.throughDay} ${comparison.throughDay === 1 ? 'day' : 'days'} of each month` : ' (whole months)'}.
+        than {previousLabel}{comparison.throughDay ? ` (first ${comparison.throughDay} ${comparison.throughDay === 1 ? 'day' : 'days'})` : ''}
 </p>}
       {summary.futureCount > 0 && <p className="dashboard-fine">Includes {summary.futureCount} {summary.futureCount === 1 ? 'entry' : 'entries'} dated after today.</p>}
     </>}
@@ -84,14 +84,13 @@ export function WeeklyRecap({ week, status, userId, timezone, reload, onSelectDa
   const delta = week.count - week.previous.count;
   const comparison = delta === 0 ? 'The same number of entries' : `${Math.abs(delta)} ${Math.abs(delta) === 1 ? 'entry' : 'entries'} ${delta > 0 ? 'more' : 'fewer'}`;
   return <section className="dashboard-week" aria-labelledby="dashboard-week-heading" aria-busy={status === 'loading'}>
-    <span className="aj-kicker">This week · Monday to Sunday</span>
-    <h2 id="dashboard-week-heading">A week in moments</h2>
+    <h2 id="dashboard-week-heading">This week</h2>
     {status !== 'ready' ? <PendingSection status={status} /> : <>
       <p className="dashboard-fine">{weekLabel(parseDateKey(week.startKey))}</p>
       <p className="dashboard-week-story">{week.count
         ? <>You’ve kept <strong>{week.count} {week.count === 1 ? 'entry' : 'entries'}</strong> across <strong>{week.activeDays} {week.activeDays === 1 ? 'day' : 'days'}</strong> so far this week.</>
         : 'No entries this week yet.'}</p>
-      <p className="dashboard-fine">{comparison} than at this point last week ({week.previous.count}).</p>
+      <p className="dashboard-fine">{comparison} than last week ({week.previous.count})</p>
       <ol className="dashboard-week-days" aria-label="This week’s journal days">
         {week.days.map(day => <li key={day.key}>
           <button type="button" disabled={day.future} className={day.count ? 'has-entries' : ''}
@@ -111,7 +110,7 @@ export function MoodAnalytics({ byDay, todayKey, status, timezone, moodsByEntry 
   const [period, setPeriod] = useState(7);
   const analytics = useMemo(() => moodAnalytics(byDay, todayKey, period, moodsByEntry), [byDay, todayKey, period, moodsByEntry, timezone]);
   return <section className="dashboard-moods" aria-labelledby="dashboard-moods-heading" aria-busy={status === 'loading'}>
-    <div className="dashboard-section-heading"><div><span className="aj-kicker">Room to reflect</span><h2 id="dashboard-moods-heading">Your moods, gently noticed</h2></div>
+    <div className="dashboard-section-heading"><h2 id="dashboard-moods-heading">Moods</h2>
       <div className="dashboard-period" role="group" aria-label="Mood analytics period">{[7, 30].map(days => <button type="button" key={days}
         aria-pressed={period === days} disabled={status !== 'ready'} onClick={() => setPeriod(days)}>{days} days</button>)}</div>
     </div>
@@ -138,7 +137,7 @@ export function MoodAnalytics({ byDay, todayKey, status, timezone, moodsByEntry 
 
 export function RecentEntries({ entries, status, moodsByEntry = new Map() }) {
   return <section className="dashboard-recent" aria-labelledby="dashboard-recent-heading" aria-busy={status === 'loading'}>
-    <div className="dashboard-section-heading"><div><span className="aj-kicker">A few pages back</span><h2 id="dashboard-recent-heading">Recent memories</h2></div><Link to="/history">All entries ↗</Link></div>
+    <div className="dashboard-section-heading"><h2 id="dashboard-recent-heading">Recent memories</h2><Link to="/history">All entries ↗</Link></div>
     {status !== 'ready' ? <PendingSection status={status} /> : entries.length === 0
       ? <p className="dashboard-muted">No journals yet. Record or write one and it shows up here.</p>
       : <ul className="dashboard-recent-list">{entries.slice(0, 3).map(entry => {

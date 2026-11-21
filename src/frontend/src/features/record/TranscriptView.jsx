@@ -79,11 +79,11 @@ export default function TranscriptView({ model }) {
             {!finalizedTranscript && !interimTranscript && <p className="record-transcript-hint">
               {phase === 'recording' && model.transcriptionActive ? 'Listening for your words…'
                 : phase === 'recording' ? model.uploadAfterStop
-                  ? 'Your audio is recording locally. Stop to transcribe it and review your journal.'
+                  ? 'Recording…'
                   : capabilities.uploadAvailable ? 'Live transcription stopped. Your audio is still recording; stop to review and choose whether to transcribe it.'
                   : 'Live transcription is unavailable. Your audio is still recording; stop to review and write your journal.'
-                  : phase === 'finalizing' ? 'Finishing your take. If no speech is confirmed, you can write your journal in review.'
-                    : 'Your transcript will appear here as you record.'}
+                  : phase === 'finalizing' ? 'Finishing…'
+                    : ''}
             </p>}
           </div>
           {showLatest && <button type="button" className="record-action" onClick={followLatest}>Follow latest text</button>}
@@ -124,7 +124,7 @@ export default function TranscriptView({ model }) {
           {saveUnknown && <p className="record-draft-help">The draft is locked while the save result is uncertain. {capabilities.idempotentSaveAvailable
             ? 'You can safely retry this save.' : 'Automatic retry is unavailable. Check your journals before discarding this draft.'}</p>}
           {canUpload && <>
-            <p className="record-draft-help">Send the full recording for transcription. This makes a new request and may use your transcription allowance. Existing text is kept for comparison.</p>
+            <p className="record-draft-help">New request · uses your transcription allowance.</p>
             <button className="record-action" type="button" onClick={flow.transcribe}>
               {['failed', 'cancelled'].includes(uploadStatus) ? 'Retry transcription' : 'Transcribe recorded audio'}
             </button>
@@ -132,7 +132,6 @@ export default function TranscriptView({ model }) {
           {uploadTranscript != null && <details className="record-original" open>
             <summary>Transcript from uploaded recording</summary>
             <p>{uploadTranscript}</p>
-            <p className="record-draft-help">Replacing the draft uses this full transcript. Your original confirmed text remains available above.</p>
             <button className="record-action" type="button" onClick={flow.useUploadTranscript}
               disabled={phase !== 'review' || saveUnknown}>Replace draft with uploaded transcript</button>
           </details>}

@@ -160,7 +160,7 @@ export default function PixelMemories({ entries, status, todayKey, timezone, use
   const currentGeneration = generation.scope === scope ? generation : { status: 'idle' };
   return <section className="pixel-memories" aria-labelledby="pixel-memories-heading">
     <div className="pixel-memories-heading">
-      <div><span className="aj-kicker">Seven days, little keepsakes</span><h2 id="pixel-memories-heading">Moments in Pixels</h2></div>
+      <h2 id="pixel-memories-heading">Moments in Pixels</h2>
       <div className="pixel-memory-controls">
         <label>Seven days ending<input type="date" value={asOf} min="1000-01-07" max={todayKey}
           onChange={event => {
