@@ -68,7 +68,7 @@ export default function Calendar({ month, todayKey, selectedKey, mode, byDay, st
           <input type="month" aria-label="Jump to month" value={displayedMonth} min="1000-01" max="9999-12"
             onChange={event => { const value = parseMonthKey(event.target.value); if (value) onMonthChange(value); }} />
         </label>
-        <p id="calendar-help">Select a date to open its journal or choose an entry.</p>
+        <p id="calendar-help" className="visually-hidden">Select a date to open its journal.</p>
       </div>
       <table className="calendar-grid" role="grid" aria-labelledby="calendar-month" aria-describedby="calendar-help"
         aria-busy={status === 'loading'}>

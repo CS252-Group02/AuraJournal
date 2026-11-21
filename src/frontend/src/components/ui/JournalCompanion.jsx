@@ -4,6 +4,6 @@ export default function JournalCompanion({ message, children }) {
     <div className="journal-companion-art" aria-hidden="true">
       <span className="journal-companion-face"><span className="journal-companion-eyes" /><span className="journal-companion-blush" /></span>
     </div>
-    <div><span className="aj-kicker">A little space for you</span><p>{message}</p>{children}</div>
+    <div>{message && <p>{message}</p>}{children}</div>
   </aside>;
 }

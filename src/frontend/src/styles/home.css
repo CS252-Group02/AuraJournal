@@ -44,9 +44,9 @@
 .home-record-link:hover .home-record-halo { background: #dcebdd; }
 .home-record-label { font: 600 30px / 1.2 var(--aj-serif); }
 .home-start > p { color: var(--aj-muted); font-size: 12px; margin: 14px 0 8px; }
-.home-page .home-write-link, .home-page .home-text-button { color: #426b54; border-radius: 6px; background: transparent; padding: 10px 8px; font-size: 12px; font-weight: 400; text-decoration: underline; text-underline-offset: 4px; }
+.home-page .home-write-link, .home-page .home-text-button { color: #426b54; border-radius: 3px; background: transparent; padding: 10px 8px; font-size: 12px; font-weight: 400; text-decoration: underline; text-underline-offset: 4px; }
 .home-companion { position: absolute; top: 116px; right: 0; width: 295px; min-height: 250px; text-align: left; }
-.home-companion > p { width: 290px; min-height: 80px; margin: 0; padding: 19px; background: #fffefa; border-radius: 20px; color: #344e42; line-height: 1.5; font-size: 14px; }
+.home-companion > p { width: 290px; min-height: 80px; margin: 0; padding: 19px; background: #fffefa; border-radius: 6px; color: #344e42; line-height: 1.5; font-size: 14px; }
 .home-companion-art { position: relative; width: 124px; height: 124px; margin: 13px 0 0 96px; }
 .home-companion-face { position: absolute; inset: 0; border-radius: 50%; background: #fffefa; }
 .home-companion-face::before { content: ''; position: absolute; left: 57px; top: -5px; width: 21px; height: 21px; border-radius: 50%; background: #7fa48b; }

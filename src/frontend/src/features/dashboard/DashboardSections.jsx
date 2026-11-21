@@ -5,7 +5,7 @@ import { moodPresentation, MOODS } from '../calendar/calendarModel.js';
 import { entryTitle } from '../journal/entryText.js';
 import { weekLabel } from '../reflection/week.js';
 import { parseDateKey } from '../../lib/localDate.js';
-import { companionMessage, dashboardPreview, journalDayKey, moodAnalytics, reflectionScope } from './dashboardModel.js';
+import { dashboardPreview, journalDayKey, moodAnalytics, reflectionScope } from './dashboardModel.js';
 import { useDashboardReflection } from './useDashboardReflection.js';
 
 function PendingSection({ status }) {
@@ -22,13 +22,9 @@ export function Activity({ activity, status, todayKey, timezone }) {
         <div><dt>Journal entries</dt><dd>{activity.total}<span> in all</span></dd></div>
         <div><dt>Days journaled</dt><dd>{activity.activeDays}<span> through today</span></dd></div>
       </dl>
-      <p className="dashboard-fine">{activity.current.count
-        ? `Your streak continues through ${activity.current.throughKey === todayKey ? 'today' : 'yesterday'}.`
-        : 'No current streak. A new page is always welcome.'} A day counts once, however many entries you save. Activity follows your journal dates.</p>
-      <p className="dashboard-fine">{activity.todayCount
-        ? `${activity.todayCount} ${activity.todayCount === 1 ? 'entry is' : 'entries are'} dated today.`
-        : 'No entry is dated today yet. Your next page is here whenever you’re ready.'}{' '}
-        Today and streaks use your local time{timezone ? ` (${timezone})` : ''}; future journal dates are counted in totals, but do not extend streaks.</p>
+      <p className="dashboard-fine">{activity.current.count ? '' : 'No current streak. '}{activity.todayCount
+        ? `${activity.todayCount} ${activity.todayCount === 1 ? 'entry is' : 'entries are'} dated today`
+        : 'Nothing dated today'}{timezone ? ` · ${timezone}` : ''}</p>
     </>}
   </section>;
 }
@@ -47,10 +43,10 @@ export function MonthlyOverview({ summary, month, status, onSelectDate }) {
           {parseDateKey(summary.mostActive.key).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
         </button>{' '}· {summary.mostActive.count} {summary.mostActive.count === 1 ? 'entry' : 'entries'}
         {summary.mostActive.tiedDays > 1 ? ` (${summary.mostActive.tiedDays} dates tied; earliest shown)` : ''}.</p>
-        : <p className="dashboard-fine">No journals are dated in this month yet. Choose another month to revisit a memory.</p>}
+        : <p className="dashboard-fine">No journals this month.</p>}
       {comparison && <p className="dashboard-fine">{comparison.delta === 0 ? 'The same number of entries' : `${Math.abs(comparison.delta)} ${Math.abs(comparison.delta) === 1 ? 'entry' : 'entries'} ${comparison.delta > 0 ? 'more' : 'fewer'}`}{' '}
         than {previousLabel}{comparison.throughDay ? ` across the first ${comparison.throughDay} ${comparison.throughDay === 1 ? 'day' : 'days'} of each month` : ' (whole months)'}.
-        {' '}Every month has its own pace.</p>}
+</p>}
       {summary.futureCount > 0 && <p className="dashboard-fine">Includes {summary.futureCount} {summary.futureCount === 1 ? 'entry' : 'entries'} dated after today.</p>}
     </>}
   </section>;
@@ -73,7 +69,7 @@ export function ReflectionBody({ state, generate, reload }) {
     <button type="button" className="aj-btn aj-btn-outline" onClick={generate}>Regenerate recap</button>
   </div> : <p className="dashboard-muted">No entries remain in this week. <button className="aj-btn aj-btn-quiet" type="button" onClick={reload}>Refresh entries</button></p>;
   return <div className="dashboard-reflection-invite">
-    <p className="dashboard-fine">For a written recap, your journal text for the full week is sent to the AI service only when you choose Generate.</p>
+    <p className="dashboard-fine">Sends this week’s text to AI.</p>
     <button type="button" className="aj-btn aj-btn-outline" onClick={generate}>Generate weekly recap</button>
   </div>;
 }
@@ -94,7 +90,7 @@ export function WeeklyRecap({ week, status, userId, timezone, reload, onSelectDa
       <p className="dashboard-fine">{weekLabel(parseDateKey(week.startKey))}</p>
       <p className="dashboard-week-story">{week.count
         ? <>You’ve kept <strong>{week.count} {week.count === 1 ? 'entry' : 'entries'}</strong> across <strong>{week.activeDays} {week.activeDays === 1 ? 'day' : 'days'}</strong> so far this week.</>
-        : 'No entries dated Monday through today yet. There’s still space for a moment you’d like to keep.'}</p>
+        : 'No entries this week yet.'}</p>
       <p className="dashboard-fine">{comparison} than at this point last week ({week.previous.count}).</p>
       <ol className="dashboard-week-days" aria-label="This week’s journal days">
         {week.days.map(day => <li key={day.key}>
@@ -120,24 +116,21 @@ export function MoodAnalytics({ byDay, todayKey, status, timezone, moodsByEntry 
         aria-pressed={period === days} disabled={status !== 'ready'} onClick={() => setPeriod(days)}>{days} days</button>)}</div>
     </div>
     {status !== 'ready' ? <PendingSection status={status} /> : <>
-      <p className="dashboard-fine">Last {period} days, including today · independent of the calendar month.</p>
       {analytics.classified === 0 ? <div className="dashboard-mood-unavailable">
         <div className="dashboard-mood-palette" aria-hidden="true">{Object.entries(MOODS).map(([key, mood]) => <span key={key} style={{ background: mood.color }} />)}</div>
         <p>{analytics.total ? 'Mood data isn’t available for these entries yet.' : 'No journals in this period yet.'}</p>
-        <p className="dashboard-muted">{analytics.total ? `${analytics.total} ${analytics.total === 1 ? 'entry has' : 'entries have'} no saved mood classification. ` : ''}Your words and activity are here; mood patterns will appear when saved moods are available.</p>
       </div> : <>
         <p>Most recorded: <strong>{analytics.mostFrequent.join(' / ')}</strong>{analytics.mostFrequent.length > 1 ? ' (tied)' : ''}.</p>
         <ul className="dashboard-mood-distribution">{analytics.distribution.map(item => <li key={item.key}>
           <span>{item.label}</span><span className="dashboard-mood-track" aria-hidden="true"><span style={{ width: `${100 * item.count / analytics.classified}%`, background: item.color }} /></span>
           <span>{item.count}</span>
         </li>)}</ul>
-        <p className="dashboard-fine">{analytics.classified} classified · {analytics.missing} without a saved mood. Bar lengths show the share of classified entries.</p>
+        <p className="dashboard-fine">{analytics.classified} classified · {analytics.missing} without a mood</p>
         <ol className="dashboard-mood-timeline" aria-label="Daily mood history">{analytics.timeline.map(day => <li key={day.key}
           aria-label={`${day.key}: ${day.moods.length ? day.moods.map(key => MOODS[key].label).join(', ') : day.count ? 'mood unavailable' : 'no entries'}`}>
           {day.moods.length ? day.moods.map(key => <span key={key} style={{ background: MOODS[key].color }} aria-hidden="true" />) : <span className="dashboard-mood-gap" aria-hidden="true" />}
           <time dateTime={day.key}>{parseDateKey(day.key).getDate()}</time>
         </li>)}</ol>
-        <p className="dashboard-fine">Each day shows its recorded categories without ranking emotions.</p>
       </>}
     </>}
   </section>;
@@ -147,7 +140,7 @@ export function RecentEntries({ entries, status, moodsByEntry = new Map() }) {
   return <section className="dashboard-recent" aria-labelledby="dashboard-recent-heading" aria-busy={status === 'loading'}>
     <div className="dashboard-section-heading"><div><span className="aj-kicker">A few pages back</span><h2 id="dashboard-recent-heading">Recent memories</h2></div><Link to="/history">All entries ↗</Link></div>
     {status !== 'ready' ? <PendingSection status={status} /> : entries.length === 0
-      ? <p className="dashboard-muted">Your recent memories will be waiting here after you save your first entry.</p>
+      ? <p className="dashboard-muted">No journals yet. Record or write one and it shows up here.</p>
       : <ul className="dashboard-recent-list">{entries.slice(0, 3).map(entry => {
         const key = journalDayKey(entry), mood = moodPresentation(moodsByEntry.get(entry.id));
         return <li key={entry.id}><Link to={`/journal/${encodeURIComponent(entry.id)}`}>
@@ -164,8 +157,7 @@ export function RecentEntries({ entries, status, moodsByEntry = new Map() }) {
 }
 
 export function DashboardCompanion({ activity, week, status }) {
-  return <JournalCompanion message={status === 'ready' ? companionMessage(activity.total, week.count, activity.current.count)
-    : 'A little space to pause. Your memories will be here when your journals are ready.'}>
-    <Link to="/">Make a little memory ↗</Link>
+  return <JournalCompanion>
+    <Link to="/">Write</Link>
   </JournalCompanion>;
 }

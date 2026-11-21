@@ -1,5 +1,5 @@
 export default function RecordButton({ model, onReset }) {
-  const { phase, capture, error, warning, flow, capabilities, elapsedSeconds, transcriptionActive, uploadAfterStop } = model;
+  const { phase, capture, error, warning, flow, capabilities, elapsedSeconds } = model;
   const captureLayout = ['ready', 'connecting', 'recording', 'error'].includes(phase);
   const duration = `${String(Math.floor(elapsedSeconds / 60)).padStart(2, '0')}:${String(elapsedSeconds % 60).padStart(2, '0')}`;
   const recording = phase === 'recording' && capture.status === 'recording';
@@ -8,21 +8,14 @@ export default function RecordButton({ model, onReset }) {
   const label = recording ? 'Stop' : capture.status === 'requesting_permission' ? 'Allow microphone'
     : phase === 'connecting' ? 'Connecting…' : phase === 'finalizing' ? 'Finalizing…' : 'Record';
   const message = {
-    ready: capabilities.transcriptionAvailable
-      ? `Audio is sent for live transcription. Stop well before five minutes to allow finalization.${capabilities.proofreadAvailable ? ' Final text may be sent for AI proofreading.' : ''} Your journal is saved only when you choose Save journal.`
-      : capabilities.uploadAvailable
-        ? 'Record locally. After Stop, WebM/Opus audio is uploaded for transcription. Review and edit before choosing Save journal.'
-        : 'Record locally and write your journal after stopping. Your journal is saved only when you choose Save journal.',
-    connecting: 'Preparing your recording…',
-    recording: transcriptionActive
-      ? 'Recording… Stop well before five minutes; the live limit includes finalization.'
-      : uploadAfterStop ? 'Recording locally… Select Stop to transcribe and review your audio.'
-        : capabilities.uploadAvailable ? 'Recording locally… Select Stop to review your audio and choose whether to transcribe it.'
-        : 'Recording locally… Select Stop to review your audio and write your journal.',
-    finalizing: 'Finishing audio and waiting for final speech results…',
-    transcribing: 'Uploading audio and transcribing… This can take up to 100 seconds. You can listen, edit, or cancel; your recording is kept.',
-    proofreading: 'Proofreading the confirmed transcript…',
-    review: 'Review your draft below. Your changes are the version that will be saved.',
+    ready: capabilities.transcriptionAvailable ? 'Audio is sent for live transcription. Up to five minutes.'
+      : capabilities.uploadAvailable ? 'Audio is uploaded for transcription after Stop.' : '',
+    connecting: 'Connecting…',
+    recording: 'Recording…',
+    finalizing: 'Finishing…',
+    transcribing: 'Uploading and transcribing… up to 100 seconds.',
+    proofreading: 'Proofreading…',
+    review: '',
     saving: 'Saving your journal…',
     saved: 'Journal saved.',
   }[phase];

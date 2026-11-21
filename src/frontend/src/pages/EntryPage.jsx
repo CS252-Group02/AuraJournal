@@ -48,9 +48,8 @@ function Reflection({ entry, onSummarize, state }) {
   return (
     <aside className="entry-note entry-note-empty" aria-labelledby="note-heading">
       <span className="aj-kicker" id="note-heading">A note to myself ✦</span>
-      <p>Let AuraJournal gather this entry into a short reflection.</p>
       <button type="button" className="aj-btn" onClick={onSummarize} disabled={state.busy}>
-        {state.busy ? 'Reflecting…' : 'Reflect on this entry'}
+        {state.busy ? 'Reflecting…' : 'Reflect'}
       </button>
       {state.error && <p className="aj-error" role="alert">{state.error}</p>}
     </aside>
@@ -218,7 +217,6 @@ export default function EntryPage() {
               <div><dt>Written</dt><dd>{fullDate(entry.created_at)}, {clock(entry.created_at)}</dd></div>
               {edited && <div><dt>Edited</dt><dd>{fullDate(entry.updated_at)}, {clock(entry.updated_at)}</dd></div>}
               <div><dt>Length</dt><dd>{wordCount(entry.content)} words · {readMinutes(entry.content)} min read</dd></div>
-              <div><dt>Visibility</dt><dd>Private journal</dd></div>
             </dl>
           </aside>
         </div>

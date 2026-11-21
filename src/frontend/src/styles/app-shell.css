@@ -5,12 +5,12 @@ html:has(.app-shell) { scrollbar-gutter: stable; scroll-padding-bottom: 110px; }
 .shell-content:focus { outline: none; }
 .has-floating-record .shell-content { padding-bottom: calc(104px + env(safe-area-inset-bottom, 0px)); }
 .app-shell-record .shell-content { padding: 0; }
-.shell-skip { position: fixed; top: 12px; left: 100px; transform: translateY(-180%); z-index: 50; padding: 12px 18px; background: #fffefa; color: #283d36; border-radius: 10px; }
+.shell-skip { position: fixed; top: 12px; left: 100px; transform: translateY(-180%); z-index: 50; padding: 12px 18px; background: #fffefa; color: #283d36; border-radius: 4px; }
 .shell-skip:focus { transform: none; }
 .app-sidebar {
   position: fixed; z-index: 30; left: 10px; top: max(24px, calc((100svh - 720px) / 2));
   display: flex; flex-direction: column; width: 66px; height: min(720px, calc(100svh - 48px));
-  padding: 20px 9px; border-radius: 24px; background: rgb(235 242 232 / 88%);
+  padding: 20px 9px; border-radius: 6px; background: rgb(235 242 232 / 88%);
   color: #527d65; font: 400 14px 'AuraJournal Record Inter', sans-serif;
   transition: width 180ms ease-out, box-shadow 180ms ease-out;
 }
@@ -23,21 +23,21 @@ html:has(.app-shell) { scrollbar-gutter: stable; scroll-padding-bottom: 110px; }
 .app-sidebar nav { margin-top: 34px; }
 .app-sidebar nav, .app-sidebar li { min-width: 0; }
 .app-sidebar ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 16px; }
-.sidebar-link { display: flex; align-items: center; gap: 20px; min-width: 0; overflow: hidden; height: 57px; padding: 0 12px; border-radius: 17px; text-decoration: none; color: #527d65; }
+.sidebar-link { display: flex; align-items: center; gap: 20px; min-width: 0; overflow: hidden; height: 57px; padding: 0 12px; border-radius: 4px; text-decoration: none; color: #527d65; }
 .sidebar-link svg, .sidebar-pin svg { flex: 0 0 24px; }
 .sidebar-link .sidebar-label { color: #283d36; font-size: 14px; }
 .sidebar-link:hover { background: rgb(255 254 250 / 65%); }
 .sidebar-link.is-active { background: rgb(255 254 250 / 85%); color: #356b51; box-shadow: inset 0 0 0 1px rgb(82 125 101 / 13%); }
 .app-sidebar .sidebar-secondary { margin-top: 20px; padding-top: 16px; border-top: 1px solid rgb(82 125 101 / 12%); }
-.app-sidebar .sidebar-pin { margin-top: auto; min-width: 0; overflow: hidden; min-height: 44px; padding: 10px 12px; display: flex; align-items: center; gap: 20px; background: transparent; color: #527d65; font: inherit; border-radius: 12px; }
+.app-sidebar .sidebar-pin { margin-top: auto; min-width: 0; overflow: hidden; min-height: 44px; padding: 10px 12px; display: flex; align-items: center; gap: 20px; background: transparent; color: #527d65; font: inherit; border-radius: 4px; }
 .sidebar-pin[aria-pressed="true"] svg { transform: rotate(180deg); }
-.app-sidebar .sidebar-close { position: absolute; top: 16px; right: 10px; width: 44px; height: 44px; padding: 10px; background: transparent; color: #527d65; border-radius: 12px; }
+.app-sidebar .sidebar-close { position: absolute; top: 16px; right: 10px; width: 44px; height: 44px; padding: 10px; background: transparent; color: #527d65; border-radius: 4px; }
 .sidebar-close:hover, .sidebar-pin:hover { background: rgb(255 254 250 / 65%); }
 .sidebar-note { margin: auto 12px 6px; color: #52695d; font: 600 18px / 1.4 'AuraJournal Record Cormorant', Georgia, serif; }
 .shell-navigation-dialog {
   position: fixed; top: max(16px, env(safe-area-inset-top, 0px)); left: max(12px, env(safe-area-inset-left, 0px));
   width: min(280px, calc(100vw - 32px)); height: min(720px, calc(100svh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)));
-  max-height: none; max-width: none; margin: 0; padding: 0; border: 0; border-radius: 24px;
+  max-height: none; max-width: none; margin: 0; padding: 0; border: 0; border-radius: 6px;
   overflow-y: auto; background: #f1f6ef; color: #283d36;
 }
 .shell-navigation-dialog::backdrop { background: rgb(29 47 38 / 25%); }
@@ -45,7 +45,7 @@ html:has(.app-shell) { scrollbar-gutter: stable; scroll-padding-bottom: 110px; }
 .app-sidebar.is-drawer .sidebar-brand { padding-right: 40px; }
 .app-sidebar.is-drawer .sidebar-brand .sidebar-label { font-size: 22px; }
 .app-sidebar.is-drawer nav { margin-top: 32px; }
-.shell-mobile-toggle { position: absolute; z-index: 20; top: max(12px, env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); width: 44px; height: 44px; padding: 10px; background: #e7eee2; color: #527d65; border-radius: 14px; }
+.shell-mobile-toggle { position: absolute; z-index: 20; top: max(12px, env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); width: 44px; height: 44px; padding: 10px; background: #e7eee2; color: #527d65; border-radius: 4px; }
 .floating-record {
   position: fixed; z-index: 15; right: max(28px, env(safe-area-inset-right, 0px)); bottom: calc(28px + env(safe-area-inset-bottom, 0px));
   display: grid; place-items: center; width: 60px; height: 60px; border-radius: 50%;

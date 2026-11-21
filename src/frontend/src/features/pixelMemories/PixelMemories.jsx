@@ -61,7 +61,7 @@ export function MemoryDay({ day, status, generation, onGenerate }) {
         <span>{emptyLabel}</span>
       </div>}
     {entry ? <Link className="pixel-memory-caption" to={journalUrl(entry)}>{titleOf(entry)}</Link>
-      : <p className="pixel-memory-caption">{status === 'ready' || status === 'loading' ? 'A little space in your story' : 'Your memories will be here'}</p>}
+      : null}
     {entry && !memory && !unknown && !day.invalid && <p className="pixel-memory-note">Journal saved</p>}
     {entry && !memory && !unknown && !day.invalid && onGenerate && <div className="pixel-generation-source">
       {day.entries.length > 1 && <label>Journal for this image
@@ -118,8 +118,8 @@ export function MemoriesGallery({ entries, asOf, onRefresh, generation, onGenera
       {state.status === 'ready' && invalidCount > 0 && <p role="status">Some image information could not be matched to your journals.{' '}
         <button type="button" onClick={onRefresh}>Refresh memories</button></p>}
       {state.status === 'ready' && !invalidCount && imageCount === 0 && <p role="status">{entryCount
-        ? 'Your journals are here. No pixel images have been saved for these seven days yet.'
-        : 'No journals are dated in these seven days. Choose an earlier end date or keep a new moment.'}</p>}
+        ? 'No pixel images for these seven days yet.'
+        : 'No journals in these seven days.'}</p>}
     </div>
     <MemoryDays days={days} status={state.status} generation={generation} onGenerate={onGenerate} />
   </>;
@@ -171,18 +171,15 @@ export default function PixelMemories({ entries, status, todayKey, timezone, use
         <button type="button" className="aj-btn aj-btn-quiet" disabled={status === 'loading'} onClick={onRefresh}>Refresh memories</button>
       </div>
     </div>
-    <p className="pixel-memories-intro">Small illustrations from your saved journals. Open a memory to return to its words.</p>
-    <p className="pixel-memories-intro" id="pixel-generation-help">Generate sends the selected journal’s text to the AI service and may incur charges.
-      The first image generated for each date stays its default memory.</p>
+    <p className="pixel-memories-intro" id="pixel-generation-help">Generate sends that journal’s text to AI.</p>
     <GenerationStatus state={currentGeneration} entry={entries.find(entry => entry.id === currentGeneration.entryId)}
       onCheck={() => generator.checkSaved()} onRetry={() => generator.retry()} onRefresh={onRefresh} />
     <p className="visually-hidden">{dateLabel(dates[0])} through {dateLabel(asOf)}. Journal dates determine placement.</p>
     {status === 'ready' ? <MemoriesGallery key={scope} entries={entries} asOf={asOf} onRefresh={onRefresh}
       generation={currentGeneration} onGenerate={entry => generator.generate(entry.id, scope)} />
       : <>
-        <p role="status" className="pixel-memory-status">{status === 'loading' ? 'Loading journals for your memories…' : 'Memories are unavailable until your journals can be loaded. Use Refresh memories to try again.'}</p>
+        <p role="status" className="pixel-memory-status">{status === 'loading' ? 'Loading journals for your memories…' : 'Could not load journals. Refresh to try again.'}</p>
         <MemoryDays days={dates.map(key => ({ key, entries: [], images: [] }))} status={`journals-${status}`} />
       </>}
-    <p className="pixel-memories-footnote">Images are generated only when you choose Generate. Saving journals, opening this gallery, and refreshing never generate images.</p>
   </section>;
 }

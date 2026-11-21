@@ -95,14 +95,21 @@ export default function HistoryPage() {
     setParams({}, { replace: true });
   }
 
+  const [shown, setShown] = useState(null);
+  useEffect(() => {
+    if (source.status === 'ready') setShown(source.entries);
+  }, [source.status, source.entries]);
+  const refreshing = source.status === 'loading' && shown !== null;
+  const listed = source.status === 'ready' ? source.entries : shown || [];
+
   const visible = useMemo(
-    () => source.entries.filter((entry) => filter !== 'ai' || entry.ai_summary),
-    [source.entries, filter],
+    () => listed.filter((entry) => filter !== 'ai' || entry.ai_summary),
+    [listed, filter],
   );
 
   const lastOpened = getLastOpened(user.id);
   const recentEntry = lastOpened && all.entries.find((entry) => entry.id === lastOpened.id);
-  const searching = serverSearch || filter !== 'all';
+  const searching = Boolean(search.q || search.start || search.end) || filter !== 'all';
   const ready = all.status === 'ready';
 
   let emptyMessage = 'No entries have an AI reflection yet.';
@@ -110,7 +117,7 @@ export default function HistoryPage() {
   else if (search.start || search.end) emptyMessage = 'No entries in this date range.';
 
   let content;
-  if (all.status === 'loading' || (source.status === 'loading' && !badRange)) {
+  if (all.status === 'loading' || (source.status === 'loading' && !badRange && !refreshing)) {
     content = <Skeleton count={6} className="history-grid" />;
   } else if (all.status === 'error' || source.status === 'error') {
     const failed = all.status === 'error' ? all : source;
@@ -138,7 +145,7 @@ export default function HistoryPage() {
     content = (
       <>
         {recentEntry && !searching && <RecentlyOpened entry={recentEntry} openedAt={lastOpened.openedAt} />}
-        <section aria-labelledby="all-heading">
+        <section aria-labelledby="all-heading" aria-busy={refreshing} className={refreshing ? 'history-refreshing' : undefined}>
           <div className="aj-section-head">
             <h2 id="all-heading">{searching ? 'Results' : 'All entries'}</h2>
             <span className="visually-hidden" role="status">
@@ -179,7 +186,7 @@ export default function HistoryPage() {
           <label className="aj-search">
             <span className="visually-hidden">Search your journals</span>
             <span aria-hidden="true">⌕</span>
-            <input type="search" value={query} placeholder="Search your memories, moments, moods…"
+            <input type="search" value={query} placeholder="Search"
               onChange={(event) => setQuery(event.target.value)} disabled={!ready} />
           </label>
           <label className="aj-date">
@@ -198,9 +205,10 @@ export default function HistoryPage() {
               {Object.entries(FILTERS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
           </label>
-          <button type="button" className="aj-btn aj-btn-outline" disabled={!ready}
+          <button type="button" className="aj-btn aj-btn-outline history-sort" disabled={!ready}
             onClick={() => update('sort', search.sort === 'newest' ? 'oldest' : 'newest', 'newest')}>
-            {search.sort === 'newest' ? '↓ Newest first' : '↑ Oldest first'}
+            <span aria-hidden={search.sort !== 'newest'}>↓ Newest first</span>
+            <span aria-hidden={search.sort !== 'oldest'}>↑ Oldest first</span>
           </button>
         </div>
 
