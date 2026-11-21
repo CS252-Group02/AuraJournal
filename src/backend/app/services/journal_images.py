@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import JournalEntry, JournalImage
+from app.models import JournalEntry, JournalImage, PixelArtJob
 
 
 def attach_image(
@@ -35,8 +35,8 @@ def has_owned_image_reference(image: JournalImage) -> bool:
 
 
 def recent_journal_memories(
-    session: Session, user_id: UUID, as_of: date
-) -> list[tuple[date, UUID, JournalImage | None]]:
+    session: Session, user_id: UUID, as_of: date, *, include_jobs=False,
+):
     """Entries on the latest seven occupied journal days, including missing art.
 
     A single owner-scoped outer join keeps days with no images and avoids lazy
@@ -49,14 +49,20 @@ def recent_journal_memories(
         .order_by(JournalEntry.journal_date.desc())
         .limit(7)
     )
+    columns = [JournalEntry.journal_date, JournalEntry.id, JournalImage]
+    if include_jobs:
+        columns.append(PixelArtJob)
     query = (
-        select(JournalEntry.journal_date, JournalEntry.id, JournalImage)
+        select(*columns)
         .outerjoin(JournalImage, JournalImage.entry_id == JournalEntry.id)
         .where(JournalEntry.user_id == user_id, JournalEntry.journal_date.in_(days))
         .order_by(JournalEntry.journal_date.desc(), JournalEntry.created_at.desc(),
                   JournalEntry.id.desc())
     )
-    return [(day, entry_id, image) for day, entry_id, image in session.execute(query)]
+    if include_jobs:
+        query = query.outerjoin(PixelArtJob, (PixelArtJob.entry_id == JournalEntry.id) &
+                                (PixelArtJob.source_version == JournalEntry.content_version))
+    return list(session.execute(query).tuples())
 
 
 def recent_journal_images(

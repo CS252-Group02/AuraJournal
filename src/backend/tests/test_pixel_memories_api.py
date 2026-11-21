@@ -11,7 +11,7 @@ from app.models import JournalEntry, JournalImage, User
 from app.routers import pixel_art
 from app.services.journal_images import attach_image
 from test_api import app, application_for, request  # noqa: F401
-from test_pixel_art_api import pixel_app, call, create, path  # noqa: F401
+from test_pixel_art_api import pixel_app, call, create, path, generate  # noqa: F401
 from test_pixellab import png
 
 FEED = "/api/entries/pixel-art/memories"
@@ -20,6 +20,17 @@ CUTOFF = date(2027, 1, 3)
 
 def feed(app, as_of=CUTOFF):
     return call(app, "GET", f"{FEED}?as_of={as_of.isoformat()}")
+
+
+def legacy_feed(response):
+    """Assert the additive contract and return the previous consumer's fields."""
+    data = response.json()
+    for day in data.get("days", []):
+        for entry in day["entries"]:
+            assert entry.pop("generation")["status"] in {
+                "pending", "processing", "ready", "failed", "unavailable", "uncertain", "not_requested",
+            }
+    return data
 
 
 def seed_memory(session, app, owner, day, number, *, image=True, created=None):
@@ -41,7 +52,7 @@ def test_empty_feed_and_missing_images_work_without_generation(pixel_app):
     entry = call(app, "POST", "/api/entries", json={"content": "No illustration yet", "journal_date": CUTOFF.isoformat()}).json()
     response = feed(app)
     assert response.status_code == 200 and response.headers["cache-control"] == "no-store"
-    assert response.json() == {"as_of": CUTOFF.isoformat(), "days": [{
+    assert legacy_feed(response) == {"as_of": CUTOFF.isoformat(), "days": [{
         "journal_date": CUTOFF.isoformat(), "entries": [{"entry_id": entry["id"], "image": None}],
     }]}
     assert call(app, "GET", f"/api/entries/pixel-art/recent?as_of={CUTOFF}").json() == []
@@ -79,7 +90,7 @@ def test_latest_seven_occupied_days_preserve_missing_art_all_entries_and_stable_
         event.remove(app.state.engine, "before_cursor_execute", trace)
     assert response.status_code == 200
     assert len(statements) == 1  # No per-entry lazy image queries.
-    data = response.json()
+    data = legacy_feed(response)
     assert [day["journal_date"] for day in data["days"]] == [
         (CUTOFF - timedelta(days=offset * 4)).isoformat() for offset in range(7)
     ]
@@ -92,7 +103,7 @@ def test_latest_seven_occupied_days_preserve_missing_art_all_entries_and_stable_
     assert len(images) == 8  # Seven journal days, not seven image cards.
     assert "image_url" not in response.text and "Fictional private journal" not in response.text
     assert str(app.state.image_storage.root) not in response.text
-    assert feed(app).json() == data
+    assert legacy_feed(feed(app)) == data
     assert len(call(app, "GET", f"/api/entries/pixel-art/recent?as_of={CUTOFF}").json()) == 8
     assert call(app, "GET", images[0]["content_url"]).content == png()
     app.state.pixellab_client.generate.assert_not_called()
@@ -101,19 +112,19 @@ def test_latest_seven_occupied_days_preserve_missing_art_all_entries_and_stable_
 def test_generated_image_is_saved_and_retrieved_after_restart_without_provider_calls(pixel_app):
     app = pixel_app
     entry = create(app)
-    generated = call(app, "POST", path(entry), json={})
-    assert generated.status_code == 201
+    generated = generate(app, entry)
+    assert generated.status_code == 200
     cutoff = date.fromisoformat(entry["journal_date"])
     expected = {"as_of": entry["journal_date"], "days": [{
         "journal_date": entry["journal_date"],
         "entries": [{"entry_id": entry["id"], "image": generated.json()["image"]}],
     }]}
-    assert feed(app, cutoff).json() == expected
+    assert legacy_feed(feed(app, cutoff)) == expected
     restarted = application_for(app.state.engine)
     restarted.auth_cookies = app.auth_cookies
     restarted.state.image_storage = app.state.image_storage
     restarted.state.pixel_art_enabled = False
-    assert feed(restarted, cutoff).json() == expected
+    assert legacy_feed(feed(restarted, cutoff)) == expected
     assert call(restarted, "GET", generated.json()["image"]["content_url"]).content == png()
     app.state.pixellab_client.generate.assert_called_once()
 
@@ -133,7 +144,7 @@ def test_empty_feed_handles_supported_date_limits(pixel_app, day):
 def test_feed_and_each_content_url_remain_private_between_signed_in_accounts(pixel_app):
     app = pixel_app
     entry = create(app)
-    generated = call(app, "POST", path(entry), json={}).json()
+    generated = generate(app, entry).json()
     cutoff = date.fromisoformat(entry["journal_date"])
     anonymous = application_for(app.state.engine)
     assert feed(anonymous, cutoff).status_code == 401
@@ -181,7 +192,7 @@ def test_invalid_stored_references_never_serve_another_journals_file(pixel_app, 
     assert call(app, "GET", path(own)).status_code == 404
     assert call(app, "GET", path(own) + "/content").status_code == 404
     assert call(app, "POST", path(own), json={}).status_code == 404
-    data = feed(app, date.fromisoformat(own["journal_date"])).json()
+    data = legacy_feed(feed(app, date.fromisoformat(own["journal_date"])))
     assert data["days"][0]["entries"] == [{"entry_id": own["id"], "image": None}]
     assert call(app, "GET", "/api/entries/pixel-art/recent?as_of=" + own["journal_date"]).json() == []
     read.assert_not_called()
@@ -191,7 +202,7 @@ def test_invalid_stored_references_never_serve_another_journals_file(pixel_app, 
 def test_missing_physical_file_is_a_recoverable_content_404_not_automatic_regeneration(pixel_app):
     app = pixel_app
     entry = create(app)
-    image = call(app, "POST", path(entry), json={}).json()["image"]
+    image = generate(app, entry).json()["image"]
     with Session(app.state.engine) as session:
         key = session.scalar(select(JournalImage.image_url))
     assert app.state.image_storage.delete(key)
@@ -203,11 +214,11 @@ def test_missing_physical_file_is_a_recoverable_content_404_not_automatic_regene
 def test_date_edits_content_changes_and_deletion_refresh_the_feed(pixel_app):
     app = pixel_app
     entry = create(app)
-    image = call(app, "POST", path(entry), json={}).json()["image"]
+    image = generate(app, entry).json()["image"]
     cutoff = date.fromisoformat(entry["journal_date"])
     endpoint = "/api/entries/" + entry["id"]
     assert call(app, "PATCH", endpoint, json={"journal_date": "2024-02-29"}).status_code == 200
-    moved = feed(app, cutoff).json()["days"][0]
+    moved = legacy_feed(feed(app, cutoff))["days"][0]
     assert moved == {"journal_date": "2024-02-29", "entries": [{"entry_id": entry["id"], "image": image}]}
     assert call(app, "PATCH", endpoint, json={"content": "Changed journal content"}).status_code == 200
     assert feed(app, cutoff).json()["days"][0]["entries"][0]["image"] is None
@@ -217,7 +228,7 @@ def test_date_edits_content_changes_and_deletion_refresh_the_feed(pixel_app):
 
 
 def test_memory_query_failure_returns_safe_unavailable_response(pixel_app, monkeypatch):
-    def unavailable(*args):
+    def unavailable(*args, **kwargs):
         raise OperationalError("private SQL", {}, Exception("private credentials"))
 
     monkeypatch.setattr(pixel_art, "recent_journal_memories", unavailable)

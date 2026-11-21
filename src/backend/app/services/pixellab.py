@@ -60,7 +60,14 @@ def decode_image(payload: bytes) -> bytes:
             prefix, encoded = encoded.split(",", 1)
             if prefix != "data:image/png;base64":
                 raise ValueError("Unsupported media type")
-        raw = base64.b64decode(encoded, validate=True)
+        return validate_png(base64.b64decode(encoded, validate=True))
+    except (ValidationError, ValueError, TypeError, binascii.Error) as error:
+        raise PixelArtInvalidResponse() from error
+
+
+def validate_png(raw: bytes) -> bytes:
+    """Also validate durable output recovered after a worker/storage commit gap."""
+    try:
         with warnings.catch_warnings():
             warnings.simplefilter("error", Image.DecompressionBombWarning)
             with Image.open(BytesIO(raw)) as image:
@@ -72,7 +79,7 @@ def decode_image(payload: bytes) -> bytes:
                 clean = BytesIO()
                 image.convert("RGBA").save(clean, format="PNG")
                 return clean.getvalue()
-    except (ValidationError, ValueError, TypeError, binascii.Error, OSError, SyntaxError, EOFError, StructError,
+    except (ValueError, TypeError, OSError, SyntaxError, EOFError, StructError,
             UnidentifiedImageError, Image.DecompressionBombError,
             Image.DecompressionBombWarning) as error:
         raise PixelArtInvalidResponse() from error
@@ -82,6 +89,10 @@ class PixelLabClient:
     def __init__(self, api_key: str | None = None, client: httpx.Client | None = None):
         self._api_key = pixellab_api_key() if api_key is None else api_key
         self._client = client
+
+    @property
+    def configured(self) -> bool:
+        return bool(self._api_key and self._api_key.strip())
 
     def generate(self, prompt: str) -> bytes:
         if not self._api_key or not self._api_key.strip():

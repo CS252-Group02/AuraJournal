@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from threading import BoundedSemaphore
+import asyncio
 
 from fastapi import Depends, FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,11 +25,12 @@ from app.services import JournalSummarizer, JournalTitleGenerator
 from app.auth import require_browser_request
 from app.deployment import production, validate_settings, validate_database
 from app.request_limits import RequestSizeLimit
-from app.config import journal_image_storage_dir, pixellab_enabled
+from app.config import journal_image_storage_dir, pixellab_enabled, pixel_worker_concurrency, pixel_worker_enabled
 from app.routers.pixel_art import router as pixel_art_router
 from app.services.image_storage import ImageStorage
 from app.services.pixel_art import MomentExtractor
 from app.services.pixellab import PixelLabClient
+from app.services.pixel_jobs import PixelArtWorkers
 from app.routers.transcriptions import router as transcriptions_router
 from app.routers.transcription_upload import router as transcription_upload_router
 from app.services import DeepgramStreamingClient
@@ -41,11 +43,17 @@ def create_app(database_url: str | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
+        workers = None
         try:
             if production():
                 validate_database(engine)
+            if pixel_worker_enabled():
+                workers = PixelArtWorkers(app.state)
+                workers.start()
             yield
         finally:
+            if workers is not None:
+                await asyncio.to_thread(workers.stop)
             engine.dispose()
 
     app = FastAPI(title="AuraJournal API", lifespan=lifespan, dependencies=[Depends(require_browser_request)])
@@ -61,7 +69,8 @@ def create_app(database_url: str | None = None) -> FastAPI:
     app.state.pixellab_client = PixelLabClient()
     app.state.image_storage = ImageStorage(journal_image_storage_dir())
     app.state.pixel_art_enabled = pixellab_enabled()
-    app.state.pixel_art_capacity = BoundedSemaphore(2)
+    app.state.pixel_art_concurrency = pixel_worker_concurrency()
+    app.state.pixel_art_capacity = BoundedSemaphore(app.state.pixel_art_concurrency)
 
     @app.middleware("http")
     async def private_responses(request, call_next):

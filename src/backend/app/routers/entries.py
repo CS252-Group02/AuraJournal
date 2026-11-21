@@ -11,18 +11,20 @@ from app.auth import current_user
 from app.models import JournalEntry, User
 from app.schemas.entries import EntryCreate, EntryResponse, EntryUpdate, JournalDate
 from app.services.journal_history import entries_in_range, search_entries
+from app.services.pixel_jobs import invalidate_pixel_jobs, schedule_pixel_art
 
 router = APIRouter(prefix="/api/entries", tags=["entries"])
 
 
 @router.post("", response_model=EntryResponse, status_code=201)
-def create_entry(payload: EntryCreate, session: Session = Depends(get_session), user: User = Depends(current_user)):
+def create_entry(payload: EntryCreate, request: Request, session: Session = Depends(get_session), user: User = Depends(current_user)):
     content = payload.content.strip()
     if not content:
         raise HTTPException(status_code=422, detail="Entry content cannot be blank.")
     dates = payload.model_dump(include={"journal_date"}, exclude_unset=True)
     entry = JournalEntry(content=content, user_id=user.id, **dates)
     session.add(entry)
+    schedule_pixel_art(session, entry, enabled=request.app.state.pixel_art_enabled)
     session.commit()
     session.refresh(entry)
     return entry
@@ -80,6 +82,8 @@ def update_entry(entry_id: UUID, payload: EntryUpdate, request: Request,
             raise HTTPException(422, "Entry content cannot be blank.")
         if entry.content != content:
             entry.content = content
+            entry.content_version += 1
+            invalidate_pixel_jobs(session, entry.id)
             # Saved AI output describes the previous content and must be regenerated.
             entry.ai_summary = None
             entry.ai_reflection_question = None
@@ -87,6 +91,7 @@ def update_entry(entry_id: UUID, payload: EntryUpdate, request: Request,
             if entry.image is not None:
                 old_image_key = entry.image.image_url
                 session.delete(entry.image)
+            schedule_pixel_art(session, entry, enabled=request.app.state.pixel_art_enabled)
     if "journal_date" in updates:
         entry.journal_date = updates["journal_date"]
     session.commit()
