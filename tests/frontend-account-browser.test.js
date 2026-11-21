@@ -31,9 +31,10 @@ function installFixture() {
     if (path === '/api/auth/login' || path === '/api/auth/register') {
       localStorage.removeItem('test-logged-out'); return json({ id: 'browser-user', email: 'journal@example.test' });
     }
-    if (path === '/api/entries/pixel-art/recent') return json([{ entry_id: id, journal_date: day,
-      image: { id: '22222222-2222-4222-8222-222222222222', width: 128, height: 128,
-        file_format: 'png', created_at: `${day}T10:01:00Z`, content_url: `/api/entries/${id}/pixel-art/content` } }]);
+    if (path === '/api/entries/pixel-art/memories') return json({ as_of: new URL(url, location.origin).searchParams.get('as_of'),
+      days: [{ journal_date: day, entries: [{ entry_id: id, generation: { status: 'ready', error_code: null, updated_at: `${day}T10:01:00Z` },
+        image: { id: '22222222-2222-4222-8222-222222222222', width: 128, height: 128,
+          file_format: 'png', created_at: `${day}T10:01:00Z`, content_url: `/api/entries/${id}/pixel-art/content` } }] }] });
     if (path.endsWith('/pixel-art/content')) {
       const canvas = document.createElement('canvas'); canvas.width = canvas.height = 128;
       const context = canvas.getContext('2d'); context.fillStyle = '#a2c6ab'; context.fillRect(0, 0, 128, 128);
@@ -118,9 +119,9 @@ test('account menu, appearance, and existing guards work in a real browser', {
   try { await navigate('/', '.home-page'); }
   catch (error) { throw new Error(`${error.message}; runtime errors: ${JSON.stringify(errors)}`); }
 
-  await context.test('all five target pages share email, safe Settings, and the same account controls', async () => {
+  await context.test('all content pages share email, safe Settings, and the same account controls', async () => {
     for (const [path, ready] of [['/', '.home-page'], ['/dashboard', '.calendar'], ['/history', '.history-grid'],
-      ['/journal/11111111-1111-4111-8111-111111111111', '.entry-paper'], ['/reflection', '.reflection-page']]) {
+      ['/journal/11111111-1111-4111-8111-111111111111', '.entry-paper'], ['/reflection', '.reflection-page'], ['/memories', '.pixel-memories-page']]) {
       await navigate(path, ready);
       assert.equal(await theme(), 'light');
       assert.equal(await evaluate("document.querySelectorAll('.account-trigger').length"), 1);
@@ -165,7 +166,7 @@ test('account menu, appearance, and existing guards work in a real browser', {
     await navigate('/', '.home-page');
     await openMenu(); await clickText('Dark'); await key('Escape');
     assert.equal(await theme(), 'dark');
-    await click('.home-nav a[href="/dashboard"]');
+    await navigate('/memories', '.pixel-memories-page');
     await browser.waitFor("document.querySelector('.pixel-memory-art img')?.complete");
     assert.equal(await theme(), 'dark');
     assert.equal(await logoutCalls(), 0);
@@ -180,7 +181,7 @@ test('account menu, appearance, and existing guards work in a real browser', {
     assert.equal(await theme(), 'light');
     assert.ok(await evaluate("!!document.querySelector('.account-panel')"));
     await clickText('Dark'); await key('Escape');
-    await reload('.calendar');
+    await reload('.pixel-memories-page');
     assert.equal(await theme(), 'dark');
     assert.equal(await evaluate("localStorage.getItem('aurajournal-theme')"), 'dark');
   });

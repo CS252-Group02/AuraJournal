@@ -254,7 +254,8 @@ test('Dashboard shares real journal data and never generates a reflection during
   globalThis.__dashboardEntries = { entries: [row('one', '2026-11-16'), row('two', '2026-11-16')], status: 'ready', reload() {} };
   const html = render(DashboardPage, {}, '/dashboard?month=2026-11&date=2026-11-16');
   for (const text of ['Current streak', 'Longest streak', 'Journal entries', 'This week', 'Moments in Pixels', 'Moods', 'Recent memories', 'Your journal companion']) assert.ok(html.includes(text), text);
-  assert.equal((html.match(/data-memory-date=/g) || []).length, 7);
+  assert.equal((html.match(/data-memory-date=/g) || []).length, 0);
+  assert.match(html, /href="\/memories"/);
   assert.match(html, /2 journals/);
   assert.match(html, /href="\/journal\/one"/);
   assert.doesNotMatch(html, /Most recorded:/);
