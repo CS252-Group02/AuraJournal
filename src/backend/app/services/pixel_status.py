@@ -1,0 +1,22 @@
+"""Read-only public status projection; never schedules, repairs or calls providers."""
+from app.schemas.pixel_art import PixelGenerationStatus
+from app.services.journal_images import has_owned_image_reference
+
+
+def generation_status(storage, image, job):
+    if image is not None:
+        code = "invalid_reference"
+        if has_owned_image_reference(image):
+            try:
+                if storage.path(image.image_url).is_file():
+                    return PixelGenerationStatus(status="ready", updated_at=job.updated_at if job else image.created_at)
+                code = "image_missing"
+            except (OSError, ValueError):
+                code = "storage_unavailable"
+        return PixelGenerationStatus(status="failed", error_code=code, updated_at=job.updated_at if job else None)
+    if job is None:
+        return PixelGenerationStatus(status="not_requested")
+    # A missing committed image must never be advertised as ready.
+    if job.status in {"ready", "cancelled"}:
+        return PixelGenerationStatus(status="failed", error_code="image_missing", updated_at=job.updated_at)
+    return PixelGenerationStatus(status=job.status, error_code=job.error_code, updated_at=job.updated_at)

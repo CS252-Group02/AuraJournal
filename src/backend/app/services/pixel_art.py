@@ -74,6 +74,10 @@ class MomentExtractor:
             client = Groq(api_key=key, timeout=30.0, max_retries=0)
         self._ai = _GroqJSONClient(client=client, model=model)
 
+    @property
+    def configured(self) -> bool:
+        return self._ai._client is not None or bool(groq_api_key() and groq_api_key().strip())
+
     def extract(self, text: str) -> SignificantMoment:
         result = self._ai.generate(
             text, system_prompt=SYSTEM_PROMPT, response_model=SignificantMoment,

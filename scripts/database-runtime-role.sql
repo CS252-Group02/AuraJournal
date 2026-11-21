@@ -1,5 +1,5 @@
 -- Run with psql as a database administrator, in the AuraJournal database,
--- AFTER migrating to 0008. Back up and verify a restore first.
+-- AFTER migrating to head. Back up and verify a restore first.
 -- Idempotent and transactional. No credentials are stored in this file.
 \set ON_ERROR_STOP on
 BEGIN;
@@ -31,7 +31,8 @@ DO $$
 DECLARE item text;
 BEGIN
   FOREACH item IN ARRAY ARRAY['users','journal_entries','mood_records','journal_images',
-                              'auth_sessions','login_attempts','rate_limit_buckets','weekly_reflections','alembic_version'] LOOP
+                              'auth_sessions','login_attempts','rate_limit_buckets','weekly_reflections',
+                              'pixel_art_jobs','alembic_version'] LOOP
     EXECUTE format('ALTER TABLE public.%I OWNER TO aurajournal_owner', item);
     EXECUTE format('REVOKE ALL ON TABLE public.%I FROM PUBLIC, aurajournal_runtime', item);
     IF item <> 'alembic_version' THEN

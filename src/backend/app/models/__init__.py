@@ -7,8 +7,9 @@ from app.models.mood_record import MoodRecord
 from app.models.journal_image import JournalImage
 from app.models.auth import AuthSession, LoginAttempt, RateLimitBucket
 from app.models.weekly_reflection import WeeklyReflection
+from app.models.pixel_art_job import PixelArtJob
 
 __all__ = [
     "Base", "User", "JournalEntry", "MoodRecord", "JournalImage", "AuthSession",
-    "LoginAttempt", "RateLimitBucket", "WeeklyReflection",
+    "LoginAttempt", "RateLimitBucket", "WeeklyReflection", "PixelArtJob",
 ]

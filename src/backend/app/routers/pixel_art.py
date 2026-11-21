@@ -1,27 +1,22 @@
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.auth import current_user
 from app.database import get_session
-from app.models import JournalEntry, JournalImage, User
+from app.models import JournalEntry, JournalImage, PixelArtJob, User
 from app.schemas.entries import JournalDate
 from app.schemas.pixel_art import (
     DatedPixelArt, PixelArtMetadata, PixelArtRequest, PixelArtResponse,
-    PixelMemoryDay, PixelMemoryEntry, PixelMemoryFeed,
+    PixelMemoryDay, PixelMemoryEntry, PixelMemoryFeed, PixelArtStatusResponse,
 )
-from app.services._groq import (
-    AIInvalidResponseError, AIServiceNotConfiguredError, AIServiceUnavailableError, EmptyJournalError,
-)
-from app.services.image_lifecycle import generation_locks
 from app.services.journal_images import (
-    attach_image, has_owned_image_reference, recent_journal_images, recent_journal_memories,
+    has_owned_image_reference, recent_journal_images, recent_journal_memories,
 )
-from app.services.pixel_generation import render_pixel_art
-from app.services.pixellab import PixelArtError, PixelArtRateLimited
+from app.services.pixel_status import generation_status
+from app.services.pixellab import PixelArtError
 
 router = APIRouter(prefix="/api/entries", tags=["pixel art"])
 
@@ -51,69 +46,22 @@ def metadata(image: JournalImage) -> PixelArtResponse:
 
 
 @router.post("/{entry_id}/pixel-art", response_model=PixelArtResponse,
-             response_model_exclude_none=True, status_code=201,
-             responses={200: {"model": PixelArtResponse, "description": "Previously generated image"}})
-def generate_pixel_art(entry_id: UUID, payload: PixelArtRequest, request: Request, response: Response,
+             response_model_exclude_none=True, deprecated=True,
+             responses={409: {"description": "Automatic job pending or processing"},
+                        503: {"description": "Generation unavailable or terminal"}})
+def generate_pixel_art(entry_id: UUID, payload: PixelArtRequest,
                        user: User = Depends(current_user), session: Session = Depends(get_session)):
-    user_id = user.id
-    entry = owned(session, entry_id, user_id)
-    # Do not keep the authentication/read transaction open during provider calls.
-    session.rollback()
-    state = request.app.state
-    try:
-        with generation_locks(state.engine, entry_id, user_id):
-            with state.session_factory() as read_session:
-                entry = owned(read_session, entry_id, user_id)
-                if entry.image is not None:
-                    response.status_code = 200
-                    return metadata(entry.image)
-                content, updated_at = entry.content, entry.updated_at
-            if not state.pixel_art_enabled:
-                raise PixelArtError()
-            if not state.pixel_art_capacity.acquire(blocking=False):
-                raise PixelArtRateLimited()
-            try:
-                data, representation = render_pixel_art(state, content)
-                image_id = uuid4()
-                key = None
-                try:
-                    with state.session_factory() as write_session:
-                        entry = owned(write_session, entry_id, user_id, lock=True)
-                        if entry.content != content or entry.updated_at != updated_at:
-                            raise HTTPException(409, "Journal entry changed during generation. Please retry.")
-                        if entry.image is not None:
-                            raise HTTPException(409, "Journal entry already has an image.")
-                        key = state.image_storage.save(entry_id, image_id, data)
-                        image = attach_image(write_session, user_id, entry_id, image_id, key)
-                        result = metadata(image)
-                        result.representation = representation
-                        write_session.commit()
-                except Exception:
-                    if key is not None:
-                        # A lost connection during COMMIT has an uncertain outcome.
-                        # Keep a possibly referenced file until DB reconciliation
-                        # can establish whether it is safe to delete.
-                        try:
-                            with state.session_factory() as recovery_session:
-                                referenced = recovery_session.scalar(select(JournalImage.id).where(
-                                    JournalImage.image_url == key,
-                                ))
-                            if referenced is None:
-                                state.image_storage.delete(key)
-                        except SQLAlchemyError:
-                            pass
-                    raise
-                return result
-            finally:
-                state.pixel_art_capacity.release()
-    except EmptyJournalError as error:
-        raise HTTPException(422, "Journal entry cannot be empty.") from error
-    except AIInvalidResponseError as error:
-        raise HTTPException(502, "AI service returned an invalid response.") from error
-    except (AIServiceNotConfiguredError, AIServiceUnavailableError) as error:
-        raise HTTPException(503, "AI image service is unavailable. Please try again later.") from error
-    except PixelArtError as error:
-        raise service_error(error) from error
+    """Deprecated compatibility check. It never schedules or submits AI work."""
+    entry = owned(session, entry_id, user.id)
+    if entry.image is not None:
+        return metadata(entry.image)
+    job = session.scalar(select(PixelArtJob).where(
+        PixelArtJob.entry_id == entry_id, PixelArtJob.source_version == entry.content_version,
+    ))
+    if job is not None and job.status in {"pending", "processing"}:
+        raise HTTPException(409, "Automatic image generation is queued or running. Check for a saved image.",
+                            headers={"Retry-After": "5"})
+    raise HTTPException(503, "Automatic image generation is unavailable. Your journal is saved.")
 
 
 @router.get("/pixel-art/recent", response_model=list[DatedPixelArt])
@@ -127,17 +75,33 @@ def recent_pixel_art(as_of: JournalDate, user: User = Depends(current_user),
 
 
 @router.get("/pixel-art/memories", response_model=PixelMemoryFeed)
-def pixel_memories(as_of: JournalDate, user: User = Depends(current_user),
+def pixel_memories(as_of: JournalDate, request: Request, user: User = Depends(current_user),
                    session: Session = Depends(get_session)):
     groups = {}
-    for day, entry_id, image in recent_journal_memories(session, user.id, as_of):
+    for day, entry_id, image, job in recent_journal_memories(session, user.id, as_of, include_jobs=True):
         available = image is not None and has_owned_image_reference(image)
         groups.setdefault(day, []).append(PixelMemoryEntry(
             entry_id=entry_id, image=metadata(image).image if available else None,
+            generation=generation_status(request.app.state.image_storage, image, job),
         ))
     return PixelMemoryFeed(as_of=as_of, days=[
         PixelMemoryDay(journal_date=day, entries=entries) for day, entries in groups.items()
     ])
+
+
+@router.get("/{entry_id}/pixel-art/status", response_model=PixelArtStatusResponse)
+def get_pixel_art_status(entry_id: UUID, request: Request, user: User = Depends(current_user),
+                         session: Session = Depends(get_session)):
+    entry = owned(session, entry_id, user.id)
+    job = session.scalar(select(PixelArtJob).where(
+        PixelArtJob.entry_id == entry_id, PixelArtJob.source_version == entry.content_version,
+    ))
+    available = entry.image is not None and has_owned_image_reference(entry.image)
+    return PixelArtStatusResponse(
+        entry_id=entry.id, journal_date=entry.journal_date,
+        image=metadata(entry.image).image if available else None,
+        generation=generation_status(request.app.state.image_storage, entry.image, job),
+    )
 
 
 @router.get("/{entry_id}/pixel-art", response_model=PixelArtResponse, response_model_exclude_none=True)

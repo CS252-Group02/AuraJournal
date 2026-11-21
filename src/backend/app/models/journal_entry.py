@@ -27,6 +27,7 @@ class JournalEntry(CreatedAt, UpdatedAt, Base):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    content_version: Mapped[int] = mapped_column(nullable=False, default=1, server_default="1")
     journal_date: Mapped[date] = mapped_column(
         Date, nullable=False,
         server_default=text("(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok')::date"),

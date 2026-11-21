@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from app.models import JournalImage
+from app.models import JournalImage, PixelArtJob
 from app.services.image_storage import ImageStorage
 from app.services.pixellab import PixelArtError, PixelArtRateLimited
 
@@ -17,7 +17,7 @@ class GenerationConflict(PixelArtError):
 
 
 @contextmanager
-def generation_locks(engine, entry_id: UUID, user_id: UUID | None = None):
+def generation_locks(engine, entry_id: UUID, user_id: UUID | None = None, *, capacity: int | None = None):
     # Session locks survive transaction boundaries. AUTOCOMMIT prevents an idle
     # transaction during network calls. All workers use stable namespaced keys.
     with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as connection:
@@ -37,6 +37,18 @@ def generation_locks(engine, entry_id: UUID, user_id: UUID | None = None):
                 if not acquired:
                     raise GenerationConflict() if kind == "entry" else PixelArtRateLimited()
                 held.append(key)
+            if capacity is not None:
+                for slot in range(capacity):
+                    key = int.from_bytes(hashlib.sha256(
+                        f"aurajournal:pixel-art:{namespace}:slot:{slot}".encode()
+                    ).digest()[:8], signed=True)
+                    acquired = connection.scalar(text("SELECT pg_try_advisory_lock(:key)"), {"key": key})
+                    connection.commit()
+                    if acquired:
+                        held.append(key)
+                        break
+                else:
+                    raise PixelArtRateLimited()
             yield
         finally:
             try:
@@ -68,7 +80,14 @@ def reconcile_images(engine, storage: ImageStorage) -> int:
                 with generation_locks(engine, entry_id):
                     with Session(engine) as session:
                         referenced = session.scalar(select(JournalImage.id).where(JournalImage.image_url == key))
-                    if not referenced:
+                        # A completed provider response may have reached disk before
+                        # the attachment transaction. Keep it for worker recovery.
+                        recoverable = session.scalar(select(PixelArtJob.id).where(
+                            PixelArtJob.id == UUID(validated.stem), PixelArtJob.entry_id == entry_id,
+                            PixelArtJob.status.in_(["processing", "uncertain"]),
+                            PixelArtJob.submitted_at.is_not(None),
+                        ))
+                    if not referenced and not recoverable:
                         if path.suffix == ".tmp":
                             if not path.is_symlink():
                                 path.unlink(missing_ok=True)

@@ -30,9 +30,23 @@ class DatedPixelArt(BaseModel):
     image: PixelArtMetadata
 
 
+class PixelGenerationStatus(BaseModel):
+    status: Literal["pending", "processing", "ready", "failed", "unavailable", "uncertain", "not_requested"]
+    error_code: str | None = None
+    updated_at: datetime | None = None
+
+
+class PixelArtStatusResponse(BaseModel):
+    entry_id: UUID
+    journal_date: date
+    image: PixelArtMetadata | None
+    generation: PixelGenerationStatus
+
+
 class PixelMemoryEntry(BaseModel):
     entry_id: UUID
     image: PixelArtMetadata | None
+    generation: PixelGenerationStatus
 
 
 class PixelMemoryDay(BaseModel):
