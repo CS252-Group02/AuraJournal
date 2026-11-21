@@ -242,7 +242,7 @@ export default function EntryPage() {
   return (
     <main className="aj-page entry-page">
       <div className="aj-inner">
-        <PageHeader initial={user.email[0]?.toUpperCase()} />
+        <PageHeader />
         <Link to="/history" className="aj-back">← All journal entries</Link>
         {content}
       </div>

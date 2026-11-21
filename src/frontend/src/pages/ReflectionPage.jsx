@@ -187,7 +187,7 @@ export default function ReflectionPage() {
   return (
     <main className="aj-page reflection-page">
       <div className="aj-inner">
-        <PageHeader initial={user.email[0]?.toUpperCase()} />
+        <PageHeader />
         <header className="aj-title reflection-title">
           <div>
             <h1>Weekly recap</h1>

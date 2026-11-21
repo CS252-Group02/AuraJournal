@@ -31,22 +31,6 @@
   -webkit-font-smoothing: antialiased;
 }
 
-/* Dark tokens; AuthLayout.jsx adds .dark from the theme switch (light / dark / system). */
-.login.dark {
-  color-scheme: dark;
-  --background: oklch(0.19 0.012 160);
-  --foreground: oklch(0.96 0.008 150);
-  --card: oklch(0.225 0.012 160);
-  --primary: oklch(0.74 0.09 155);
-  --primary-foreground: oklch(0.2 0.02 160);
-  --muted: oklch(0.28 0.014 160);
-  --muted-foreground: oklch(0.72 0.02 155);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.56 0.04 155);
-}
-
 .login ::selection { background: color-mix(in oklch, var(--foreground) 18%, transparent); }
 
 
@@ -81,7 +65,7 @@
   transition: border-color 150ms, box-shadow 150ms;
 }
 @media (min-width: 768px) { .login-input { font-size: 14px; } }
-.login.dark .login-input { background: color-mix(in oklch, var(--input) 30%, transparent); }
+:root[data-theme="dark"] .login .login-input { background: color-mix(in oklch, var(--input) 30%, transparent); }
 .login-input::placeholder { color: var(--muted-foreground); }
 /* Browser autofill paints its own pale fill; keep the input colour instead. */
 .login-input:autofill,
@@ -148,7 +132,7 @@
   outline: none;
   transition: background-color 150ms, scale 150ms;
 }
-.login.dark .login-google { border-color: var(--input); background: color-mix(in oklch, var(--input) 30%, transparent); }
+:root[data-theme="dark"] .login .login-google { border-color: var(--input); background: color-mix(in oklch, var(--input) 30%, transparent); }
 .login-google:hover { background: var(--muted); }
 .login-google:active { scale: 0.97; }
 .login-google:focus-visible { box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent); }
@@ -199,52 +183,6 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
-}
-
-/* Theme switch: segmented control with a sliding selection pill. */
-.theme-switch {
-  position: fixed;
-  top: 16px;
-  right: 24px;
-  display: flex;
-  gap: 4px;
-  padding: 4px;
-  border-radius: var(--radius);
-  background: var(--muted);
-}
-.theme-switch .pill {
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  width: 32px;
-  height: 28px;
-  border-radius: calc(var(--radius) * 0.8);
-  background: var(--background);
-  box-shadow: 0 1px 2px color-mix(in oklch, var(--foreground) 10%, transparent);
-  transition: translate 240ms var(--ease-drawer);
-}
-.theme-option {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 28px;
-  padding: 0;
-  border: 0;
-  border-radius: calc(var(--radius) * 0.8);
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  outline: none;
-  transition: color 150ms;
-}
-.theme-option:hover,
-.theme-option[aria-pressed="true"] { color: var(--foreground); }
-.theme-option:focus-visible { box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent); }
-.theme-option svg { width: 16px; height: 16px; }
-
-@media (max-width: 640px) {
-  .theme-switch { top: 12px; right: 12px; }
 }
 
 /* Motion: content rises out of a blur; a refused form shakes. */
