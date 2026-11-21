@@ -24,14 +24,26 @@ def test_query_measurement_rolls_back_synthetic_data(migrated_engine):
 
 def test_security_upgrade_preserves_owned_ai_and_child_records(isolated_engine):
     from datetime import date
+    from uuid import uuid4
     migrate(isolated_engine, '0007')
     with Session(isolated_engine) as session:
-        entry = JournalEntry(user_id=DEVELOPMENT_USER_ID, content='Keep my journal',
-                             journal_date=date(2026, 11, 16), ai_summary='Saved AI summary',
-                             ai_reflection_question='What helped?')
-        entry.image = JournalImage(image_url='pixel-art/legacy-reference.png')
-        entry.mood_record = MoodRecord(valence=0.5, arousal=0.25)
-        session.add(entry)
+        # Seed the historical schema explicitly: current ORM models also include
+        # content_version, which did not exist before migration 0010.
+        entry_id = uuid4()
+        created = session.scalar(text("""
+            INSERT INTO journal_entries
+                (id,user_id,content,journal_date,ai_summary,ai_reflection_question)
+            VALUES (:id,:owner,'Keep my journal','2026-11-16','Saved AI summary','What helped?')
+            RETURNING created_at
+        """), {"id": entry_id, "owner": DEVELOPMENT_USER_ID})
+        session.execute(text("""
+            INSERT INTO journal_images (id,entry_id,image_url,file_format)
+            VALUES (:id,:entry,'pixel-art/legacy-reference.png','png')
+        """), {"id": uuid4(), "entry": entry_id})
+        session.execute(text("""
+            INSERT INTO mood_records (id,entry_id,valence,arousal)
+            VALUES (:id,:entry,0.5,0.25)
+        """), {"id": uuid4(), "entry": entry_id})
         # Seed the historical schema without the source_dates column added in 0009.
         session.execute(text("""
             INSERT INTO weekly_reflections (user_id, period_start, summary, questions)
@@ -39,7 +51,6 @@ def test_security_upgrade_preserves_owned_ai_and_child_records(isolated_engine):
                     '["What helped?", "What next?"]'::jsonb)
         """), {'owner': DEVELOPMENT_USER_ID})
         session.commit()
-        entry_id, created = entry.id, entry.created_at
     migrate(isolated_engine)
     migrate(isolated_engine)
     with Session(isolated_engine) as session:
