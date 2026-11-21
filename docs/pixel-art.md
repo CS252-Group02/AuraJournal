@@ -115,7 +115,7 @@ entry/version/token, so deleted journals cannot receive late images. Normal edit
 and deletion remove old files after database commit. Account deletion retains the
 existing database cascades and orphan cleanup behavior.
 
-## Read-only API contract for PR2
+## Read-only memory API
 
 Every route requires the authenticated session cookie. Missing and foreign journal
 IDs return 404; anonymous requests return 401. Responses have `Cache-Control:
@@ -197,13 +197,9 @@ checks file presence without decoding every PNG. A missing file is reported as
 Storage can disappear after a response; clients must still handle content 404/503
 and decode errors. Reads never repair or regenerate missing images.
 
-PR2 should GET the grouped feed on navigation/refresh and poll it (or the
-per-journal status GET) every five seconds **only while visible journals are
-pending/processing**, with a two-minute polling window. Stop on terminal status,
-hidden tab, navigation, logout or account change; refresh/focus can start a new
-bounded window. Treat `uncertain` as terminal and offer a read refresh, without a
-billable POST. No WebSocket/SSE infrastructure is needed. Preserve account-scoped
-request cancellation, credentials, PNG Blob URLs and logout revocation.
+The frontend gallery uses this contract through authenticated, no-store GETs.
+No WebSocket/SSE infrastructure is needed. Account-scoped cancellation, PNG Blob
+URLs and logout revocation remain in place.
 
 ### Deprecated POST compatibility
 
@@ -215,15 +211,77 @@ request cancellation, credentials, PNG Blob URLs and logout revocation.
 - 503 if unavailable, terminal or never scheduled; 404 for missing/foreign journals;
 - it never schedules, runs providers, clears a fence or retries an unchanged journal.
 
-The current Dashboard still shows Generate controls and copy describing explicit
-generation; their removal and disclosure updates belong to PR2. Its existing
-metadata/PNG/recent reads and first-image-per-day selection remain compatible.
-Clicking Generate while work runs uses its existing conflict/check flow; refreshing
-finds completed automatic images. POST no longer returns 201 or waits for a fresh
-image. The existing Dashboard disclosure describes user-initiated generation and
-does not disclose automatic generation on journal saves. Production rollout must
-satisfy the disclosure requirement below first. No frontend implementation is
-included in this PR.
+The dedicated frontend gallery never calls this POST. It remains available only
+for older consumers; it cannot start or retry provider work.
+
+## Dedicated Moments in Pixels gallery
+
+`/memories` is a protected content page inside the existing AppShell. It shares
+navigation, the account menu, theme controls and floating Record link. Dashboard
+links to the page and retains its calendar/activity/reflection/mood features; it
+no longer embeds a second gallery.
+
+The UI shows exactly **seven consecutive browser-local calendar dates** ending on
+the selected date, independently of the feed's seven occupied dates. It creates
+seven stable slots and matches groups by `journal_date`, leaving unoccupied slots
+empty and ignoring occupied dates outside that calendar range. It preserves all
+journals/images on each visible date. Today follows the shared local-day clock at
+midnight and on focus/timezone changes; historical selections stay fixed. The date
+picker retains its `1000-01-07` minimum and today's local date as its maximum.
+
+The grouped feed is the authoritative artwork/status source. Journal captions use
+one authenticated journal-list read scoped to the visible seven calendar dates
+on opening, explicit refresh/focus, and when
+the feed changes. Unchanged polls do not refetch the journal list. Metadata is
+validated before rendering: date/UUID/status structure, unique journal/image
+identities, PNG dimensions/format/timestamps, exact authenticated content URLs,
+and matching current journal/date associations. Invalid metadata never becomes
+an arbitrary image URL. Associations that changed during the two reads display
+an unavailable state until the next refresh, rather than moving an image to a
+wrong date or journal.
+
+### Read-only updates
+
+The gallery polls the grouped feed approximately every five seconds only while a
+visible journal is `pending` or `processing`, within a two-minute window. It stops
+on terminal states, read failures, hidden tabs, unmount/navigation, logout and
+account changes. Refresh, focus or returning to a visible tab opens a new bounded
+window. Older pending occupied dates outside the visible calendar slots do not
+start polling. A paused-update message offers a read refresh; there is no automatic
+provider retry or generation POST. New journals/edits made elsewhere after all
+visible jobs are terminal are discovered on refresh/focus.
+
+Pending artwork appears automatically after a successful poll. Unchanged data
+retains its snapshot, day components, image identities and Blob URLs; refresh does
+not remount the whole gallery. Read errors preserve an existing authorized snapshot
+with an error message, but authentication changes clear all private data. Late
+metadata/image responses from old date ranges or sessions are ignored.
+
+### Daily artwork navigation and image safety
+
+A date with multiple ready artworks shows Previous/Next buttons **beneath** the
+square image and a position such as `1 / 3`. Controls have descriptive accessible
+names, visible focus, boundary disabled states and native keyboard/arrow-key
+operation. There is no autoplay. Initial selection uses the earliest image creation
+time, with journal UUID ties. Selection is latched by journal/image identity:
+new images do not unexpectedly replace it; removal falls back to a valid remaining
+artwork. The caption, image link and journal destination always follow that exact
+selection. Other journals retain their own status and source links in the day's
+expandable list. A ready artwork remains visible when other journals are pending.
+
+All seven dates fit together on sufficiently wide screens; narrower viewports use
+a contained horizontal scroller and larger cards. Images scale with their square
+area using `object-fit: contain` and `image-rendering: pixelated`, without cropping
+or overlays. Feature CSS is imported independently of Dashboard CSS and uses the
+shared theme tokens in both Light and Dark.
+
+The original authenticated PNG loader and `apiPng()` validation are retained.
+They enforce canonical paths, cookies, no-store, redirect rejection, PNG content
+and signature/size checks, request deadlines and auth epochs. Images use temporary
+Blob URLs, revoked on replacement, removal, logout or unmount. Image download/decode
+failures offer **Retry image**, which only repeats the PNG GET and does not change
+backend generation status. Nothing is stored in localStorage. No manual generation
+button, source selector, billable retry/check flow or `pixelGeneration.js` remains.
 
 ## Configuration, deployment and privacy
 
@@ -290,8 +348,17 @@ to PixelLab, that artwork can be symbolic/inaccurate, and that provider processi
 retention and charges may apply. Obtain informed opt-in where required by the
 product's privacy policy and applicable obligations. This PR supplies an operational
 flag, not per-account consent storage/UI; keep generation disabled for users who
-have not received the disclosure/required consent. PR2 must remove the old Generate
-controls and provide the disclosure/consent experience before production enablement.
+have not received the disclosure/required consent. The frontend now displays the
+external-artwork disclosure before written journal saves, recorded-journal saves,
+and content edits, explaining Groq/PixelLab transmission, symbolic/inaccurate art,
+provider processing/retention and possible charges. It does not add a cosmetic
+consent checkbox or change provider configuration.
+
+**Remaining production blocker where per-user opt-in is required:** PR1 has no
+per-account consent persistence or backend enforcement. Frontend disclosure alone
+cannot enforce consent for direct API clients or other users. Add the required
+backend consent policy/enforcement before enabling automatic generation for those
+accounts; this frontend PR does not claim to solve that missing enforcement.
 Credentials remain backend-only. Structural/evidence validation does not prove
 semantic factuality or removal of all identifying details by the model. Provider
 retention, backups and deletion are separate privacy/deployment responsibilities.
@@ -313,7 +380,12 @@ leases/restart recovery, saved-output recovery, uncertain commits, edit/delete
 races, private content, multiple journals per date and no generation on reads.
 Migration tests compare model metadata and exercise upgrade/downgrade without a
 historical backfill. Run `npm run test:frontend` and `npm run build` from the root
-for existing frontend compatibility. No live provider call is required or implied.
+for existing frontend compatibility. Browser coverage uses only fixture journals and canvas PNGs. It checks private
+navigation/account isolation, automatic updates, Blob URL stability, unobstructed
+carousel controls, disclosure placement, and 320/768/1024/1440-pixel layouts in both
+themes. Run `npm run test:frontend:browser` with an installed Chromium/Chrome/Brave
+(or `BROWSER_BIN`) for these optional browser checks. No live provider call is
+required or implied.
 
 Any live evaluation requires separate explicit authorization, fictional journals,
 a test account, provider credits and the deployment/privacy prerequisites above.
