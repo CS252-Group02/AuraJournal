@@ -52,7 +52,7 @@ function DashboardContent({ user }) {
       <div className="aj-inner">
         <PageHeader />
         <header className="aj-title dashboard-title">
-          <div><h1>Your journey</h1><p>Every day tells a story. Here’s yours.</p></div>
+          <div><h1>Your journey</h1></div>
         </header>
         <nav className="dashboard-links" aria-label="Your journal">
           <Link to="/">Back to Main</Link>
@@ -76,7 +76,7 @@ function DashboardContent({ user }) {
               onModeChange={view.changeMode} onSelectDate={view.selectDate} />
             <MonthlyOverview summary={monthly} month={view.month} status={status} onSelectDate={view.selectDate} />
             {ready && view.selectedKey ? <SelectedDayEntries key={view.selectedKey} dateKey={view.selectedKey} entries={byDay.get(view.selectedKey) || []} />
-              : ready && <p className="dashboard-selection-hint">Choose a date to revisit its journals. A single-entry day opens directly; use the date picker to see its details here.</p>}
+              : null}
           </div>
           <div className="dashboard-reflections-column">
             <WeeklyRecap week={week} status={status} userId={user.id} timezone={view.timezone} reload={reload} onSelectDate={view.selectDate} />

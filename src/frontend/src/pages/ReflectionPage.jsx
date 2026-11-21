@@ -25,7 +25,6 @@ function MemoryStrip({ start, byDay }) {
     <section aria-labelledby="memories-heading">
       <div className="aj-section-head">
         <h2 id="memories-heading">Your week’s entries</h2>
-        <span className="aj-kicker">Tap a day to open its entry</span>
       </div>
       <ol className="memory-strip">
         {weekDays(start).map((day) => {
@@ -81,7 +80,7 @@ function RecapBody({ state, onGenerate, onRefresh }) {
     return (
       <StatePanel icon="✦" title="What happened this week"
         action={<button type="button" className="aj-btn" onClick={onGenerate}>Generate weekly recap</button>}>
-        Create a factual recap from this week’s entries. Their text will be sent to the AI service only when you select Generate.
+        Sends this week’s text to AI.
       </StatePanel>
     );
   }

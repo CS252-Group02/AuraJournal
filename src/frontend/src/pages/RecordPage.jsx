@@ -8,7 +8,6 @@ import { useNavigationGuard } from '../components/layout/navigation.js';
 function JournalMascot() {
   return (
     <aside className="record-mascot" aria-label="Your journal companion">
-      <p className="record-mascot-speech">Whenever you are ready, I am here.</p>
       <div className="record-mascot-art" aria-hidden="true">
         <div className="record-mascot-face">
           <span className="record-mascot-eyes" />
@@ -56,7 +55,6 @@ export default function Record({ backgroundImage, backgroundStatus = 'ready', on
         </button>
         <div className="record-brand">
           <h1>{'✦  AuraJournal'}</h1>
-          <p>YOUR PRIVATE VOICE JOURNAL</p>
         </div>
       </header>
 

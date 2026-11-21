@@ -306,7 +306,7 @@ test('UI distinguishes no journal, saved journal without image, unknown metadata
   assert.equal((loading.match(/data-memory-date=/g) || []).length, 7);
   assert.match(loading, /Loading journals/); assert.doesNotMatch(loading, /Fictional memory|No journal</);
   const failure = render(PixelMemories, { ...base, status: 'error' });
-  assert.match(failure, /Use Refresh memories/); assert.doesNotMatch(failure, /Fictional memory|No journal</);
+  assert.match(failure, /Refresh to try again/); assert.doesNotMatch(failure, /Fictional memory|No journal</);
   assert.match(render(PixelMemories, { ...base, entries: [], status: 'ready' }), /Gathering your stored pixel memories/);
 });
 

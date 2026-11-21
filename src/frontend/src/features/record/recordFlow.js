@@ -96,8 +96,7 @@ export function createRecordFlow({ recorder, services, schedule = setTimeout, ca
         })();
       }
       const startup = startupTask;
-      publish({ phase: 'recording', warning: live ? state.warning : services.uploadAvailable
-        ? 'Recording locally. After Stop, supported audio will be uploaded for transcription. You can review and edit before saving.'
+      publish({ phase: 'recording', warning: live || services.uploadAvailable ? state.warning
         : 'Live transcription is unavailable. Record locally, then write or correct your journal below.' });
       await startup;
     } catch (error) {
@@ -196,7 +195,7 @@ export function createRecordFlow({ recorder, services, schedule = setTimeout, ca
       if (!validUploadedTranscript(result)) throw new Error('The server returned an invalid transcript. Your recording is kept; you can try again.');
       const warning = result.outcome === 'no_speech'
         ? 'No speech was recognized. Listen to your recording and write or correct your journal manually.'
-        : 'Review the transcript against your recording before saving.';
+        : '';
       if (existingText || state.editRevision !== revision) {
         publish({ phase: 'review', uploadStatus: 'succeeded',
           uploadTranscript: result.outcome === 'transcribed' ? result.transcript : null,
@@ -264,7 +263,7 @@ export function createRecordFlow({ recorder, services, schedule = setTimeout, ca
     useUploadTranscript() {
       if (state.phase !== 'review' || state.saveUnknown || state.uploadTranscript === null || !current(generation)) return;
       publish({ editorText: state.uploadTranscript, editRevision: state.editRevision + 1,
-        incomplete: false, error: '', warning: 'Review the uploaded transcript and make any corrections before saving.' });
+        incomplete: false, error: '', warning: '' });
     },
     edit(text) {
       if (!['review', 'transcribing'].includes(state.phase) || state.saveUnknown) return;
@@ -273,7 +272,7 @@ export function createRecordFlow({ recorder, services, schedule = setTimeout, ca
     useOriginal() {
       if (state.phase !== 'proofreading') return;
       pendingAbort?.abort();
-      enterReview({ warning: 'Reviewing the original transcript. No AI response will replace your edits.' });
+      enterReview({ warning: '' });
     },
   };
 }

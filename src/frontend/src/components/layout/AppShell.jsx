@@ -4,9 +4,11 @@ import Sidebar from './Sidebar.jsx';
 import FloatingRecordButton from './FloatingRecordButton.jsx';
 import NavigationIcon from './NavigationIcon.jsx';
 import { navigationMode, shouldGuardLink } from './navigation.js';
+import { usePageDirection } from '../../lib/motion.js';
 
 export default function AppShell() {
   const location = useLocation(), mode = navigationMode(location.pathname);
+  const direction = usePageDirection(location.pathname);
   const [mobile, setMobile] = useState(() => Boolean(globalThis.matchMedia?.('(max-width: 767px)').matches));
   const [open, setOpen] = useState(false);
   const dialog = useRef(null), opener = useRef(null), guard = useRef(null), restoreFocus = useRef(true);
@@ -65,7 +67,9 @@ export default function AppShell() {
       <Sidebar drawer onClose={() => closeSidebar()} onNavigate={() => closeSidebar(false)} />
     </dialog>}
     <div className="shell-content" id="app-content" tabIndex={-1}>
-      <Outlet context={{ openSidebar, sidebarOpen: open, registerNavigationGuard, confirmNavigation }} />
+      <div key={location.pathname} className="page-move" data-direction={direction}>
+        <Outlet context={{ openSidebar, sidebarOpen: open, registerNavigationGuard, confirmNavigation }} />
+      </div>
     </div>
     {mode.floatingRecord && <FloatingRecordButton />}
   </div>;

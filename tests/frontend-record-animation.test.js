@@ -218,14 +218,14 @@ test('record controls retain visible Start/Stop labels and disclose HTTP process
   const model = { capture: { status: 'ready' }, capabilities: { uploadAvailable: true }, elapsedSeconds: 0, flow: {} };
   const render = updates => renderToStaticMarkup(React.createElement(Button, { model: { ...model, ...updates } }));
   assert.match(render({ phase: 'ready' }), /record-trigger/);
-  assert.match(render({ phase: 'ready' }), /After Stop, WebM\/Opus audio is uploaded/);
+  assert.match(render({ phase: 'ready' }), /Audio is uploaded for transcription after Stop/);
   const recording = render({ phase: 'recording', capture: { status: 'recording' }, elapsedSeconds: 12 });
   assert.match(recording, /aria-label="Stop recording"/);
   assert.match(recording, /is-recording/);
   assert.match(recording, /00:12/);
   const uploading = render({ phase: 'transcribing', capture: { status: 'stopped' } });
   assert.match(uploading, /role="status"/);
-  assert.match(uploading, /Uploading audio and transcribing/);
+  assert.match(uploading, /Uploading and transcribing/);
   assert.match(uploading, /100 seconds/);
   assert.match(uploading, /Cancel transcription/);
   assert.match(uploading, /Discard take/);
@@ -250,7 +250,7 @@ test('HTTP retry and proposed replacement remain separate from the current edite
     capture: { url: 'blob:kept' }, capabilities: {}, flow: {}, canUpload: true, uploadStatus: 'failed' };
   const render = updates => renderToStaticMarkup(React.createElement(MemoryRouter, {}, React.createElement(View, { model: { ...model, ...updates } })));
   assert.match(render({}), /Retry transcription/);
-  assert.match(render({}), /new request.*transcription allowance/);
+  assert.match(render({}), /New request.*transcription allowance/);
   const comparison = render({ canUpload: false, uploadStatus: 'succeeded', uploadTranscript: 'Full recognized text' });
   assert.match(comparison, /<textarea[^>]*>My corrected draft<\/textarea>/);
   assert.match(comparison, /Confirmed live text/);
