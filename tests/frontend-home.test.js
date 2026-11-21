@@ -117,7 +117,7 @@ test('Home welcomes the real account, links to existing routes, and shows three 
   assert.doesNotMatch(html.slice(html.indexOf('class="home-recent"')), /href="\/journal\/fourth"/);
   assert.match(html, /journal@example.test/);
   assert.match(html, /Your account/);
-  assert.match(html, /Log out/);
+  assert.match(html, /class="account-trigger"[^>]*aria-label="Your account"/);
   assert.match(html, /A 4-day journaling rhythm/);
   assert.match(html, /Write instead/);
   assert.match(html, /aria-expanded="false" aria-controls="home-writing"/);

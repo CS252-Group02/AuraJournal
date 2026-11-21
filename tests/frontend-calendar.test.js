@@ -175,7 +175,7 @@ async function loadComponents() {
       resolveDir: dirname(fileURLToPath(path)), loader: 'jsx' },
     bundle: true, write: false, platform: 'node', format: 'cjs', packages: 'external', jsx: 'automatic',
     plugins: [{ name: 'calendar-context', setup(builder) {
-      builder.onLoad({ filter: /[\\/]lib[\\/]api.js$/ }, () => ({ contents: 'export const api=()=>{throw new Error("Unexpected API request")};', loader: 'js' }));
+      builder.onLoad({ filter: /[\\/]lib[\\/]api.js$/ }, () => ({ contents: 'export const api=()=>{throw new Error("Unexpected API request")}; export const apiPng=api; export const getAuthEpoch=()=>0; export const subscribeAuthChanges=()=>()=>{};', loader: 'js' }));
       builder.onLoad({ filter: /[\\/]auth[\\/]Auth.jsx$/ }, () => ({ contents: 'export const useAuth=()=>({user:{id:"account-a",email:"a@example.com"}});', loader: 'js' }));
       builder.onLoad({ filter: /useJournalEntries.js$/ }, () => ({ contents: 'export const useJournalEntries=()=>globalThis.__calendarEntries;', loader: 'js' }));
     } }],

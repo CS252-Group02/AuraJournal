@@ -189,7 +189,7 @@ async function loadComponents() {
       builder.onLoad({ filter: /[\\/]auth[\\/]Auth.jsx$/ }, () => ({ contents: 'export const useAuth=()=>({user:globalThis.__dashboardUser||{id:"account-a",email:"a@example.com"}});', loader: 'js' }));
       builder.onLoad({ filter: /useLocalDay.js$/ }, () => ({ contents: 'export const useLocalDay=()=>({todayKey:"2026-11-19",timezone:"UTC",refresh:()=>({todayKey:"2026-11-19"})});', loader: 'js' }));
       builder.onLoad({ filter: /useJournalEntries.js$/ }, () => ({ contents: 'export const useJournalEntries=()=>globalThis.__dashboardEntries;', loader: 'js' }));
-      builder.onLoad({ filter: /[\\/]lib[\\/]api.js$/ }, () => ({ contents: 'export const api=(...args)=>globalThis.__dashboardApi(...args);', loader: 'js' }));
+      builder.onLoad({ filter: /[\\/]lib[\\/]api.js$/ }, () => ({ contents: 'export const api=(...args)=>globalThis.__dashboardApi(...args); export const apiPng=api; export const getAuthEpoch=()=>0; export const subscribeAuthChanges=()=>()=>{};', loader: 'js' }));
     } }],
   });
   const module = { exports: {} };
@@ -253,7 +253,8 @@ test('Dashboard shares real journal data and never generates a reflection during
   globalThis.__dashboardApi = () => { throw new Error('Automatic AI generation'); };
   globalThis.__dashboardEntries = { entries: [row('one', '2026-11-16'), row('two', '2026-11-16')], status: 'ready', reload() {} };
   const html = render(DashboardPage, {}, '/dashboard?month=2026-11&date=2026-11-16');
-  for (const text of ['Current streak', 'Longest streak', 'Journal entries', 'A week in moments', 'Your moods, gently noticed', 'Recent memories', 'Your journal companion']) assert.ok(html.includes(text), text);
+  for (const text of ['Current streak', 'Longest streak', 'Journal entries', 'A week in moments', 'Moments in Pixels', 'Your moods, gently noticed', 'Recent memories', 'Your journal companion']) assert.ok(html.includes(text), text);
+  assert.equal((html.match(/data-memory-date=/g) || []).length, 7);
   assert.match(html, /2 journals/);
   assert.match(html, /href="\/journal\/one"/);
   assert.doesNotMatch(html, /Most recorded:/);

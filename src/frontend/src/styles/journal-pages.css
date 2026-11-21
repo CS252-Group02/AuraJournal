@@ -40,7 +40,6 @@
 .aj-breadcrumb { display: flex; gap: 10px; color: var(--aj-muted); font-size: .78rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
 .aj-breadcrumb a { text-decoration: none; }
 .aj-breadcrumb a:hover { color: var(--aj-green-dark); }
-.aj-avatar { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--aj-soft); color: var(--aj-green-dark); font-family: var(--aj-serif); font-size: 1.15rem; }
 
 .aj-page .aj-title { margin-bottom: 28px; }
 .aj-title h1 { font-size: clamp(2rem, 5vw, 3rem); line-height: 1.15; }

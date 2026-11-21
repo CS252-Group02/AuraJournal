@@ -15,6 +15,7 @@ export default function AppShell() {
     guard.current = callback;
     return () => { if (guard.current === callback) guard.current = null; };
   }, []);
+  const confirmNavigation = useCallback(() => !guard.current || guard.current(), []);
   const openSidebar = useCallback(event => {
     opener.current = event?.currentTarget || document.activeElement; restoreFocus.current = true; setOpen(true);
   }, []);
@@ -42,7 +43,7 @@ export default function AppShell() {
   }, [open, drawerMode]);
   function protectNavigation(event) {
     const link = event.target.closest?.('a[href]');
-    if (shouldGuardLink(event, link, window.location) && guard.current && !guard.current()) event.preventDefault();
+    if (shouldGuardLink(event, link, window.location) && !confirmNavigation()) event.preventDefault();
   }
   return <div className={`app-shell${mode.record ? ' app-shell-record' : ''}${mode.floatingRecord ? ' has-floating-record' : ''}`}
     onClickCapture={protectNavigation}>
@@ -64,7 +65,7 @@ export default function AppShell() {
       <Sidebar drawer onClose={() => closeSidebar()} onNavigate={() => closeSidebar(false)} />
     </dialog>}
     <div className="shell-content" id="app-content" tabIndex={-1}>
-      <Outlet context={{ openSidebar, sidebarOpen: open, registerNavigationGuard }} />
+      <Outlet context={{ openSidebar, sidebarOpen: open, registerNavigationGuard, confirmNavigation }} />
     </div>
     {mode.floatingRecord && <FloatingRecordButton />}
   </div>;

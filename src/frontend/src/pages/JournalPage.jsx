@@ -11,6 +11,7 @@ import JournalCard from '../features/journal/JournalCard.jsx';
 import { useJournalEntries } from '../features/journal/useJournalEntries.js';
 import { dailyReflection } from '../features/journal/homeContent.js';
 import { useNavigationGuard } from '../components/layout/navigation.js';
+import AccountMenu from '../components/layout/AccountMenu.jsx';
 
 function Companion() {
   return <aside className="home-companion" aria-label="A gentle reminder">
@@ -21,7 +22,7 @@ function Companion() {
   </aside>;
 }
 
-function HomeContent({ user, logout }) {
+function HomeContent() {
   const { entries, setEntries, status, error, reload } = useJournalEntries();
   const { todayKey, timezone } = useLocalDay();
   const today = parseDateKey(todayKey);
@@ -87,16 +88,7 @@ function HomeContent({ user, logout }) {
         <nav className="home-nav" aria-label="Your journal">
           <Link to="/dashboard">Dashboard</Link><Link to="/history">History</Link><Link to="/reflection">Weekly recap</Link>
         </nav>
-        <details className="home-account" onKeyDown={event => {
-          if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary').focus(); }
-        }}>
-          <summary aria-label="Your account"><span aria-hidden="true">{user.email[0]?.toUpperCase()}</span></summary>
-          <div className="home-account-menu"><span>Signed in as</span><p>{user.email}</p>
-            <button type="button" className="aj-btn aj-btn-quiet" onClick={() => {
-              if (!saving.current && (!content.trim() || window.confirm('Log out and discard your unsaved journal draft?'))) logout();
-            }} disabled={busy}>Log out</button>
-          </div>
-        </details>
+        <AccountMenu className="home-account" beforeLeave={confirmLeave} />
       </header>
 
       <section className="home-invitation" aria-labelledby="home-heading">
@@ -161,6 +153,6 @@ function HomeContent({ user, logout }) {
 }
 
 export default function JournalPage() {
-  const { user, logout } = useAuth();
-  return <HomeContent key={user.id} user={user} logout={logout} />;
+  const { user } = useAuth();
+  return <HomeContent key={user.id} />;
 }
