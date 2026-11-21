@@ -9,6 +9,8 @@ an authenticated session cookie. POST also requires the configured Origin,
 | `POST /api/entries/{entry_id}/pixel-art` with `{}` | 201 new image; 200 existing image without another provider call |
 | `GET /api/entries/{entry_id}/pixel-art` | 200 image metadata |
 | `GET /api/entries/{entry_id}/pixel-art/content` | 200 private PNG bytes |
+| `GET /api/entries/pixel-art/memories?as_of=2026-11-20` | Up to seven occupied journal days, including missing images |
+| `GET /api/entries/pixel-art/recent?as_of=2026-11-20` | Existing flat image-only view of the same seven days |
 | `GET /api/entries/pixel-art/recent?as_of=YYYY-MM-DD` | Image metadata on the latest seven occupied journal dates through `as_of` |
 
 Example generation response:

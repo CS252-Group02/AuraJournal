@@ -165,6 +165,21 @@ existing tracked database before its first automatic upgrade.
 
 Entries now store a required `journal_date` using the MVP's UTC+7 calendar (`Asia/Bangkok`). Existing entries use their local creation day; new entries default to the current local day. See [journal dates and timestamps](docs/database/migrations.md#journal-dates-and-timestamps) for migration behavior and Backend date-selection integration.
 
+Calendar APIs provide per-day counts, selected-day journals and current streaks.
+Streak/dashboard requests accept an optional IANA `timezone`; the default remains
+`Asia/Bangkok`, and stored journal dates never shift. See the
+[calendar API guide](docs/calendar-api.md) for parameters and verification.
+
+Pixel-art APIs generate and retrieve private journal-linked images. The grouped
+`GET /api/entries/pixel-art/memories?as_of=2026-11-20` feed includes up to seven
+recent journal days and explicit missing-image placeholders. See the
+[pixel-art and memory API guide](docs/pixel-art.md) for contracts and verification.
+
+`POST /api/entries/ask` answers questions from bounded, owner-scoped journal
+excerpts and returns supporting dates or an insufficient-evidence result. It
+uses the existing Groq configuration and shared AI quota. See the
+[journal question API guide](docs/journal-questions.md) for contracts and limits.
+
 The old development user remains disabled and its entries stay private. Register a real account in the browser. See [accounts and sessions](docs/authentication.md) for configuration and API details.
 
 ## Run

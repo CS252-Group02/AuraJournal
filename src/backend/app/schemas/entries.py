@@ -1,8 +1,20 @@
 from datetime import date, datetime
 import re
+from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
+
+
+def _calendar_date(value):
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        raise ValueError("Use a non-null journal date in YYYY-MM-DD form.")
+    return date.fromisoformat(value)
+
+
+JournalDate = Annotated[date, BeforeValidator(_calendar_date)]
 
 
 class _EntryWrite(BaseModel):
@@ -15,11 +27,7 @@ class _EntryWrite(BaseModel):
     def calendar_date(cls, value):
         # An omitted field uses the database default/preserves the old value.
         # Explicit nulls, timestamps and numeric Unix times are not calendar dates.
-        if isinstance(value, date) and not isinstance(value, datetime):
-            return value
-        if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
-            raise ValueError("Use a non-null journal date in YYYY-MM-DD form.")
-        return value
+        return _calendar_date(value)
 
 
 class EntryCreate(_EntryWrite):

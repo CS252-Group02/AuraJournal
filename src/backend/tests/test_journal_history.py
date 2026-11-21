@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
 import pytest
@@ -69,3 +69,31 @@ def test_calendar_counts_entries_per_owner_and_day(history_session):
 ])
 def test_current_streak(history_session, owner, as_of, expected):
     assert current_streak(history_session, owner, as_of) == expected
+
+
+
+@pytest.mark.parametrize("start", [date.min, date.max - timedelta(days=2)])
+def test_streak_handles_supported_date_extremes(history_session, start):
+    days = [start + timedelta(days=offset) for offset in range(3)]
+    history_session.add_all([
+        JournalEntry(user_id=ALICE, content="Date boundary", journal_date=day) for day in days
+    ])
+    history_session.flush()
+    assert current_streak(history_session, ALICE, days[0]) == 1
+    assert current_streak(history_session, ALICE, days[-1]) == 3
+
+
+def test_streak_is_not_limited_to_a_month_or_inflated_by_duplicates(history_session):
+    first = date(2025, 1, 1)
+    last = first + timedelta(days=399)
+    days = [first + timedelta(days=offset) for offset in range(400)]
+    history_session.add_all([
+        JournalEntry(user_id=BOB, content="Long streak", journal_date=day) for day in days
+    ])
+    history_session.add_all([
+        JournalEntry(user_id=BOB, content="Duplicate", journal_date=last),
+        JournalEntry(user_id=BOB, content="Duplicate", journal_date=last),
+        JournalEntry(user_id=BOB, content="Future", journal_date=last + timedelta(days=1)),
+    ])
+    history_session.flush()
+    assert current_streak(history_session, BOB, last) == 400
