@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { usePresence } from '../../lib/motion.js';
 import { Link, useLocation, useOutletContext } from 'react-router-dom';
 import { useAuth } from '../../auth/Auth.jsx';
 import AppearanceToggle from '../../theme/AppearanceToggle.jsx';
@@ -10,6 +11,7 @@ export default function AccountMenu({ className = '', beforeLeave }) {
   const shell = useOutletContext();
   const location = useLocation();
   const [open, setOpen] = useState(false), [pending, setPending] = useState(false);
+  const presence = usePresence(open, 110);
   const [notice, setNotice] = useState('');
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const trigger = useRef(null), panel = useRef(null), submitting = useRef(false);
@@ -79,8 +81,8 @@ export default function AccountMenu({ className = '', beforeLeave }) {
       aria-expanded={open} aria-controls={id} onClick={() => { setNotice(''); setOpen(value => !value); }}>
       <span aria-hidden="true">{user?.email?.[0]?.toUpperCase() || '?'}</span>
     </button>
-    {open && createPortal(<div ref={panel} id={id} className="account-panel" role="region" aria-label="Your account"
-      style={position} onKeyDown={event => {
+    {presence.mounted && createPortal(<div ref={panel} id={id} className={`account-panel${presence.leaving ? ' is-leaving' : ''}`}
+      role="region" aria-label="Your account" inert={presence.leaving} style={position} onKeyDown={event => {
         if (event.key !== 'Tab') return;
         const controls = [...panel.current.querySelectorAll('a[href], button:not(:disabled)')];
         if ((event.shiftKey && event.target === controls[0]) || (!event.shiftKey && event.target === controls.at(-1))) {

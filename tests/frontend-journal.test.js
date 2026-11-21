@@ -71,3 +71,16 @@ test('date keys reject invalid input', () => {
   assert.equal(parseDateKey('next week'), null);
   assert.equal(parseDateKey(null), null);
 });
+
+test('history search builds backend query paths', async () => {
+  const { entrySearchPath, readSearchParams, invalidRange } = await import('../src/frontend/src/features/journal/journalSearch.js');
+  const read = (value) => readSearchParams(new URLSearchParams(value));
+  assert.equal(entrySearchPath(read('')), null);
+  assert.equal(entrySearchPath(read('filter=ai')), null);
+  assert.equal(entrySearchPath(read('q=%20walk%20')), '/api/entries?q=walk&sort=newest');
+  assert.equal(entrySearchPath(read('start=2026-11-01&end=2026-11-07&sort=oldest')),
+    '/api/entries?start=2026-11-01&end=2026-11-07&sort=oldest');
+  assert.equal(entrySearchPath(read('start=bad&sort=weird')), null);
+  assert.ok(invalidRange(read('start=2026-11-08&end=2026-11-07')));
+  assert.equal(entrySearchPath(read('start=2026-11-08&end=2026-11-07')), null);
+});

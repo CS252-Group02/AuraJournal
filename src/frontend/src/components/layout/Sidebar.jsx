@@ -32,6 +32,5 @@ export default function Sidebar({ drawer = false, onClose, onNavigate }) {
     {!drawer && <button type="button" className="sidebar-pin" aria-label={pinned ? 'Unpin navigation' : 'Keep navigation expanded'}
       aria-pressed={pinned} aria-expanded={expanded} onClick={() => setPinned(value => !value)}><NavigationIcon name="expand" />
       <span className="sidebar-label">{pinned ? 'Unpin navigation' : 'Keep open'}</span></button>}
-    {drawer && <p className="sidebar-note">A little space to breathe.</p>}
   </aside>;
 }

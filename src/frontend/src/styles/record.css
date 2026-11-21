@@ -131,7 +131,7 @@ html:has(.record-page) { scrollbar-gutter: stable; }
   height: 60px;
   padding: 0;
   border: 0;
-  border-radius: 15px;
+  border-radius: 4px;
   background: rgb(255 254 250 / 87%);
   color: #527d65;
   font: 600 25px / normal 'AuraJournal Record Inter', sans-serif;
@@ -199,7 +199,7 @@ html:has(.record-page) { scrollbar-gutter: stable; }
 .record-page .record-action:focus-visible,
 .record-page .record-sidebar-toggle:focus-visible { outline: 3px solid #283d36; outline-offset: 5px; }
 .record-page .record-sidebar-toggle:not(:disabled) { cursor: pointer; }
-.record-trigger.is-recording::after { border-radius: 6px; }
+.record-trigger.is-recording::after { border-radius: 3px; }
 
 .record-page .record-feedback {
   margin: 10px 0;
@@ -217,7 +217,7 @@ html:has(.record-page) { scrollbar-gutter: stable; }
   margin-top: 8px;
   padding: 8px 16px;
   border: 1px solid #527d65;
-  border-radius: 12px;
+  border-radius: 4px;
   background: #fffefa;
   color: #344e42;
   font-size: 13px;
@@ -349,7 +349,7 @@ html:has(.record-page) { scrollbar-gutter: stable; }
   width: min(290px, 100%);
   min-height: 80px;
   padding: 19px 21px 7px 19px;
-  border-radius: 20px;
+  border-radius: 6px;
   background: rgb(255 254 250 / 94%);
   color: #344e42;
   font-size: 15px;

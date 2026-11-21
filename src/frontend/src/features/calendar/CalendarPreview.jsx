@@ -31,8 +31,7 @@ export default function CalendarPreview({ todayKey, byDay, status }) {
           })}
         </tr>)}</tbody>
       </table>
-      <p className="home-calendar-note">{ready ? <><span className="home-activity-dot" aria-hidden="true" /> A moment you made your own</>
-        : status === 'loading' ? 'Gathering your journal activity…' : 'Activity is unavailable until your journals can be loaded.'}</p>
+      {!ready && <p className="home-calendar-note">{status === 'loading' ? 'Loading…' : 'Activity is unavailable.'}</p>}
     </section>
   );
 }

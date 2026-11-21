@@ -253,7 +253,7 @@ test('Dashboard shares real journal data and never generates a reflection during
   globalThis.__dashboardApi = () => { throw new Error('Automatic AI generation'); };
   globalThis.__dashboardEntries = { entries: [row('one', '2026-11-16'), row('two', '2026-11-16')], status: 'ready', reload() {} };
   const html = render(DashboardPage, {}, '/dashboard?month=2026-11&date=2026-11-16');
-  for (const text of ['Current streak', 'Longest streak', 'Journal entries', 'A week in moments', 'Moments in Pixels', 'Your moods, gently noticed', 'Recent memories', 'Your journal companion']) assert.ok(html.includes(text), text);
+  for (const text of ['Current streak', 'Longest streak', 'Journal entries', 'This week', 'Moments in Pixels', 'Moods', 'Recent memories', 'Your journal companion']) assert.ok(html.includes(text), text);
   assert.equal((html.match(/data-memory-date=/g) || []).length, 7);
   assert.match(html, /2 journals/);
   assert.match(html, /href="\/journal\/one"/);
@@ -272,7 +272,7 @@ test('categorical mood fixtures render counts and colors without numeric emotion
   const html = render(MoodAnalytics, { byDay, todayKey: '2026-11-17', status: 'ready', moodsByEntry: new Map([['one', 'calm']]) });
   assert.match(html, /Most recorded:/);
   assert.match(html, /Calm/);
-  assert.match(html, /1 classified · 1 without a saved mood/);
+  assert.match(html, /1 classified · 1 without a mood/);
   assert.match(html, /#ddeadc/);
   assert.match(html, /Daily mood history/);
 });
@@ -283,11 +283,11 @@ test('monthly overview renders real totals, comparison bounds, tied dates and tr
     row('d', '2026-11-12'), row('future', '2026-11-30'), row('previous', '2026-10-01')]).byDay;
   const props = { month: new Date(2026, 10, 1), summary: monthlyActivity(byDay, '2026-11', '2026-11-19'), status: 'ready' };
   const html = render(MonthlyOverview, props);
-  assert.match(html, /November 2026, in moments/);
+  assert.match(html, /November 2026<\/h2>/);
   assert.match(html, /<strong>5<\/strong> entries across <strong>3<\/strong> journal days/);
   assert.match(html, /2 dates tied; earliest shown/);
   assert.match(html, /3 entries more.*October 2026/);
-  assert.match(html, /first 19 days of each month/);
+  assert.match(html, /\(first 19 days\)/);
   assert.match(html, /Includes 1 entry dated after today/);
   for (const status of ['loading', 'error']) {
     const pending = render(MonthlyOverview, { ...props, status });
@@ -295,7 +295,7 @@ test('monthly overview renders real totals, comparison bounds, tied dates and tr
     assert.match(pending, /role="status"/);
   }
   const empty = render(MonthlyOverview, { ...props, summary: monthlyActivity(new Map(), '2026-11', '2026-11-19') });
-  assert.match(empty, /No journals are dated in this month/);
+  assert.match(empty, /No journals this month/);
   assert.doesNotMatch(empty, /Most entries on/);
 });
 
@@ -307,8 +307,8 @@ test('overview statistics separate all-time days, monthly activity and factual t
   assert.match(html, /Days journaled<\/dt><dd>3<span> through today/);
   assert.match(html, /Journal entries<\/dt><dd>5/);
   assert.match(html, /2 entries are dated today/);
-  assert.match(html, /local time \(UTC\)/);
-  assert.match(html, /October 2026, in moments/);
+  assert.match(html, /· UTC/);
+  assert.match(html, /October 2026<\/h2>/);
   assert.match(html, /<strong>1<\/strong> entry across <strong>1<\/strong> journal day/);
   assert.match(html, /Mood unavailable/);
   assert.doesNotMatch(html, /Most recorded:/);
@@ -337,7 +337,7 @@ test('missing mood scores never acquire categories in analytics or recent entrie
   const { MoodAnalytics, RecentEntries } = await components;
   const entries = [row('numeric', '2026-11-19', { valence: 0.9, arousal: 0.1, mood_record: { valence: 0.9, arousal: 0.1 } })];
   const moods = render(MoodAnalytics, { byDay: indexJournalDays(entries).byDay, todayKey: '2026-11-19', status: 'ready' });
-  assert.match(moods, /no saved mood classification/);
+  assert.match(moods, /Mood data isn’t available/);
   assert.doesNotMatch(moods, /Most recorded:|Daily mood history/);
   const recent = render(RecentEntries, { entries, status: 'ready' });
   assert.match(recent, /Mood unavailable/);

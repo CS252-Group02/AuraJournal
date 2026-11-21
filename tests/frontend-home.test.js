@@ -93,7 +93,7 @@ test('calendar preview has real counts, today, and direct/single versus Dashboar
   assert.match(html, /href="\/dashboard\?month=2026-11&amp;date=2026-11-15"/);
   assert.match(html, /November 15, 2026, 2 journals/);
   assert.equal((html.match(/home-calendar-day/g) || []).length, 30);
-  assert.equal((html.match(/class="home-activity-dot"/g) || []).length, 3); // Two dates and the legend.
+  assert.equal((html.match(/class="home-activity-dot"/g) || []).length, 2);
   assert.doesNotMatch(html, /role="grid"|Heatmap|Previous month|mood unavailable/);
 });
 
@@ -118,7 +118,7 @@ test('Home welcomes the real account, links to existing routes, and shows three 
   assert.match(html, /journal@example.test/);
   assert.match(html, /Your account/);
   assert.match(html, /class="account-trigger"[^>]*aria-label="Your account"/);
-  assert.match(html, /A 4-day journaling rhythm/);
+  assert.match(html, /4-day streak/);
   assert.match(html, /Write instead/);
   assert.match(html, /aria-expanded="false" aria-controls="home-writing"/);
   assert.match(html, /dateTime="2026-11-16"|datetime="2026-11-16"/);
@@ -129,10 +129,9 @@ test('empty Home encourages a first entry without invented activity or streaks',
   const { Home } = await components;
   setup();
   const html = render(Home);
-  assert.match(html, /Your story starts wherever you are/);
-  assert.match(html, /A fresh page whenever you’re ready/);
+  assert.match(html, /No journals yet/);
   assert.match(html, /View all entries/);
-  assert.doesNotMatch(html, /-day journaling rhythm|has-entries/);
+  assert.doesNotMatch(html, /-day streak|has-entries/);
 });
 
 test('Home loading and failures remain distinct from an empty account, with recording/writing always reachable', async () => {
@@ -140,7 +139,7 @@ test('Home loading and failures remain distinct from an empty account, with reco
   setup([entry('stale', 16)], 'loading');
   const loading = render(Home);
   assert.match(loading, /Gathering your moments/);
-  assert.doesNotMatch(loading, /-day journaling rhythm|Your story starts|\/journal\/stale/);
+  assert.doesNotMatch(loading, /-day streak|No journals yet|\/journal\/stale/);
   setup([entry('stale', 16)], 'error', 'The connection is unavailable.');
   const error = render(Home);
   assert.match(error, /role="alert"/);
@@ -148,7 +147,7 @@ test('Home loading and failures remain distinct from an empty account, with reco
   assert.match(error, /The connection is unavailable/);
   assert.match(error, /href="\/record"/);
   assert.match(error, /Write instead/);
-  assert.doesNotMatch(error, /-day journaling rhythm|Your story starts|\/journal\/stale/);
+  assert.doesNotMatch(error, /-day streak|No journals yet|\/journal\/stale/);
 });
 
 test('invalid dates retain journal access and another account never inherits the previous previews', async () => {
