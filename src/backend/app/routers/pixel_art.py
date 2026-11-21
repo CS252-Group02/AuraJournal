@@ -20,7 +20,7 @@ from app.services.image_lifecycle import generation_locks
 from app.services.journal_images import (
     attach_image, has_owned_image_reference, recent_journal_images, recent_journal_memories,
 )
-from app.services.pixel_art import build_pixel_art_prompt
+from app.services.pixel_generation import render_pixel_art
 from app.services.pixellab import PixelArtError, PixelArtRateLimited
 
 router = APIRouter(prefix="/api/entries", tags=["pixel art"])
@@ -73,9 +73,7 @@ def generate_pixel_art(entry_id: UUID, payload: PixelArtRequest, request: Reques
             if not state.pixel_art_capacity.acquire(blocking=False):
                 raise PixelArtRateLimited()
             try:
-                moment = state.moment_extractor.extract(content)
-                prompt = build_pixel_art_prompt(moment)
-                data = state.pixellab_client.generate(prompt)
+                data, representation = render_pixel_art(state, content)
                 image_id = uuid4()
                 key = None
                 try:
@@ -88,7 +86,7 @@ def generate_pixel_art(entry_id: UUID, payload: PixelArtRequest, request: Reques
                         key = state.image_storage.save(entry_id, image_id, data)
                         image = attach_image(write_session, user_id, entry_id, image_id, key)
                         result = metadata(image)
-                        result.representation = moment.kind
+                        result.representation = representation
                         write_session.commit()
                 except Exception:
                     if key is not None:
