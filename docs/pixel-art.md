@@ -1,309 +1,322 @@
-# Pixel-art API (A11–A15)
+# Automatic private Pixel Art
 
-Generation is explicit and independent of journal saving. All endpoints require
-an authenticated session cookie. POST also requires the configured Origin,
-`X-AuraJournal-CSRF: 1`, and `Content-Type: application/json`.
+Journal creation and content edits schedule Pixel Art on the backend. Saving a
+journal never waits for Groq or PixelLab. The application commits the journal and
+its durable PostgreSQL job in one transaction; if the database cannot persist the
+job, that transaction rolls back instead of leaving an unscheduled saved journal.
+Provider outages, disabled generation, missing credentials and exhausted credits
+never cause an otherwise valid journal save to fail.
+
+## Generation architecture
+
+`pixel_generation.render_pixel_art` reuses the original significant-moment
+extractor and PixelLab client. Groq receives the journal and returns validated
+`grounded`/`symbolic` output. Grounded scenes require exact source evidence. Only
+the minimized visual prompt reaches PixelLab. The existing privacy instructions,
+symbolic fallback, style, 128×128 resolution, model selection, prompt enhancement
+setting and PNG validation remain unchanged. No journal text, evidence, scene or
+provider error payload is copied into a job or logged by the worker.
+
+`pixel_art_jobs` is an outbox, with one unique `(entry_id, source_version)` row.
+`journal_entries.content_version` increases only when trimmed content changes.
+Journal CRUD schedules/invalidate jobs inside the journal transaction. No migration,
+startup routine, gallery read or deprecated generation POST backfills old journals.
+
+Application lifespan starts a bounded set of managed polling threads. Each pass
+examines at most 32 due jobs from distinct owners, so one user's backlog cannot
+fill the scan window. It uses short row-lock transactions and the original
+PostgreSQL session advisory locks for entries and users. Shared advisory slots
+also limit total generation concurrency across application processes. Advisory
+locks retain a connection in AUTOCOMMIT mode; no database transaction is held
+open during either external AI call. Threads stop taking new work on shutdown and
+finish their current attempt before the engine is disposed. A forced process exit
+is recovered from persisted state.
+
+The worker commits `processing`, an attempt token and a five-minute lease before
+external work. It commits `submitted_at` **before** calling PixelLab. The job UUID
+is the image UUID, giving output a deterministic private storage key. The final
+transaction rechecks the owner, content version and attempt token under the entry
+lock, then attaches the PNG and marks the job ready atomically. Filesystem and
+PostgreSQL commits cannot be atomic; recovery handles that gap conservatively.
+
+### Status and retry policy
+
+| Public status | Meaning |
+| --- | --- |
+| `pending` | Durable work waiting for a worker or the bounded extraction retry |
+| `processing` | A worker has claimed the current content version |
+| `ready` | An owned image reference and private file are available |
+| `failed` | Terminal validation/generation failure, or missing/invalid stored image |
+| `unavailable` | Generation disabled, not configured, out of credits, or budget exhausted |
+| `uncertain` | PixelLab may have completed; no automatic image-provider resubmission is safe |
+| `not_requested` | Historical journal without a job or image |
+
+Obsolete versions use internal `cancelled` rows, never returned as the current
+journal's generation status. `error_code` is a safe application code; raw provider
+messages, SQL details, paths, prompts and credentials never appear in this API.
+
+Current public error codes are `disabled`, `service_unavailable`,
+`credits_unavailable`, `budget_exhausted`, `extraction_unavailable`,
+`generation_failed`, `provider_busy`, `invalid_image`, `attempts_exhausted`,
+`completion_uncertain`, `image_missing`, `invalid_reference`, and
+`storage_unavailable`. Successful states use null; clients should use status for
+control flow and a safe generic fallback for unrecognized future error codes.
+
+- A transient Groq extraction failure has **one retry**, after at least 60 seconds
+  (two total extraction attempts). That retry can incur another Groq charge.
+  Invalid output and configuration errors are terminal. Crashes before image
+  submission also count toward the two-attempt bound.
+- There are **zero automatic PixelLab retries**, including timeout, transport/5xx,
+  rate-limit, malformed output, storage failure and lost commit acknowledgement.
+  A submission marker can exist even if a crash prevented the actual request;
+  that ambiguity intentionally sacrifices an image rather than risking a charge.
+- Expired `processing` jobs without a submission marker may resume within the
+  attempt bound. The entry advisory lock prevents recovery while another worker
+  still owns the job, even if the lease has expired. Attempt tokens fence stale
+  workers that lost their lock/claim.
+- Expired jobs with a submission marker first check the deterministic private PNG.
+  If valid, they attach it without calling either provider. If absent, they become
+  terminal `uncertain`. A possibly committed reference is never deleted after a
+  lost acknowledgement.
+- Lock/capacity contention leaves jobs pending without consuming attempts or
+  provider budget. Database outages leave durable claims recoverable after lease
+  expiry. Worker failures log only a fixed message, without exception payloads.
+- `failed`, `unavailable` and `uncertain` jobs are not automatically re-enqueued
+  by enabling providers, restarting, refreshing, or clicking the old Generate
+  button. A new content version is a new request. Do not clear `submitted_at`
+  or blindly reset terminal jobs to pending.
+
+For an `uncertain` job whose output reached disk but could not attach, an operator
+may fix the database/storage problem and reopen **attachment recovery only**:
+
+```sql
+UPDATE pixel_art_jobs
+SET status = 'processing', lease_expires_at = now() - interval '1 second'
+WHERE id = '<investigated-job-uuid>' AND status = 'uncertain'
+  AND submitted_at IS NOT NULL;
+```
+
+The retained submission marker ensures this operation cannot call PixelLab again.
+If no output exists, it returns to `uncertain`. There is no user-facing retry API
+in this PR. Uncertain jobs/files require operational review; they are intentionally
+retained until recovered, invalidated by content edits, or removed with the journal.
+
+### Edit and delete lifecycle
+
+Content changes invalidate the old image and jobs, clear the existing summary
+fields as before, increment the content version, and schedule the new version.
+Identical trimmed content, date-only edits and summary changes preserve valid
+artwork and in-flight work. Dates are read from the journal, so retained artwork
+moves to its updated `journal_date`. Changing content and then changing it back
+still produces a new version; an earlier in-flight result cannot attach.
+
+Deletion cascades jobs and image references. Worker completion checks the locked
+entry/version/token, so deleted journals cannot receive late images. Normal edits
+and deletion remove old files after database commit. Account deletion retains the
+existing database cascades and orphan cleanup behavior.
+
+## Read-only API contract for PR2
+
+Every route requires the authenticated session cookie. Missing and foreign journal
+IDs return 404; anonymous requests return 401. Responses have `Cache-Control:
+no-store` and `X-Content-Type-Options: nosniff`. No GET schedules jobs, calls AI,
+repairs rows or writes files. Query-supplied user identity is never trusted.
 
 | Request | Response |
 | --- | --- |
-| `POST /api/entries/{entry_id}/pixel-art` with `{}` | 201 new image; 200 existing image without another provider call |
-| `GET /api/entries/{entry_id}/pixel-art` | 200 image metadata |
-| `GET /api/entries/{entry_id}/pixel-art/content` | 200 private PNG bytes |
-| `GET /api/entries/pixel-art/memories?as_of=2026-11-20` | Up to seven occupied journal days, including missing images |
-| `GET /api/entries/pixel-art/recent?as_of=2026-11-20` | Existing flat image-only view of the same seven days |
-| `GET /api/entries/pixel-art/recent?as_of=YYYY-MM-DD` | Image metadata on the latest seven occupied journal dates through `as_of` |
+| `GET /api/entries/pixel-art/memories?as_of=YYYY-MM-DD` | 200 grouped feed with images and generation status |
+| `GET /api/entries/{entry_id}/pixel-art/status` | 200 current journal date, image or null, and generation status |
+| `GET /api/entries/{entry_id}/pixel-art` | Existing 200 image metadata; 404 if no usable reference |
+| `GET /api/entries/{entry_id}/pixel-art/content` | Existing private 200 PNG; 404 missing/invalid reference or missing file; 503 storage outage |
+| `GET /api/entries/pixel-art/recent?as_of=YYYY-MM-DD` | Existing flat image-only array, unchanged |
 
-Example generation response:
+Grouped feed example (UUIDs abbreviated here for readability):
 
 ```json
 {
-  "entry_id": "00000000-0000-4000-8000-000000000002",
-  "image": {
-    "id": "00000000-0000-4000-8000-000000000003",
-    "file_format": "png",
-    "width": 128,
-    "height": 128,
-    "created_at": "2026-11-13T12:00:00Z",
-    "content_url": "/api/entries/00000000-0000-4000-8000-000000000002/pixel-art/content"
-  },
-  "representation": "grounded"
+  "as_of": "2026-11-21",
+  "days": [
+    {
+      "journal_date": "2026-11-21",
+      "entries": [
+        {
+          "entry_id": "<journal-B-uuid>",
+          "image": null,
+          "generation": {
+            "status": "processing",
+            "error_code": null,
+            "updated_at": "2026-11-21T12:00:00Z"
+          }
+        },
+        {
+          "entry_id": "<journal-A-uuid>",
+          "image": {
+            "id": "<image-uuid>",
+            "file_format": "png",
+            "width": 128,
+            "height": 128,
+            "created_at": "2026-11-21T11:59:00Z",
+            "content_url": "/api/entries/<journal-A-uuid>/pixel-art/content"
+          },
+          "generation": {
+            "status": "ready",
+            "error_code": null,
+            "updated_at": "2026-11-21T11:59:00Z"
+          }
+        }
+      ]
+    }
+  ]
 }
 ```
 
-`representation` is returned only for fresh generation. `symbolic` means a
-generic journal illustration rather than a depicted memory. Moment text, evidence,
-prompt, and representation are not persisted. Retrieval returns image metadata
-without representation. All responses use `Cache-Control: no-store`.
+The per-journal status response is exactly
+`{entry_id, journal_date, image, generation}`, with the same nested types.
+`generation` always has `status`, nullable `error_code`, and nullable ISO timestamp
+`updated_at`. Historical journals without jobs use `not_requested`, with null
+error/timestamp. Nullable fields are present in the feed/status responses. Image
+metadata retains its existing fields and authenticated content URL. Representation
+is not persisted; retrieved artwork should be labeled an illustration, without
+claiming it depicts a grounded event.
 
-Errors use `{"detail":"..."}`. Missing and foreign entries return 404. Other
-responses include 401 authentication, 403 browser protection, 415 content type,
-422 input validation, 409 concurrent generation or changed source, 429 capacity,
-502 invalid provider output, 503 configuration/credits/provider/storage/database
-unavailability, and 504 provider timeout. A 429 response includes Retry-After.
+The feed selects the latest **seven distinct occupied journal dates** on or before
+the inclusive `as_of` cutoff, rather than seven consecutive dates or seven images.
+Days with no ready images still count. Every journal on each selected date is
+included. Days sort descending; journals sort by creation timestamp descending,
+then UUID descending. Multiple journals on one date keep separate images and
+statuses. Empty accounts return `{"as_of":"YYYY-MM-DD","days":[]}`. `as_of`
+is required and strictly validated as a real `YYYY-MM-DD` date; invalid dates
+return 422. Dates are never converted from image timestamps or client timezones.
+The feed uses one joined query for entries, images and current jobs.
 
-There are no automatic generation retries. A timeout can still incur a provider
-charge and cannot be recovered through this synchronous API. Retrying is a new
-explicit billable submission if no image was saved. Repeating a successful
-request returns existing metadata. Existing records are never silently replaced.
+Storage keys must match the associated journal/image exactly and be PNG. Legacy
+external URLs, malformed and cross-journal keys never reach storage and yield
+`image: null` in the feed; direct metadata/content returns 404. The status projection
+checks file presence without decoding every PNG. A missing file is reported as
+`failed`/`image_missing`, while retaining valid metadata for legacy consumers.
+Storage can disappear after a response; clients must still handle content 404/503
+and decode errors. Reads never repair or regenerate missing images.
 
-## Dashboard: Moments in Pixels (U08)
+PR2 should GET the grouped feed on navigation/refresh and poll it (or the
+per-journal status GET) every five seconds **only while visible journals are
+pending/processing**, with a two-minute polling window. Stop on terminal status,
+hidden tab, navigation, logout or account change; refresh/focus can start a new
+bounded window. Treat `uncertain` as terminal and offer a read refresh, without a
+billable POST. No WebSocket/SSE infrastructure is needed. Preserve account-scoped
+request cancellation, credentials, PNG Blob URLs and logout revocation.
 
-The Dashboard reuses its authenticated `GET /api/entries` result and existing
-local-day clock. It shows exactly seven consecutive calendar dates ending today,
-or ending on the date chosen in the gallery. Calendar month/date selection is
-independent. Today follows browser local midnight and focus/timezone changes;
-an earlier selected end date stays fixed. The date picker supports end dates
-from `1000-01-07` through today.
+### Deprecated POST compatibility
 
-The recent endpoint returns an array of `{journal_date, entry_id, image}` records,
-with the same image metadata as above. It selects the latest seven **occupied
-journal dates**, including dates without images, and returns all images on those
-dates. Those dates may span more than seven calendar days. The gallery filters
-the complete response to its calendar range and requires each image to match a
-loaded journal's ID and saved journal date. It does not truncate the response to
-seven records. Malformed or contradictory metadata is unavailable, with a refresh
-action, rather than a substitute illustration.
+`POST /api/entries/{entry_id}/pixel-art` still requires `{}`, configured Origin,
+`X-AuraJournal-CSRF: 1`, and JSON content type. It is deprecated in OpenAPI:
 
-Each day initially shows the first successfully stored image, using the earliest
-image `created_at` and entry ID to break timestamp ties. Later generations do not
-replace that default, including after a page reload. If its image is invalidated,
-deleted, or moved to another date, the earliest remaining image becomes the default.
-A day's expandable list links to every
-journal, identifies additional stored images, and lets the user choose which
-image to view. Only the currently selected thumbnail for each day is fetched;
-changing it releases the previous thumbnail. Empty dates and saved journals
-without an image have distinct labels. Captions come from the associated
-journal's first sentence, using the existing title helper.
+- 200 with the existing `{entry_id, image}` shape if a valid reference exists;
+- 409 with `Retry-After: 5` if the automatic job is pending/processing;
+- 503 if unavailable, terminal or never scheduled; 404 for missing/foreign journals;
+- it never schedules, runs providers, clears a fence or retries an unchanged journal.
 
-`apiPng()` is a binary companion to the JSON `api()` helper. It uses configured
-`API_URL`, session cookies, `cache: 'no-store'`, and rejects redirects. It accepts
-only canonical `/api/entries/{uuid}/pixel-art/content` paths. Metadata also binds
-that path to its entry ID. Successful responses must have PNG content type, a PNG
-signature, and a nonempty body of at most 2 MiB. The browser's decoder handles
-remaining PNG validation; decode failure offers an explicit retry. Images use
-temporary Blob object URLs, never public content URLs or localStorage. Request
-cancellation, authentication epochs, and component cleanup prevent late responses
-from replacing another period/account and revoke completed object URLs on logout,
-replacement, refresh, or unmount. A content 401 uses the existing global expired
-session handler. Gallery metadata and PNG requests have 30-second client deadlines
-and no automatic retry.
+The current Dashboard still shows Generate controls and copy describing explicit
+generation; their removal and disclosure updates belong to PR2. Its existing
+metadata/PNG/recent reads and first-image-per-day selection remain compatible.
+Clicking Generate while work runs uses its existing conflict/check flow; refreshing
+finds completed automatic images. POST no longer returns 201 or waits for a fresh
+image. The existing Dashboard disclosure describes user-initiated generation and
+does not disclose automatic generation on journal saves. Production rollout must
+satisfy the disclosure requirement below first. No frontend implementation is
+included in this PR.
 
-Refresh memories reloads journals and metadata together, reconciling edits,
-moved dates, deletions, and changes made in another tab. The gallery is a snapshot;
-it does not subscribe to live server changes. Changing journal content invalidates
-its stored image on the backend; an already displayed snapshot is replaced on
-refresh or navigation. Opening, selecting dates/images, retrying reads, and
-refreshing make only GET requests.
-
-### Explicit generation from the Dashboard
-
-For a saved journal without an image, choose **Generate pixel memory** in its day
-card. When several journals share a date without an image, the card has a labeled
-journal selector, initially matching its displayed journal. The caption/link
-follows the selection. Once a day has images, its expandable journal list provides
-generation buttons for other journals without images and `Show image` controls
-for stored images. The first generated image remains the default for that date;
-`Show image` temporarily selects another image until the gallery is reopened.
-
-The controls disclose that generation sends the selected journal text to the AI
-service and may incur charges. Only a button activation submits
-`POST /api/entries/{entry_id}/pixel-art` with `{}` through the existing JSON helper.
-Both 201 new-image and 200 existing-image responses must identify the requested
-entry and contain valid private PNG metadata. A confirmed save refreshes journals,
-metadata, and then private PNG content. Generation feedback stays above the
-gallery during the refresh. A thumbnail failure after a confirmed save offers a
-read retry rather than another generation. A fresh `symbolic` response is labeled
-as a symbolic journal illustration in the success message.
-
-One generation/check request at a time is allowed across the gallery; duplicate
-activations are locked synchronously. The POST has a 180-second client deadline,
-allowing for the backend's moment extraction and image generation time. Check
-requests have a 30-second deadline. Unmount, account/period/source changes abort
-local requests and ignore late results. Aborting a browser request cannot cancel
-provider work or undo charges; the pending message explains that the server may
-still finish. Saving a journal and opening/refreshing the gallery never generate
-images. Neither failures nor deadlines cause automatic generation retries.
-
-Session/security errors, missing journals, invalid content, capacity limits,
-invalid provider output, and disabled/unavailable services have actionable
-messages. Lost connections, malformed success responses, 409 conflicts, and
-timeouts require **Check for saved image** before another submission. That action
-uses the existing metadata GET for the entry. A found image refreshes the gallery;
-read failures keep the check available. A 404 enables an explicitly labeled
-**Retry generation (may incur a charge)** action and explains that the previous
-request might still finish. No private image or generation state is stored in
-localStorage. Other tabs/devices rely on the existing backend concurrency locks.
-
-### Manual Dashboard verification
-
-Use a test account and fictional journals. Existing stored images are sufficient;
-the checks below do not require paid generation. If new provider images are
-needed, use the separate, explicitly billable verification procedure below.
-
-1. Open `/dashboard` with an empty test account. Confirm seven dated slots and
-   the empty-period message. Save fictional journals on some of those dates,
-   including two or more on one date. Refresh and distinguish `No journal` from
-   `No pixel image yet`; check every journal link.
-2. With existing stored images, check correct saved dates, crisp 128px thumbnails,
-   captions, first-generated-image selection, additional-image counts, and every `Show
-   image`/journal link in the expanded day. In DevTools, confirm metadata GET
-   uses `as_of`, PNG GETs include cookies, `<img>` uses `blob:` URLs, and no
-   generation POST occurs on reads, date/image selection, or refresh.
-3. Choose end dates across a month/year boundary and February 29 in a leap year.
-   Always count seven consecutive dates. Navigate Calendar independently, then
-   use Today in the gallery. Leave the current period open across local midnight,
-   or change the test browser's clock/timezone and refocus; verify it advances.
-4. Throttle the network, quickly change end dates, leave Dashboard, and log out
-   while images are pending. Sign in to a second test account. Confirm no previous
-   account images/captions appear and no late request repopulates the gallery.
-5. Use browser request interception to simulate metadata network failure and PNG
-   403/404/429/503/504 responses. Verify meaningful unavailable states, retained
-   journal links, and recovery only after explicit retry/refresh. Expire the test
-   session to check the existing sign-in redirect on 401. Test malformed metadata
-   and invalid PNG bytes without altering production data.
-6. Edit, redate, or delete a fictional journal in another tab, then refresh the
-   gallery. Verify the old placement/image disappears and content edits show a
-   saved journal without its invalidated image. Check Calendar, heatmap, streaks,
-   monthly overview, recent entries, History links, and weekly recap still work.
-7. At mobile and desktop widths (including 320px and 1440px), check that only the
-   gallery strip scrolls horizontally. Tab through date controls, thumbnails,
-   details, image selectors and retries; use Enter/Space on native controls and
-   confirm visible focus and meaningful screen-reader labels.
-
-### Manual generation verification (explicitly billable)
-
-With generation enabled, valid backend-only PixelLab/Groq credentials, available
-credits, persistent image storage, and fictional journals in a test account:
-
-1. Save one fictional journal, open Dashboard, and choose `Generate pixel memory`.
-   Expect processing feedback, then a real stored PNG on that journal's date.
-   Confirm the browser sent one POST with `{}` and authenticated GETs afterward.
-2. Create several fictional journals on the same date. Before any image exists,
-   choose journal B in the selector and generate. Then expand the day and generate
-   from journal A. B remains the default after refreshing/reopening Dashboard;
-   A can be viewed through `Show image`. Check both captions and journal links.
-3. During generation, quickly activate controls again; all generation buttons
-   should be disabled and no duplicate POST should appear. Navigate away or
-   switch the period/account while waiting; late results must not repopulate the
-   current gallery. Return and refresh to discover any completed server work.
-4. Use request interception for timeout/lost-response/409/malformed-success
-   scenarios. Check for a saved image before retrying. Simulate check failures and
-   404: only explicit retry may send another POST, with the charge warning visible.
-   Separately simulate 403/404/429/502/503 generation errors; verify the journal and
-   existing images remain intact. A content-load failure after successful generation
-   must offer image-read recovery, without resubmitting generation.
-5. Edit or delete the journal providing the default image, then refresh. Its
-   invalidated image disappears and the next earliest stored image becomes the
-   default. Verify native keyboard operation for the selector and generation,
-   check, and retry controls at both mobile and desktop widths.
-
-These provider checks require an explicit human action and can incur charges.
-Automated tests use fake transport/image bytes and never call PixelLab/Groq.
-
-Automated coverage lives in `tests/frontend-pixel-memories.test.js` and the
-Dashboard/Calendar regression suites. It uses fake transport/image bytes and
-component effect tests; it does not prove browser decoding, visual layout, or
-real PixelLab/Groq provider behavior. Run `npm run test:frontend` and
-`npm run build` from the repository root.
-
-## Configuration and deployment
-
-Install `src/backend/requirements.txt`. Configure backend environment variables:
+## Configuration, deployment and privacy
 
 ```dotenv
-PIXELLAB_ENABLED=true
-PIXELLAB_API_KEY=<backend-only PixelLab token>
-GROQ_API_KEY=<backend-only Groq token>
+PIXELLAB_ENABLED=false
+PIXELLAB_API_KEY=
+GROQ_API_KEY=
 GROQ_MODEL=openai/gpt-oss-20b
-JOURNAL_IMAGE_STORAGE_DIR=/absolute/path/to/private/persistent/journal-images
+PIXEL_ART_WORKER_ENABLED=true
+PIXEL_ART_CONCURRENCY=2
+PIXEL_ART_USER_DAILY_LIMIT=20
+PIXEL_ART_DAILY_LIMIT=200
+JOURNAL_IMAGE_STORAGE_DIR=/absolute/private/persistent/journal-images
 ```
 
-Generation defaults to disabled. A blank storage setting defaults to the ignored
-repository `var/journal-images` directory. Storage must be on a persistent,
-privately controlled volume shared by all workers on the backend host. Do not
-serve this directory through static hosting. Restrict the volume and backups to
-the backend account and use deployment-managed encryption at rest.
+`PIXELLAB_ENABLED` gates new work and defaults false. Disabled saves persist terminal
+`unavailable` jobs; enabling it does not replay them. Workers can remain running to
+recover already-submitted output even while generation is disabled.
+`PIXEL_ART_WORKER_ENABLED=false` stops workers in that process without dropping
+pending jobs; keep at least one enabled application process for generation.
+Concurrency is clamped to 1–4 and **must match across all replicas**, which must
+share PostgreSQL/schema and the private persistent storage volume. Each process
+creates that many worker threads, while shared slots enforce the configured total.
+Budget database connections for these workers, advisory-lock connections, normal
+requests and recovery. Direct or session-pooled PostgreSQL is required; transaction
+pooling cannot preserve session advisory locks.
 
-The backend uses synchronous PixelLab v2 `/create-image-pixen` with 128×128 output
-and prompt enhancement disabled. Only the minimized visual prompt reaches
-PixelLab; Groq receives the journal to extract its moment. Factuality and removal
-of personal identifiers also depend on the model following its instructions;
-structural validation and source quotation checks cannot prove semantic accuracy.
+Provider-attempt budgets use the existing PostgreSQL rate-limit buckets: 10 per
+user per minute, configured per-user daily (default 20), and configured shared
+daily (default 200), across replicas. They include extraction retries and failed
+attempts; recovery from a saved PNG does not consume budget. These are fixed
+windows starting on first use, matching existing bucket semantics. Budget exhaustion
+is terminal `unavailable` and does not block journal saving.
 
-One generation per user and entry is enforced across workers by PostgreSQL
-session advisory locks. Two generations per application process may run at once.
-Locks retain a database connection, with no open transaction during AI requests.
-No queue or database migration is required. Configure reverse-proxy request
-limits to allow the long-running explicit generation request.
+Before deployment, back up and run `alembic upgrade head` from `src/backend` using
+owner credentials (`MIGRATION_DATABASE_URL`). Migration `0010` adds the version
+column and job table **without generating any historical work**. Reapply
+`scripts/database-runtime-role.sql` as administrator, or explicitly grant the
+restricted runtime role SELECT/INSERT/UPDATE/DELETE on `pixel_art_jobs`. API/worker
+processes use restricted runtime credentials, not migration-owner credentials.
+The migration reversibly drops its table/column; downgrade loses job/fence history.
+Stop all workers before downgrade and never reconstruct automatic jobs from that
+lost history. Existing journal content and image references remain intact.
 
-Changing journal content invalidates image metadata; unchanged edits retain it.
-Deletion cascades metadata. Both delete owned files after database commit. A
-late result cannot associate with a deleted or changed entry. Existing summary
-or reflection updates can also change the entry timestamp and conservatively
-invalidate an in-flight generation.
-
-Filesystem and database operations cannot commit atomically. Schedule the
-following command **hourly and after restarts**, under the backend account, with
-the same environment and volume as the server:
+Keep images and backups private, outside static hosting. The blank storage setting
+still defaults to ignored `var/journal-images`. Preserve volume permissions and use
+deployment-managed encryption at rest. Schedule the existing cleanup command hourly
+and after restarts, with the same DB/schema and storage configuration:
 
 ```sh
 .venv/bin/python scripts/cleanup-journal-images.py
 ```
 
-It removes unreferenced owned PNGs and abandoned temporary files, skips active
-generation, and preserves referenced files. Normal edit/delete requests clean up
-immediately; failed deletions and crash leftovers are retried by this command.
-Monitor its nonzero exit status and restore volume permissions/availability when
-cleanup fails. Cleanup cannot succeed while storage or PostgreSQL is unavailable.
-It never follows legacy external image URLs. External provider retention and
-backup erasure are separate deployment/privacy responsibilities.
+Cleanup retains referenced images and submitted recoverable/uncertain job outputs,
+skips actively locked entries, and removes other orphan PNG/temp files. Inspect
+worker fixed-message warnings, pending age, expired leases, terminal job counts,
+provider budgets and cleanup exit status. DB/storage outages need operational
+repair; this design does not provide an operations UI or provider-side result lookup.
 
-## Manual verification with real providers
+**Disclosure/consent requirement before enabling automatic generation:** the
+application must clearly explain before journal submission that saving or changing
+journal text automatically sends the full journal to Groq and a minimized scene
+to PixelLab, that artwork can be symbolic/inaccurate, and that provider processing,
+retention and charges may apply. Obtain informed opt-in where required by the
+product's privacy policy and applicable obligations. This PR supplies an operational
+flag, not per-account consent storage/UI; keep generation disabled for users who
+have not received the disclosure/required consent. PR2 must remove the old Generate
+controls and provide the disclosure/consent experience before production enablement.
+Credentials remain backend-only. Structural/evidence validation does not prove
+semantic factuality or removal of all identifying details by the model. Provider
+retention, backups and deletion are separate privacy/deployment responsibilities.
 
-This incurs external API charges. Use fictional journals and a local test account.
+## Verification
 
-1. Set the environment above in the backend `.env`; install requirements and
-   restart with `npm start`. Keep local `AUTH_COOKIE_SECURE=false`. Use
-   `http://localhost:5173` consistently.
-2. Register or log in through the existing UI. Open the browser developer console
-   on that frontend origin. Run:
+Automated provider interactions are mocked; `tests/conftest.py` blocks real HTTP
+and provider WebSockets. Use a disposable PostgreSQL test database:
 
-   ```js
-   const base = 'http://localhost:8000';
-   const headers = {'Content-Type': 'application/json', 'X-AuraJournal-CSRF': '1'};
-   const saved = await fetch(`${base}/api/entries`, {
-     method: 'POST', credentials: 'include', headers,
-     body: JSON.stringify({content: 'Today I finished my mathematics homework after an hour of practice.'})
-   });
-   if (saved.status !== 201) throw new Error(`Save failed: ${saved.status}`);
-   const entry = await saved.json();
-   const imagePath = `${base}/api/entries/${entry.id}/pixel-art`;
-   const generated = await fetch(imagePath, {
-     method: 'POST', credentials: 'include', headers, body: '{}'
-   });
-   if (generated.status !== 201) throw new Error(`Generation failed: ${generated.status}`);
-   const result = await generated.json();
-   const metadata = await fetch(imagePath, {credentials: 'include'});
-   if (metadata.status !== 200) throw new Error('Metadata missing');
-   const content = await fetch(`${base}${result.image.content_url}`, {credentials: 'include'});
-   const preview = document.createElement('img');
-   const previewURL = URL.createObjectURL(await content.blob());
-   preview.src = previewURL;
-   preview.width = preview.height = 256;
-   preview.style.imageRendering = 'pixelated';
-   document.body.append(preview);
-   ```
+```sh
+cd src/backend
+TEST_DATABASE_URL=postgresql+psycopg://user@localhost/aurajournal_test \
+  ../../.venv/bin/python -m pytest tests -q
+```
 
-3. Inspect scene fidelity and readability. Repeat the generation request; expect
-   200 and the same image ID, with no additional PixelLab submission.
-4. PATCH `/api/entries/${entry.id}` with a different `content` using the same
-   fetch options. Both image endpoints should now return 404. Generate again
-   explicitly if desired, then DELETE the entry with the same headers and `{}`;
-   its image endpoints must return 404 and owned PNG files should be removed.
-5. Test the URLs from a second signed-in account and logged out; expect 404 and
-   401 respectively. Set `PIXELLAB_ENABLED=false`, restart, and verify saving
-   still works while requesting a new image returns 503.
-6. Remove the console preview with `preview.remove()` and
-   `URL.revokeObjectURL(previewURL)`. Run the cleanup command. Repeat with a
-   fictional Vietnamese entry to assess language fidelity. Never log real journals
-   or provider credentials during verification.
+Coverage includes atomic outbox persistence, nonblocking saves, status transitions,
+provider/budget failures, bounded retry, duplicate suppression, concurrent workers,
+leases/restart recovery, saved-output recovery, uncertain commits, edit/delete
+races, private content, multiple journals per date and no generation on reads.
+Migration tests compare model metadata and exercise upgrade/downgrade without a
+historical backfill. Run `npm run test:frontend` and `npm run build` from the root
+for existing frontend compatibility. No live provider call is required or implied.
+
+Any live evaluation requires separate explicit authorization, fictional journals,
+a test account, provider credits and the deployment/privacy prerequisites above.
+Saving a journal with providers enabled is itself billable; no Generate action is
+needed. Observe the status GET/feed until completion, inspect the private PNG,
+then test date/content edits and deletion. Never log real journals or credentials.
