@@ -1,4 +1,6 @@
 import json
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 from pydantic import ValidationError
@@ -7,6 +9,7 @@ from app.services._groq import AIInvalidResponseError, EmptyJournalError
 from app.services.pixel_art import (
     FALLBACK_SCENE, SYSTEM_PROMPT, MomentExtractor, SignificantMoment, build_pixel_art_prompt,
 )
+from app.services.pixel_generation import render_pixel_art
 from test_ai_service import FakeCompletions, client_for
 
 
@@ -43,13 +46,54 @@ def test_vietnamese_source_and_evidence_are_preserved():
     assert calls.calls[0]["messages"][1]["content"] == source
 
 
-@pytest.mark.parametrize("source", ["Okay.", "...", "Tomorrow I plan to fly to Paris."])
-def test_vague_and_future_only_entries_use_explicit_symbolic_fallback(source):
+@pytest.mark.parametrize("source", ["Okay.", "..."])
+def test_entries_without_a_visual_theme_use_abstract_fallback(source):
     service, _ = extractor(dict(kind="symbolic", moment="No concrete moment selected", evidence=None, scene=None))
     moment = service.extract(source)
     assert moment.kind == "symbolic"
     assert build_pixel_art_prompt(moment).startswith(FALLBACK_SCENE)
+    assert "closed journal" not in FALLBACK_SCENE
     assert source not in build_pixel_art_prompt(moment)
+
+
+def test_short_unfinished_entry_can_supply_a_concrete_scene():
+    source = "hello today is my first day at the university and i"
+    scene = "A student at a university."
+    service, _ = extractor(dict(kind="grounded", moment="First day at university",
+                                evidence="my first day at the university", scene=scene))
+    prompt = build_pixel_art_prompt(service.extract(source))
+    assert prompt.startswith(scene)
+    assert FALLBACK_SCENE not in prompt
+    assert "journal" not in prompt.lower() and "book" not in prompt.lower()
+
+
+@pytest.mark.parametrize("source,evidence,theme,scene", [
+    ("i didnt sleep today", "didnt sleep", "No sleep today",
+     "An abstract open-eye motif surrounded by restless angular lines."),
+    ("Hôm nay tôi không ngủ được.", "không ngủ được", "Không ngủ được",
+     "An abstract open-eye motif with restless looping lines."),
+    ("fuck this UI page", "fuck this UI page", "Frustration with a UI page",
+     "Tense jagged shapes and clashing colors representing frustration with an interface."),
+    ("Tomorrow I plan to fly to Paris.", "plan to fly", "A future travel plan",
+     "An abstract wing motif representing the idea of travel."),
+])
+def test_symbolic_themes_reach_image_provider_instead_of_book_fallback(source, evidence, theme, scene):
+    service, _ = extractor(dict(kind="symbolic", moment=theme, evidence=evidence, scene=scene))
+    provider = Mock(return_value=b"generated image")
+    before_submit = Mock()
+    data, kind = render_pixel_art(
+        SimpleNamespace(moment_extractor=service, pixellab_client=SimpleNamespace(generate=provider)),
+        source, before_submit=before_submit,
+    )
+    assert data == b"generated image" and kind == "symbolic"
+    before_submit.assert_called_once_with()
+    provider.assert_called_once()
+    prompt = provider.call_args.args[0]
+    assert prompt.startswith(scene)
+    assert FALLBACK_SCENE not in prompt
+    assert "journal" not in prompt.lower() and "book" not in prompt.lower()
+    assert source not in prompt
+    assert "128x128" in prompt and len(prompt) <= 800
 
 
 @pytest.mark.parametrize("source", ["", "  ", None])
@@ -63,6 +107,8 @@ def test_empty_input_does_not_call_groq(source):
 @pytest.mark.parametrize("result", [
     {}, {"kind": "grounded"},
     dict(kind="symbolic", moment="none", evidence="invented", scene="an event"),
+    dict(kind="symbolic", moment="none", evidence="homework", scene=None),
+    dict(kind="symbolic", moment="none", evidence=None, scene="an abstract theme"),
     dict(kind="grounded", moment="A", evidence=None, scene="B"),
     dict(kind="grounded", moment="A", evidence="invented", scene="B"),
     dict(kind="grounded", moment="A", evidence="homework", scene="x" * 451),
@@ -74,13 +120,28 @@ def test_invalid_or_ungrounded_output_is_rejected(result):
         service.extract("I finished my homework.")
 
 
-def test_full_journal_cannot_be_forwarded_as_scene():
+@pytest.mark.parametrize("kind", ["grounded", "symbolic"])
+def test_full_journal_cannot_be_forwarded_as_scene(kind):
     source = "I finished my homework."
     result = grounded()
+    result["kind"] = kind
     result["scene"] = source
     service, _ = extractor(result)
     with pytest.raises(AIInvalidResponseError):
         service.extract(source)
+
+
+def test_unverified_symbolic_theme_never_submits_an_image():
+    service, _ = extractor(dict(kind="symbolic", moment="Frustration", evidence="angry",
+                                scene="Jagged red shapes representing frustration."))
+    provider, before_submit = Mock(), Mock()
+    with pytest.raises(AIInvalidResponseError):
+        render_pixel_art(
+            SimpleNamespace(moment_extractor=service, pixellab_client=SimpleNamespace(generate=provider)),
+            "i didnt sleep today", before_submit=before_submit,
+        )
+    before_submit.assert_not_called()
+    provider.assert_not_called()
 
 
 def test_invalid_json_is_controlled():
