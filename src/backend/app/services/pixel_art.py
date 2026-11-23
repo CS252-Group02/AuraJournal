@@ -25,15 +25,16 @@ identifiers from scene; use generic roles and objects instead. Compose one simpl
 scene, not a journal summary. Do not copy the full journal into scene. Do not add
 text, logos or watermarks. No Markdown or extra JSON fields.
 If nothing concrete can be depicted, return kind symbolic, moment describing
-that no concrete moment was selected, and evidence and scene null. This will be
-rendered as a generic journal illustration, never presented as a real memory.
+that no concrete moment was selected, and evidence and scene null. Do not invent
+a scene or generic substitute.
 """
 
 STYLE = (
     "Pixel art, 128x128, limited soft color palette, crisp pixels, clear silhouettes, "
     "one simple readable composition, minimal detail. No text, letters, logos or watermark."
 )
-FALLBACK_SCENE = "Symbolic illustration of a closed journal, isolated on a plain background."
+class NoDepictableMoment(Exception):
+    """Extraction found no grounded scene; never submit an image prompt."""
 
 
 class SignificantMoment(BaseModel):
@@ -60,7 +61,9 @@ class SignificantMoment(BaseModel):
 
 
 def build_pixel_art_prompt(moment: SignificantMoment) -> str:
-    scene = moment.scene if moment.kind == "grounded" else FALLBACK_SCENE
+    if moment.kind != "grounded":
+        raise NoDepictableMoment()
+    scene = moment.scene
     prompt = f"{scene} {STYLE}"
     if len(prompt) > 800:
         raise AIInvalidResponseError("AI service returned an invalid response.")

@@ -97,6 +97,7 @@ export function selectedMemory(images, identity) {
 }
 
 export function generationLabel(generation) {
+  if (generation.status === 'failed' && generation.error_code === 'no_depictable_moment') return 'No moment could be illustrated';
   if (generation.status === 'failed' && ['image_missing', 'invalid_reference', 'storage_unavailable'].includes(generation.error_code)) return 'Image unavailable';
   return {
     pending: 'Waiting for artwork', processing: 'Preparing artwork…', ready: 'Artwork ready',

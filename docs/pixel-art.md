@@ -13,7 +13,7 @@ never cause an otherwise valid journal save to fail.
 extractor and PixelLab client. Groq receives the journal and returns validated
 `grounded`/`symbolic` output. Grounded scenes require exact source evidence. Only
 the minimized visual prompt reaches PixelLab. The existing privacy instructions,
-symbolic fallback, style, 128×128 resolution, model selection, prompt enhancement
+style, 128×128 resolution, model selection, prompt enhancement
 setting and PNG validation remain unchanged. No journal text, evidence, scene or
 provider error payload is copied into a job or logged by the worker.
 
@@ -56,7 +56,7 @@ journal's generation status. `error_code` is a safe application code; raw provid
 messages, SQL details, paths, prompts and credentials never appear in this API.
 
 Current public error codes are `disabled`, `service_unavailable`,
-`credits_unavailable`, `budget_exhausted`, `extraction_unavailable`,
+`credits_unavailable`, `budget_exhausted`, `extraction_unavailable`, `no_depictable_moment`,
 `generation_failed`, `provider_busy`, `invalid_image`, `attempts_exhausted`,
 `completion_uncertain`, `image_missing`, `invalid_reference`, and
 `storage_unavailable`. Successful states use null; clients should use status for
@@ -66,6 +66,11 @@ control flow and a safe generic fallback for unrecognized future error codes.
   (two total extraction attempts). That retry can incur another Groq charge.
   Invalid output and configuration errors are terminal. Crashes before image
   submission also count toward the two-attempt bound.
+- A `symbolic` result (no concrete depictable moment) never produces a generic
+  journal-book prompt. It is queued for one extraction retry after at least 60
+  seconds; a second such result ends as `failed` with `no_depictable_moment`.
+  No PixelLab submission is made unless a grounded scene is found. Existing images
+  are not regenerated; editing journal content schedules a new version as usual.
 - There are **zero automatic PixelLab retries**, including timeout, transport/5xx,
   rate-limit, malformed output, storage failure and lost commit acknowledgement.
   A submission marker can exist even if a crash prevented the actual request;

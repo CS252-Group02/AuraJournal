@@ -285,6 +285,7 @@ test('all backend states are distinct and only ready references enter a carousel
   assert.equal(hasPendingMemories(grouped, '2026-11-19'), true);
   assert.equal(hasPendingMemories(feed([missing(rows[0], 'pending')], '2026-11-19', '2026-10-01'), '2026-11-19'), false);
   assert.equal(generationLabel(generation('failed', 'image_missing')), 'Image unavailable');
+  assert.equal(generationLabel(generation('failed', 'no_depictable_moment')), 'No moment could be illustrated');
 });
 
 test('grouped API uses authenticated no-store GET and validates the actual backend response', async () => {

@@ -15,6 +15,7 @@ from app.models import JournalEntry, PixelArtJob
 from app.services._groq import AIServiceUnavailableError, AIServiceNotConfiguredError, AIInvalidResponseError
 from app.services.image_lifecycle import generation_locks, reconcile_images
 from app.services.pixel_jobs import PixelArtWorkers, run_pixel_job_once, schedule_pixel_art
+from app.services.pixel_art import SignificantMoment
 from app.services.pixellab import (
     PixelArtError, PixelArtTimeout, PixelArtCreditsUnavailable, PixelArtRateLimited, PixelArtInvalidResponse,
 )
@@ -124,6 +125,53 @@ def test_transient_extraction_retries_once_with_backoff_then_stops(pixel_app):
     assert run_pixel_job_once(app.state)
     assert job_for(app, entry).status == "failed" and job_for(app, entry).attempts == 2
     assert not run_pixel_job_once(app.state)
+    app.state.pixellab_client.generate.assert_not_called()
+
+
+@pytest.mark.parametrize("second_grounded", [False, True])
+def test_no_depictable_moment_requeues_without_submitting_pixel_art(pixel_app, second_grounded):
+    app = pixel_app
+    entry = create(app)
+    symbolic = SignificantMoment(kind="symbolic", moment="No concrete moment", evidence=None, scene=None)
+    grounded = app.state.moment_extractor.extract.return_value
+    app.state.moment_extractor.extract.side_effect = [symbolic, grounded if second_grounded else symbolic]
+    assert run_pixel_job_once(app.state)
+    job = job_for(app, entry)
+    assert (job.status, job.error_code, job.attempts, job.submitted_at) == ("pending", "no_depictable_moment", 1, None)
+    assert job.available_at > utcnow() + timedelta(seconds=50)
+    assert not run_pixel_job_once(app.state)
+    app.state.pixellab_client.generate.assert_not_called()
+    due(app, entry)
+    assert run_pixel_job_once(app.state)
+    job = job_for(app, entry)
+    assert job.attempts == 2
+    if second_grounded:
+        assert job.status == "ready" and job.submitted_at is not None
+        app.state.pixellab_client.generate.assert_called_once()
+    else:
+        assert (job.status, job.error_code, job.submitted_at) == ("failed", "no_depictable_moment", None)
+        assert status(app, entry)["generation"]["error_code"] == "no_depictable_moment"
+        app.state.pixellab_client.generate.assert_not_called()
+    assert not run_pixel_job_once(app.state)
+    assert call(app, "GET", "/api/entries").json() == [entry]
+
+
+@pytest.mark.parametrize("action", ["edit", "delete"])
+def test_queued_symbolic_attempt_is_invalidated_when_journal_changes(pixel_app, action):
+    app = pixel_app
+    entry = create(app)
+    app.state.moment_extractor.extract.return_value = SignificantMoment(
+        kind="symbolic", moment="No concrete moment", evidence=None, scene=None,
+    )
+    assert run_pixel_job_once(app.state)
+    old_job = job_for(app, entry).id
+    if action == "edit":
+        assert call(app, "PATCH", f"/api/entries/{entry['id']}", json={"content": "A new version"}).status_code == 200
+    else:
+        assert call(app, "DELETE", f"/api/entries/{entry['id']}", json={}).status_code == 204
+    with Session(app.state.engine) as session:
+        old = session.get(PixelArtJob, old_job)
+        assert old is None if action == "delete" else old.status == "cancelled"
     app.state.pixellab_client.generate.assert_not_called()
 
 

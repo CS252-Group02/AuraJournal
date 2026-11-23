@@ -17,6 +17,7 @@ from app.services._groq import AIServiceNotConfiguredError, AIServiceUnavailable
 from app.services.image_lifecycle import generation_locks
 from app.services.journal_images import attach_image, has_owned_image_reference
 from app.services.pixel_generation import render_pixel_art
+from app.services.pixel_art import NoDepictableMoment
 from app.services.pixellab import (
     PixelArtCreditsUnavailable, PixelArtError, PixelArtInvalidResponse, PixelArtRateLimited,
     PixelArtTimeout, validate_png,
@@ -170,9 +171,12 @@ def _failure(state, attempt, error):
                 job.status, job.error_code = "failed", "invalid_image"
             else:
                 job.status, job.error_code = "uncertain", "completion_uncertain"
-        elif isinstance(error, AIServiceUnavailableError) and job.attempts < MAX_ATTEMPTS:
-            job.status, job.error_code = "pending", "extraction_unavailable"
+        elif isinstance(error, (AIServiceUnavailableError, NoDepictableMoment)) and job.attempts < MAX_ATTEMPTS:
+            job.status = "pending"
+            job.error_code = "no_depictable_moment" if isinstance(error, NoDepictableMoment) else "extraction_unavailable"
             job.available_at = utcnow() + timedelta(seconds=RETRY_SECONDS)
+        elif isinstance(error, NoDepictableMoment):
+            job.status, job.error_code = "failed", "no_depictable_moment"
         elif isinstance(error, (AIServiceNotConfiguredError, HTTPException)):
             job.status = "unavailable"
             job.error_code = "budget_exhausted" if isinstance(error, HTTPException) else "service_unavailable"
