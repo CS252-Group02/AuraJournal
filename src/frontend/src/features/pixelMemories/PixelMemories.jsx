@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { parseDateKey } from '../../lib/localDate.js';
 import { entryTitle } from '../journal/entryText.js';
 import { createMemoriesLoader, createMemoryImageLoader } from './pixelMemoriesApi.js';
 import { generationLabel, mapPixelMemories, memoryDates, MIN_MEMORY_DATE, selectedMemory } from './pixelMemoriesModel.js';
+import { api } from '../../lib/api.js';
 
 const titleOf = memory => entryTitle(memory.entry.content);
 const journalUrl = memory => `/journal/${memory.entry_id}`;
@@ -31,7 +32,29 @@ export function MemoryImage({ memory, label }) {
   </>;
 }
 
-export function MemoryDay({ day, status }) {
+function RetryArtwork({ item, onRetry }) {
+  const [busy, setBusy] = useState(false), [error, setError] = useState('');
+  const active = useRef(true), locked = useRef(false);
+  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
+  if (!item.generation.retryable) return null;
+  async function retry() {
+    if (locked.current) return;
+    locked.current = true; setBusy(true); setError('');
+    try {
+      await api(`/api/entries/${item.entry_id}/pixel-art/retry`, { method: 'POST', body: {} });
+      if (active.current) await onRetry?.();
+    } catch (failure) {
+      if (active.current) setError(failure.message || 'Could not retry artwork.');
+    } finally {
+      locked.current = false;
+      if (active.current) setBusy(false);
+    }
+  }
+  return <span><button type="button" disabled={busy} onClick={retry}>{busy ? 'Queuing…' : 'Retry artwork'}</button>
+    {error && <span role="alert">{error}</span>}</span>;
+}
+
+export function MemoryDay({ day, status, onRetry }) {
   const [selected, setSelected] = useState(null);
   const memory = selectedMemory(day.images, selected);
   // Latch the effective identity: a newly ready image, even an earlier one,
@@ -74,20 +97,22 @@ export function MemoryDay({ day, status }) {
         disabled={index === day.images.length - 1} onClick={() => move(1)}><span aria-hidden="true">→</span></button>
     </div>}
     {primary && <Link className="pixel-memory-caption" to={journalUrl(primary)}>{titleOf(primary)}</Link>}
+    {primary && day.entries.length === 1 && <RetryArtwork item={primary} onRetry={onRetry} />}
     {memory && preparing > 0 && <p className="pixel-memory-note">{preparing} {preparing === 1 ? 'artwork' : 'artworks'} preparing</p>}
     {day.entries.length > 1 && <details className="pixel-memory-more">
       <summary>{day.entries.length} journals</summary>
       <ul>{day.entries.map(item => <li key={item.entry_id}>
         <Link to={journalUrl(item)}>{titleOf(item)}</Link>
         <span data-generation-status={item.generation.status}>{generationLabel(item.generation)}</span>
+        <RetryArtwork item={item} onRetry={onRetry} />
       </li>)}</ul>
     </details>}
   </li>;
 }
 
-export function MemoryDays({ days, status }) {
+export function MemoryDays({ days, status, onRetry }) {
   return <ol className="pixel-memory-days" aria-label="Seven calendar days of memories" tabIndex={0}>
-    {days.map(day => <MemoryDay key={day.key} day={day} status={status} />)}
+    {days.map(day => <MemoryDay key={day.key} day={day} status={status} onRetry={onRetry} />)}
   </ol>;
 }
 
@@ -130,6 +155,6 @@ export default function PixelMemories({ todayKey, timezone, userId }) {
       {current.windowExpired && <p role="status">Updates paused. Refresh memories to check again.</p>}
     </div>
     <p className="visually-hidden">{dateLabel(dates[0])} through {dateLabel(asOf)}. Illustrations from your saved journals.</p>
-    <MemoryDays key={`${userId}:${timezone}:${asOf}`} days={days} status={current.status} />
+    <MemoryDays key={`${userId}:${timezone}:${asOf}`} days={days} status={current.status} onRetry={() => loader.refresh()} />
   </section>;
 }

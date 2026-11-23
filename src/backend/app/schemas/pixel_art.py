@@ -34,6 +34,7 @@ class PixelGenerationStatus(BaseModel):
     status: Literal["pending", "processing", "ready", "failed", "unavailable", "uncertain", "not_requested"]
     error_code: str | None = None
     updated_at: datetime | None = None
+    retryable: bool = False
 
 
 class PixelArtStatusResponse(BaseModel):
