@@ -79,11 +79,19 @@ control flow and a safe generic fallback for unrecognized future error codes.
   (two total extraction attempts). That retry can incur another Groq charge.
   Invalid output and configuration errors are terminal. Crashes before image
   submission also count toward the two-attempt bound.
-- A `symbolic` result (no concrete depictable moment) never produces a generic
+- A `symbolic` result without an evidenced scene never produces a generic
   journal-book prompt. It is queued for one extraction retry after at least 60
   seconds; a second such result ends as `failed` with `no_depictable_moment`.
   No PixelLab submission is made unless a grounded scene is found. Existing images
   are not regenerated; editing journal content schedules a new version as usual.
+- An evidence-backed symbolic scene can be illustrated. For terminal jobs that
+  never reached PixelLab, owners can select **Retry artwork** in the gallery.
+  `POST /api/entries/{id}/pixel-art/retry` accepts `{}` with the usual session,
+  Origin and CSRF checks. It requeues the same version with a fresh two-attempt
+  extraction allowance. Retries consume provider budgets and may incur charges.
+  Jobs with a recorded submission, existing images, and pending/processing jobs
+  return 409; uncertain submissions remain recovery-only. Status includes
+  `retryable`, projected from the current job and submission marker.
 - There are **zero automatic PixelLab retries**, including timeout, transport/5xx,
   rate-limit, malformed output, storage failure and lost commit acknowledgement.
   A submission marker can exist even if a crash prevented the actual request;
@@ -115,8 +123,9 @@ WHERE id = '<investigated-job-uuid>' AND status = 'uncertain'
 ```
 
 The retained submission marker ensures this operation cannot call PixelLab again.
-If no output exists, it returns to `uncertain`. There is no user-facing retry API
-in this PR. Uncertain jobs/files require operational review; they are intentionally
+If no output exists, it returns to `uncertain`. The user-facing retry API is limited
+to jobs without a submission marker and cannot resubmit this job. Uncertain
+jobs/files require operational review; they are intentionally
 retained until recovered, invalidated by content edits, or removed with the journal.
 
 ### Edit and delete lifecycle

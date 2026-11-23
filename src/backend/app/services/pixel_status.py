@@ -19,4 +19,5 @@ def generation_status(storage, image, job):
     # A missing committed image must never be advertised as ready.
     if job.status in {"ready", "cancelled"}:
         return PixelGenerationStatus(status="failed", error_code="image_missing", updated_at=job.updated_at)
-    return PixelGenerationStatus(status=job.status, error_code=job.error_code, updated_at=job.updated_at)
+    return PixelGenerationStatus(status=job.status, error_code=job.error_code, updated_at=job.updated_at,
+                                 retryable=job.status in {"failed", "unavailable"} and job.submitted_at is None)

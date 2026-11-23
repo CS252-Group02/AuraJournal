@@ -156,6 +156,55 @@ def test_no_depictable_moment_requeues_without_submitting_pixel_art(pixel_app, s
     assert call(app, "GET", "/api/entries").json() == [entry]
 
 
+def test_manual_retry_requeues_only_unsubmitted_job_and_can_complete(pixel_app):
+    app = pixel_app
+    entry = create(app)
+    symbolic = SignificantMoment(kind="symbolic", moment="No scene", evidence=None, scene=None)
+    grounded = app.state.moment_extractor.extract.return_value
+    app.state.moment_extractor.extract.side_effect = [symbolic, symbolic, grounded]
+    assert run_pixel_job_once(app.state)
+    due(app, entry)
+    assert run_pixel_job_once(app.state)
+    assert status(app, entry)["generation"]["retryable"] is True
+    endpoint = path(entry) + "/retry"
+    response = call(app, "POST", endpoint, json={})
+    assert response.status_code == 200
+    assert response.json()["generation"]["status"] == "pending"
+    assert call(app, "POST", endpoint, json={}).status_code == 409
+    assert run_pixel_job_once(app.state)
+    assert status(app, entry)["generation"]["status"] == "ready"
+    assert call(app, "POST", endpoint, json={}).status_code == 409
+    app.state.pixellab_client.generate.assert_called_once()
+
+
+def test_manual_retry_never_resubmits_uncertain_pixel_lab_work(pixel_app):
+    app = pixel_app
+    entry = create(app)
+    app.state.pixellab_client.generate.side_effect = PixelArtTimeout("private")
+    assert run_pixel_job_once(app.state)
+    assert status(app, entry)["generation"]["retryable"] is False
+    assert call(app, "POST", path(entry) + "/retry", json={}).status_code == 409
+    app.state.pixellab_client.generate.assert_called_once()
+
+
+def test_manual_retry_requires_owner_csrf_and_enabled_service(pixel_app):
+    app = pixel_app
+    entry = create(app)
+    app.state.moment_extractor.extract.return_value = SignificantMoment(
+        kind="symbolic", moment="No scene", evidence=None, scene=None)
+    assert run_pixel_job_once(app.state)
+    due(app, entry)
+    assert run_pixel_job_once(app.state)
+    endpoint = path(entry) + "/retry"
+    anonymous = application_for(app.state.engine)
+    assert call(anonymous, "POST", endpoint, json={}).status_code == 401
+    assert call(app, "POST", endpoint, json={}, headers={"Origin": "https://evil.example", "X-AuraJournal-CSRF": "1"}).status_code == 403
+    assert call(app, "POST", f"/api/entries/{uuid4()}/pixel-art/retry", json={}).status_code == 404
+    app.state.pixel_art_enabled = False
+    assert call(app, "POST", endpoint, json={}).status_code == 503
+    assert job_for(app, entry).status == "failed"
+
+
 @pytest.mark.parametrize("action", ["edit", "delete"])
 def test_queued_symbolic_attempt_is_invalidated_when_journal_changes(pixel_app, action):
     app = pixel_app

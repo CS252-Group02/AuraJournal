@@ -32,16 +32,13 @@ a backpack or curiosity. Remove names, addresses, workplaces, contact informatio
 identifiers from scene; use generic roles and objects instead. Compose one simple
 scene, not a journal summary. Do not copy the full journal into scene. Do not add
 text, logos or watermarks. No Markdown or extra JSON fields.
-If nothing concrete can be depicted, return kind symbolic, moment describing
-that no concrete moment was selected, and evidence and scene null. Do not invent
-a scene or generic substitute.
 If no concrete event can be depicted but the entry expresses a state, feeling or
 theme, return kind symbolic with a concise description of that theme in moment,
 an exact short quotation in evidence, and an English visual metaphor in scene.
 Use abstract shapes or a simple motif rather than inventing a real event or setting.
 An explicit plan can inspire a symbolic motif, but never show the plan happening.
 Use evidence and scene null ONLY when there is no usable subject or theme at all,
-such as punctuation alone. That fallback is abstract art, not a picture of a book.
+such as punctuation alone. Do not invent a scene or generic substitute.
 
 Examples (scene is always English; moment follows the source language):
 Entry: "today is my first day at university"
@@ -66,10 +63,6 @@ STYLE = (
 )
 class NoDepictableMoment(Exception):
     """Extraction found no grounded scene; never submit an image prompt."""
-FALLBACK_SCENE = (
-    "Abstract composition of softly overlapping geometric shapes in muted colors "
-    "on a plain background."
-)
 
 
 class SignificantMoment(BaseModel):
@@ -96,7 +89,7 @@ class SignificantMoment(BaseModel):
 
 
 def build_pixel_art_prompt(moment: SignificantMoment) -> str:
-    if moment.kind != "grounded":
+    if not moment.scene or not moment.evidence:
         raise NoDepictableMoment()
     scene = moment.scene
     prompt = f"{scene} {STYLE}"

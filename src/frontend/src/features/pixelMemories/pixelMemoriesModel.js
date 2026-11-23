@@ -34,6 +34,7 @@ export function validateMemoryFeed(feed, asOf) {
       const generation = record?.generation;
       if (typeof record?.entry_id !== 'string' || !UUID.test(record.entry_id) || entries.has(record.entry_id) || !generation ||
           !GENERATION_STATES.includes(generation.status) ||
+          !(generation.retryable === undefined || typeof generation.retryable === 'boolean') ||
           !(generation.error_code === null || typeof generation.error_code === 'string') ||
           !(generation.updated_at === null || validTimestamp(generation.updated_at)) ||
           !(record.image === null || validMemoryImage(record)) ||
@@ -44,7 +45,7 @@ export function validateMemoryFeed(feed, asOf) {
       return { entry_id: record.entry_id, image: record.image && {
         id: record.image.id, file_format: 'png', width: 128, height: 128,
         created_at: record.image.created_at, content_url: record.image.content_url,
-      }, generation: { status: generation.status, error_code: generation.error_code, updated_at: generation.updated_at } };
+      }, generation: { status: generation.status, error_code: generation.error_code, updated_at: generation.updated_at, retryable: generation.retryable === true } };
     }) };
   }) };
 }

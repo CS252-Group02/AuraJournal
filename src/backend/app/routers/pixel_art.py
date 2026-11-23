@@ -17,6 +17,7 @@ from app.services.journal_images import (
 )
 from app.services.pixel_status import generation_status
 from app.services.pixellab import PixelArtError
+from app.limits import consume
 
 router = APIRouter(prefix="/api/entries", tags=["pixel art"])
 
@@ -62,6 +63,38 @@ def generate_pixel_art(entry_id: UUID, payload: PixelArtRequest,
         raise HTTPException(409, "Automatic image generation is queued or running. Check for a saved image.",
                             headers={"Retry-After": "5"})
     raise HTTPException(503, "Automatic image generation is unavailable. Your journal is saved.")
+
+
+@router.post("/{entry_id}/pixel-art/retry", response_model=PixelArtStatusResponse)
+def retry_pixel_art(entry_id: UUID, payload: PixelArtRequest, request: Request,
+                    user: User = Depends(current_user), session: Session = Depends(get_session)):
+    entry = owned(session, entry_id, user.id, lock=True)
+    job = session.scalar(select(PixelArtJob).where(
+        PixelArtJob.entry_id == entry.id, PixelArtJob.source_version == entry.content_version,
+    ).with_for_update())
+    if entry.image is not None or job is None or job.status not in {"failed", "unavailable"} or job.submitted_at is not None:
+        raise HTTPException(409, "This artwork cannot be retried safely.")
+    state = request.app.state
+    if (not state.pixel_art_enabled or not getattr(state.moment_extractor, "configured", True)
+            or not getattr(state.pixellab_client, "configured", True)):
+        raise HTTPException(503, "Artwork generation is unavailable. Please try again later.")
+    # Apply the same shared budgets to explicit retries. consume commits, so
+    # release locks first, then reacquire and recheck eligibility atomically.
+    owner_id, job_id = user.id, job.id
+    session.rollback()
+    consume(session, [(f"pixel:retry:user:{owner_id}", 10, 60)])
+    entry = owned(session, entry_id, owner_id, lock=True)
+    job = session.scalar(select(PixelArtJob).where(
+        PixelArtJob.entry_id == entry.id, PixelArtJob.source_version == entry.content_version,
+    ).with_for_update())
+    if entry.image is not None or job is None or job.id != job_id or job.status not in {"failed", "unavailable"} or job.submitted_at is not None:
+        raise HTTPException(409, "This artwork cannot be retried safely.")
+    from app.auth import utcnow
+    job.status, job.error_code, job.attempts = "pending", None, 0
+    job.attempt_token, job.lease_expires_at, job.available_at = None, None, utcnow()
+    session.commit()
+    return PixelArtStatusResponse(entry_id=entry.id, journal_date=entry.journal_date,
+                                  image=None, generation=generation_status(state.image_storage, None, job))
 
 
 @router.get("/pixel-art/recent", response_model=list[DatedPixelArt])

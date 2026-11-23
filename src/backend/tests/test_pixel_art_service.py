@@ -46,6 +46,15 @@ def test_vietnamese_source_and_evidence_are_preserved():
     assert calls.calls[0]["messages"][1]["content"] == source
 
 
+def test_evidence_backed_symbolic_scene_is_used_without_generic_fallback():
+    source = "I did not sleep today."
+    service, _ = extractor(dict(kind="symbolic", moment="No sleep", evidence="did not sleep",
+                                scene="An abstract open-eye motif with angular lines."))
+    prompt = build_pixel_art_prompt(service.extract(source))
+    assert prompt.startswith("An abstract open-eye motif")
+    assert "closed journal" not in prompt
+
+
 @pytest.mark.parametrize("source", ["Okay.", "...", "Tomorrow I plan to fly to Paris."])
 def test_vague_and_future_only_entries_never_build_fallback_prompt(source):
     service, _ = extractor(dict(kind="symbolic", moment="No concrete moment selected", evidence=None, scene=None))
@@ -53,16 +62,6 @@ def test_vague_and_future_only_entries_never_build_fallback_prompt(source):
     assert moment.kind == "symbolic"
     with pytest.raises(NoDepictableMoment):
         build_pixel_art_prompt(moment)
-@pytest.mark.parametrize("source", ["Okay.", "..."])
-def test_entries_without_a_visual_theme_use_abstract_fallback(source):
-    service, _ = extractor(dict(kind="symbolic", moment="No concrete moment selected", evidence=None, scene=None))
-    moment = service.extract(source)
-    assert moment.kind == "symbolic"
-    assert build_pixel_art_prompt(moment).startswith(FALLBACK_SCENE)
-    assert "closed journal" not in FALLBACK_SCENE
-    assert source not in build_pixel_art_prompt(moment)
-
-
 def test_short_unfinished_entry_can_supply_a_concrete_scene():
     source = "hello today is my first day at the university and i"
     scene = "A student at a university."
@@ -70,7 +69,6 @@ def test_short_unfinished_entry_can_supply_a_concrete_scene():
                                 evidence="my first day at the university", scene=scene))
     prompt = build_pixel_art_prompt(service.extract(source))
     assert prompt.startswith(scene)
-    assert FALLBACK_SCENE not in prompt
     assert "journal" not in prompt.lower() and "book" not in prompt.lower()
 
 
@@ -97,7 +95,6 @@ def test_symbolic_themes_reach_image_provider_instead_of_book_fallback(source, e
     provider.assert_called_once()
     prompt = provider.call_args.args[0]
     assert prompt.startswith(scene)
-    assert FALLBACK_SCENE not in prompt
     assert "journal" not in prompt.lower() and "book" not in prompt.lower()
     assert source not in prompt
     assert "128x128" in prompt and len(prompt) <= 800
