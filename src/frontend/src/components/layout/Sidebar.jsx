@@ -6,6 +6,7 @@ const ITEMS = [
   { to: '/', label: 'Main', icon: 'main' },
   { to: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
   { to: '/history', label: 'History', icon: 'history' },
+  { to: '/memories', label: 'Moments in Pixels', icon: 'memories' },
   { to: '/reflection', label: 'Weekly recap', icon: 'reflection', secondary: true },
 ];
 

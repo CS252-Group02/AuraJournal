@@ -202,6 +202,11 @@ test('finalization and Review remove the caret and leave existing editing/save U
   const review = renderToStaticMarkup(React.createElement(MemoryRouter, {}, React.createElement(View, { model: { ...model, phase: 'review' } })));
   assert.match(review, /<textarea[^>]*>Edited journal<\/textarea>/);
   assert.match(review, /Save journal/);
+  assert.match(review, /Groq.*PixelLab/);
+  assert.match(review, /symbolic or inaccurate/);
+  assert.match(review, /provider processing, retention and charges/);
+  assert.ok(review.indexOf('id="record-art-disclosure"') < review.indexOf('record-action record-save'));
+  assert.match(review, /aria-describedby="record-draft-help record-art-disclosure/);
   assert.doesNotMatch(review, /has-caret|record-live-word/);
 });
 

@@ -9,6 +9,7 @@ import { entryTitle, readMinutes, wordCount } from '../features/journal/entryTex
 import { forgetLastOpened, setLastOpened } from '../features/journal/recentlyOpened.js';
 import { useJournalEntries } from '../features/journal/useJournalEntries.js';
 import { useNavigationGuard } from '../components/layout/navigation.js';
+import AutomaticArtDisclosure from '../features/pixelMemories/AutomaticArtDisclosure.jsx';
 
 const MAX_LENGTH = 5000;
 
@@ -183,6 +184,7 @@ export default function EntryPage() {
                 <label htmlFor="entry-draft" className="visually-hidden">Edit entry</label>
                 <textarea
                   id="entry-draft"
+                  aria-describedby="entry-art-disclosure"
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
                   onKeyDown={(event) => { if (event.key === 'Escape' && !busy) cancelEdit(); }}
@@ -191,6 +193,7 @@ export default function EntryPage() {
                   autoFocus
                   required
                 />
+                <AutomaticArtDisclosure id="entry-art-disclosure" />
                 <div className="entry-actions">
                   <span className="entry-count">{draft.length}/{MAX_LENGTH}{entry.ai_summary && ' · Saving clears the AI note'}</span>
                   <button type="button" className="aj-btn aj-btn-quiet" onClick={cancelEdit} disabled={busy}>Cancel</button>

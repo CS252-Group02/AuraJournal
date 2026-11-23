@@ -4,6 +4,7 @@ import { contentLength, transcriptSegments, transcriptText, validContent } from 
 import AudioPlayback from './AudioPlayback.jsx';
 import LiveTranscriptText from './LiveTranscriptText.jsx';
 import { createTranscriptScroll } from './transcriptScroll.js';
+import AutomaticArtDisclosure from '../pixelMemories/AutomaticArtDisclosure.jsx';
 
 export default function TranscriptView({ model }) {
   const { phase, transcript, editorText, originalTranscript, unconfirmedText, proposedDraft,
@@ -101,10 +102,11 @@ export default function TranscriptView({ model }) {
               <label className="visually-hidden" htmlFor="record-draft">Review and edit your journal</label>
               <textarea id="record-draft" ref={editor} className="record-editor" value={editorText}
                 onChange={event => flow.edit(event.target.value)} readOnly={phase === 'saving' || saveUnknown}
-                aria-describedby={`record-draft-help${incomplete ? ' record-incomplete' : ''}`} aria-invalid={count > 5000} />
+                aria-describedby={`record-draft-help record-art-disclosure${incomplete ? ' record-incomplete' : ''}`} aria-invalid={count > 5000} />
               <p id="record-draft-help" className="record-draft-help">
                 {count}/5000 characters. {count > 5000 ? 'Shorten the draft before saving. Your full text has been kept.' : 'Only the text in this editor will be saved.'}
               </p>
+              <AutomaticArtDisclosure id="record-art-disclosure" />
               <button className="record-action record-save" type="button" onClick={flow.save}
                 disabled={phase !== 'review' || !validContent(editorText) || (saveUnknown && !capabilities.idempotentSaveAvailable)}>
                 {phase === 'saving' ? 'Saving…' : saveUnknown ? 'Retry same save' : 'Save journal'}

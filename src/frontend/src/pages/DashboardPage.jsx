@@ -8,7 +8,6 @@ import { monthKey } from '../features/calendar/calendarModel.js';
 import { useCalendarView } from '../features/calendar/useCalendarView.js';
 import JournalCard from '../features/journal/JournalCard.jsx';
 import { useJournalEntries } from '../features/journal/useJournalEntries.js';
-import PixelMemories from '../features/pixelMemories/PixelMemories.jsx';
 import { parseDateKey } from '../lib/localDate.js';
 import { activitySummary, dashboardPreview, indexJournalDays, journalDayKey, monthlyActivity, weeklyActivity } from '../features/dashboard/dashboardModel.js';
 import { Activity, DashboardCompanion, MoodAnalytics, MonthlyOverview, RecentEntries, WeeklyRecap } from '../features/dashboard/DashboardSections.jsx';
@@ -57,6 +56,7 @@ function DashboardContent({ user }) {
         <nav className="dashboard-links" aria-label="Your journal">
           <Link to="/">Back to Main</Link>
           <Link to="/history">All journal entries</Link>
+          <Link to="/memories">Moments in Pixels</Link>
           <button type="button" className="aj-btn aj-btn-quiet" disabled={status === 'loading'} onClick={reload}>Refresh entries</button>
         </nav>
         {status === 'loading' && <p className="dashboard-status" role="status">Loading your journal activity…</p>}
@@ -83,8 +83,6 @@ function DashboardContent({ user }) {
             <DashboardCompanion activity={activity} week={week} status={status} />
           </div>
         </div>
-        <PixelMemories entries={entries} status={status} userId={user.id} todayKey={view.todayKey}
-          timezone={view.timezone} onRefresh={reload} />
         <MoodAnalytics byDay={byDay} todayKey={view.todayKey} timezone={view.timezone} status={status} />
         <RecentEntries entries={entries} status={status} />
       </div>

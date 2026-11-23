@@ -107,12 +107,6 @@
 :root[data-theme="dark"] :is(.dashboard-reflection-invite, .dashboard-reflection-result, .dashboard-reflection-error) { border-color: var(--aj-line); }
 :root[data-theme="dark"] :is(.dashboard-mood-track, .dashboard-mood-timeline .dashboard-mood-gap) { background: var(--aj-soft); }
 :root[data-theme="dark"] .dashboard-recent-open > .dashboard-mood-missing { color: var(--aj-muted); }
-:root[data-theme="dark"] .pixel-memory-art { background: var(--aj-soft); border-color: var(--aj-line); }
-:root[data-theme="dark"] :is(.pixel-memory-empty, .pixel-generation-status) { background: var(--aj-bg); }
-:root[data-theme="dark"] .pixel-memory-empty.has-journal { background: var(--tone-lavender); }
-:root[data-theme="dark"] .pixel-memory-art > span { color: var(--aj-muted); }
-:root[data-theme="dark"] :is(.pixel-memory-more summary, .pixel-memories :is(.pixel-memory-more, .pixel-memory-failure, .pixel-memory-status) button) { color: var(--aj-green-dark); }
-:root[data-theme="dark"] .pixel-memories button.pixel-generate-button { background: var(--aj-soft); border-color: var(--aj-line); color: var(--aj-green-dark); }
 
 /* Navigation rail and drawer. */
 :root[data-theme="dark"] :is(.app-sidebar, .shell-navigation-dialog) { background: var(--aj-surface); color: var(--aj-ink); }

@@ -12,6 +12,7 @@ import { useJournalEntries } from '../features/journal/useJournalEntries.js';
 import { dailyReflection } from '../features/journal/homeContent.js';
 import { useNavigationGuard } from '../components/layout/navigation.js';
 import AccountMenu from '../components/layout/AccountMenu.jsx';
+import AutomaticArtDisclosure from '../features/pixelMemories/AutomaticArtDisclosure.jsx';
 
 function Companion() {
   return <aside className="home-companion" aria-label="A gentle reminder">
@@ -116,7 +117,8 @@ function HomeContent() {
             <button className="home-text-button" type="button" onClick={closeWriting} disabled={busy}>Close writing</button></div>
           <label htmlFor="home-entry">What’s on your mind?</label>
           <textarea id="home-entry" ref={editor} value={content} onChange={event => { setContent(event.target.value); setFailure(''); }}
-            maxLength={5000} required rows={7} readOnly={busy} aria-describedby="home-entry-help" />
+            maxLength={5000} required rows={7} readOnly={busy} aria-describedby="home-entry-help home-art-disclosure" />
+          <AutomaticArtDisclosure id="home-art-disclosure" />
           <div className="home-writing-footer"><span id="home-entry-help">{content.length}/5000</span>
             <button className="aj-btn" disabled={busy || !content.trim()}>{busy ? 'Saving…' : 'Save journal'}</button></div>
           {failure && <p className="aj-error" role="alert">{failure}</p>}

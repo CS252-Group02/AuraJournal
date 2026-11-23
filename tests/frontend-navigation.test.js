@@ -12,8 +12,8 @@ const origin = new URL('https://journal.example/record');
 const click = (changes = {}) => ({ button: 0, defaultPrevented: false, ...changes });
 const anchor = (href, target = '', download = false) => ({ href, target, hasAttribute: name => name === 'download' && download });
 
-test('floating record visibility is limited to the four existing content route types', () => {
-  for (const path of ['/dashboard', '/history', '/reflection', '/journal/entry-id', '/dashboard/']) {
+test('floating record visibility is limited to the content routes including the dedicated memories gallery', () => {
+  for (const path of ['/dashboard', '/history', '/memories', '/reflection', '/journal/entry-id', '/dashboard/']) {
     assert.equal(navigationMode(path).floatingRecord, true, path);
     assert.equal(navigationMode(path).record, false, path);
   }
@@ -55,7 +55,7 @@ test('desktop sidebar starts collapsed with working links, accessible names, and
   const html = render(Sidebar);
   assert.match(html, /data-expanded="false"/);
   assert.match(html, /aria-label="Main navigation"/);
-  for (const [label, path] of [['Main', '/'], ['Dashboard', '/dashboard'], ['History', '/history'], ['Weekly recap', '/reflection']]) {
+  for (const [label, path] of [['Main', '/'], ['Dashboard', '/dashboard'], ['History', '/history'], ['Moments in Pixels', '/memories'], ['Weekly recap', '/reflection']]) {
     assert.match(html, new RegExp(`aria-label="${label}"`));
     assert.ok(html.includes(`href="${path}"`));
   }
@@ -66,7 +66,7 @@ test('desktop sidebar starts collapsed with working links, accessible names, and
 test('sidebar highlights exactly one route, including History for a journal detail', async () => {
   const { Sidebar } = await components;
   for (const [path, label] of [['/', 'Main'], ['/dashboard', 'Dashboard'], ['/history', 'History'],
-    ['/journal/id', 'History'], ['/reflection', 'Weekly recap']]) {
+    ['/memories', 'Moments in Pixels'], ['/journal/id', 'History'], ['/reflection', 'Weekly recap']]) {
     const html = render(Sidebar, {}, path);
     assert.equal((html.match(/aria-current="page"/g) || []).length, 1, path);
     const active = html.match(/<a[^>]*aria-current="page"[^>]*>/)?.[0];
@@ -93,10 +93,10 @@ test('floating control is one navigation link, with no recording or microphone s
 
 test('layout routes render one floating control where needed, fullscreen Record, and shell-free auth pages', async () => {
   const { Shell } = await components;
-  for (const path of ['/', '/dashboard', '/history', '/journal/id', '/reflection', '/record', '/login', '/register']) {
+  for (const path of ['/', '/dashboard', '/history', '/journal/id', '/memories', '/reflection', '/record', '/login', '/register']) {
     const routes = React.createElement(Routes, {},
       React.createElement(Route, { element: React.createElement(Shell) },
-        ...['/', '/dashboard', '/history', '/journal/:id', '/reflection', '/record'].map(route => React.createElement(Route,
+        ...['/', '/dashboard', '/history', '/journal/:id', '/memories', '/reflection', '/record'].map(route => React.createElement(Route,
           { key: route, path: route, element: React.createElement('main', {}, `Content ${path}`) }))),
       ...['/login', '/register'].map(route => React.createElement(Route,
         { key: route, path: route, element: React.createElement('main', {}, 'Authentication') })));
