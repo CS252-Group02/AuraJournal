@@ -11,11 +11,19 @@ never cause an otherwise valid journal save to fail.
 
 `pixel_generation.render_pixel_art` reuses the original significant-moment
 extractor and PixelLab client. Groq receives the journal and returns validated
-`grounded`/`symbolic` output. Grounded scenes require exact source evidence. Only
-the minimized visual prompt reaches PixelLab. The existing privacy instructions,
-symbolic fallback, style, 128×128 resolution, model selection, prompt enhancement
-setting and PNG validation remain unchanged. No journal text, evidence, scene or
-provider error payload is copied into a job or logged by the worker.
+`grounded`/`symbolic` output. Both concrete scenes and symbolic themes require
+exact source evidence. Short entries can supply a scene (such as a first day at
+university); states and feelings can supply a visual metaphor (such as an open-eye
+motif for sleeplessness). Negated or planned events must not be shown as completed.
+Only entries without a usable subject or theme use the neutral geometric fallback.
+The prompt depicts the entry's content; book covers are not a default subject.
+Only the minimized visual prompt reaches PixelLab. Privacy instructions, pixel
+style, 128×128 resolution, model selection, prompt enhancement setting and PNG
+validation remain in place. No journal text, evidence, scene or provider error
+payload is copied into a job or logged by the worker.
+
+Prompt changes apply to subsequent generation. Existing saved PNGs are served as
+stored; refreshing the gallery does not regenerate them.
 
 `pixel_art_jobs` is an outbox, with one unique `(entry_id, source_version)` row.
 `journal_entries.content_version` increases only when trimmed content changes.
