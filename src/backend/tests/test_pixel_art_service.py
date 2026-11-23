@@ -7,7 +7,7 @@ from pydantic import ValidationError
 
 from app.services._groq import AIInvalidResponseError, EmptyJournalError
 from app.services.pixel_art import (
-    FALLBACK_SCENE, SYSTEM_PROMPT, MomentExtractor, SignificantMoment, build_pixel_art_prompt,
+    NoDepictableMoment, SYSTEM_PROMPT, MomentExtractor, SignificantMoment, build_pixel_art_prompt,
 )
 from app.services.pixel_generation import render_pixel_art
 from test_ai_service import FakeCompletions, client_for
@@ -46,6 +46,13 @@ def test_vietnamese_source_and_evidence_are_preserved():
     assert calls.calls[0]["messages"][1]["content"] == source
 
 
+@pytest.mark.parametrize("source", ["Okay.", "...", "Tomorrow I plan to fly to Paris."])
+def test_vague_and_future_only_entries_never_build_fallback_prompt(source):
+    service, _ = extractor(dict(kind="symbolic", moment="No concrete moment selected", evidence=None, scene=None))
+    moment = service.extract(source)
+    assert moment.kind == "symbolic"
+    with pytest.raises(NoDepictableMoment):
+        build_pixel_art_prompt(moment)
 @pytest.mark.parametrize("source", ["Okay.", "..."])
 def test_entries_without_a_visual_theme_use_abstract_fallback(source):
     service, _ = extractor(dict(kind="symbolic", moment="No concrete moment selected", evidence=None, scene=None))

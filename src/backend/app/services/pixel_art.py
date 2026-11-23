@@ -32,6 +32,9 @@ a backpack or curiosity. Remove names, addresses, workplaces, contact informatio
 identifiers from scene; use generic roles and objects instead. Compose one simple
 scene, not a journal summary. Do not copy the full journal into scene. Do not add
 text, logos or watermarks. No Markdown or extra JSON fields.
+If nothing concrete can be depicted, return kind symbolic, moment describing
+that no concrete moment was selected, and evidence and scene null. Do not invent
+a scene or generic substitute.
 If no concrete event can be depicted but the entry expresses a state, feeling or
 theme, return kind symbolic with a concise description of that theme in moment,
 an exact short quotation in evidence, and an English visual metaphor in scene.
@@ -61,6 +64,8 @@ STYLE = (
     "Pixel art, 128x128, limited soft color palette, crisp pixels, clear silhouettes, "
     "one simple readable composition, minimal detail. No text, letters, logos or watermark."
 )
+class NoDepictableMoment(Exception):
+    """Extraction found no grounded scene; never submit an image prompt."""
 FALLBACK_SCENE = (
     "Abstract composition of softly overlapping geometric shapes in muted colors "
     "on a plain background."
@@ -91,7 +96,9 @@ class SignificantMoment(BaseModel):
 
 
 def build_pixel_art_prompt(moment: SignificantMoment) -> str:
-    scene = moment.scene or FALLBACK_SCENE
+    if moment.kind != "grounded":
+        raise NoDepictableMoment()
+    scene = moment.scene
     prompt = f"{scene} {STYLE}"
     if len(prompt) > 800:
         raise AIInvalidResponseError("AI service returned an invalid response.")
