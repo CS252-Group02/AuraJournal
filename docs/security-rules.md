@@ -15,10 +15,10 @@ Based on AuraJournal Website Blueprint v0.67 in *CS252 - Capstone Defense (1).zi
 FR-01–FR-05 are **Must**: Email/Google/Facebook authentication, voice transcription, mood-based visuals/music, timeline/calendar history, and visual recaps. Streak tracking (FR-06) is **Should**. Public sharing and clinical assessment are outside the MVP; additional emotion-estimation/coaching ideas are outside the agreed Must scope.
 
 The backend implements email/password registration, Argon2id hashing, seven-day
-revocable cookie sessions, login throttling, origin/header CSRF checks, and
-session-derived journal ownership. Google/Facebook login, email verification,
-password recovery, account deletion, and application-level journal encryption
-remain unimplemented. Private AI/media persistence and production configuration
+revocable cookie sessions, login throttling, origin/header CSRF checks,
+session-derived journal ownership, private export, and authenticated account
+deletion. Google/Facebook login, email verification, password recovery, and
+application-level journal encryption remain unimplemented. Private AI/media persistence and production configuration
 guards are now implemented; deployed encryption and recovery still need operator
 verification. Tests cover authentication and journal isolation; these do
 not certify the broader acceptance checks below. See [authentication](authentication.md).

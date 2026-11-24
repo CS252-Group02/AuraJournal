@@ -331,7 +331,9 @@ python -m pytest tests
 
 To build the frontend, run `npm run build` from the repository root. No Python environment activation is needed for the frontend.
 
-GitHub Actions runs the PostgreSQL backend tests on Linux, Windows, and macOS, and builds the frontend.
+GitHub Actions runs the PostgreSQL backend tests on Linux, Windows, and macOS,
+and runs the frontend tests and build. See [deployed API smoke tests](docs/api-smoke-tests.md)
+for the separate staging checks with disposable accounts and live providers.
 
 For an interactive walkthrough to create and inspect test users and journals, see [create and test the database](docs/database/create-and-test.md). For request flow, backend behavior, and test details, see the [application flow guide](docs/application-flow.md).
 
@@ -340,8 +342,9 @@ For an interactive walkthrough to create and inspect test users and journals, se
 Email/password registration, login, logout, seven-day revocable cookie sessions,
 and private journal create/list are implemented. Open `/register` to create an
 account; `/` requires login. Existing development-user entries remain stored and
-are not assigned to new users. Google sign-in, email verification, password
-recovery, account deletion, mood/image endpoints, and AI frontend integration are deferred.
+are not assigned to new users. Signed-in accounts can export their journals or
+permanently delete their accounts through the [account API](docs/authentication.md#export-and-delete-an-account).
+Google sign-in, email verification, and password recovery are deferred.
 
 See [authentication](docs/authentication.md) for API, CSRF, cookie, and deployment
 settings. Use `localhost` consistently for frontend and API. Local HTTP uses

@@ -10,6 +10,7 @@ from app.database import get_session
 from app.auth import current_user
 from app.models import JournalEntry, User
 from app.schemas.entries import EntryCreate, EntryResponse, EntryUpdate, JournalDate
+from app.services.journal_export import export_journal
 from app.services.journal_history import entries_in_range, search_entries
 from app.services.pixel_jobs import invalidate_pixel_jobs, schedule_pixel_art
 
@@ -54,6 +55,11 @@ def list_entries(q: str | None = Query(default=None, max_length=5000),
 @router.get("/by-date", response_model=list[EntryResponse])
 def entries_by_date(date: JournalDate, session: Session = Depends(get_session), user: User = Depends(current_user)):
     return entries_in_range(session, user.id, date, date)
+
+
+@router.get("/export", responses={200: {"description": "JSON journal attachment"}})
+def export_entries(session: Session = Depends(get_session), user: User = Depends(current_user)):
+    return export_journal(session, user.id)
 
 
 def owned_entry(entry_id: UUID, session: Session, user: User) -> JournalEntry:

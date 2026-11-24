@@ -81,9 +81,11 @@ With the project Python environment active, from the repository root:
 ```sh
 python -m alembic -c src/backend/alembic.ini upgrade head
 python -m alembic -c src/backend/alembic.ini current
+python -m alembic -c src/backend/alembic.ini heads
 ```
 
-The revision must be `0008`. Alembic uses `MIGRATION_DATABASE_URL` when nonempty,
+The applied revision should match the repository head (`0010` at the time of
+this update). Alembic uses `MIGRATION_DATABASE_URL` when nonempty,
 otherwise `DATABASE_URL` for development compatibility. Keep migration credentials
 out of the deployed API environment: supply them only to the migration job/shell.
 
@@ -171,9 +173,14 @@ Never commit the real URL or certificates containing private keys. The startup
 checks require both actual TLS and restricted privileges; setting flags alone
 cannot satisfy them. `APP_ENV=development` is the default for local HTTP only.
 
-`npm start` is a development launcher with reload. A direct production backend can
-be launched behind TLS termination with `--no-proxy-headers`; IP limits then see
-the direct peer. If forwarding the original client IP is required, launch Uvicorn
+`npm start` is a development launcher with reload. Use the following command from
+the repository root to start the production backend behind local TLS termination.
+
+```sh
+python -m uvicorn --app-dir src/backend app.main:app --host 127.0.0.1 --port 8000 --no-proxy-headers
+```
+
+IP limits then see the direct peer. If forwarding the original client IP is required, launch Uvicorn
 with `--proxy-headers --forwarded-allow-ips=EXACT_PROXY_IP`, bind/firewall the API
 so only that proxy reaches it, and configure the proxy to **overwrite**, not trust,
 client-supplied `X-Forwarded-For` and `X-Forwarded-Proto`. Never use `*`. Configure

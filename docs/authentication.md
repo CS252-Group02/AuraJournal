@@ -18,10 +18,10 @@ repository root `.env` is configured. For production, run migrations as an
 explicit deployment step instead of using this development launcher.
 
 Open `http://localhost:5173/register` and create an email/password account. Email
-is trimmed and lowercased; passwords are 8–128 characters and are never trimmed.
+is trimmed and lowercased. New passwords must be 15–128 characters and are never trimmed.
 Registration signs you in immediately. Each account starts with its own empty
 journal. Login uses email, not a username. Google login, email verification,
-password recovery, and account deletion are not implemented in this slice.
+and password recovery are deferred. Export and account deletion are available through the API.
 
 ### Register, log in, and log out
 
@@ -83,9 +83,11 @@ cookie deployments need a separately reviewed configuration.
 | POST `/api/auth/register` | `{email, password}` → `201 {id, email}`, session cookie; duplicate email → `409` |
 | POST `/api/auth/login` | `{email, password}` → `200 {id, email}`, session cookie; invalid/disabled credentials → `401` |
 | GET `/api/auth/me` | `{id, email}`; anonymous/invalid/expired session → `401` |
+| DELETE `/api/auth/me` | `{"confirmation":"DELETE"}` → permanently deletes the signed-in account and revokes its sessions, `204` |
 | POST `/api/auth/logout` | Send `{}`; revokes session, clears cookie, returns `204` even if already logged out |
 | POST `/api/entries` | `{content, journal_date?}` → entry owned by the verified current user |
 | GET `/api/entries` | Only the verified current user's entries |
+| GET `/api/entries/export` | Private JSON attachment containing all journals owned by the signed-in account |
 | GET `/api/entries/{entry_id}` | One owned entry; missing and foreign-owned entries both return `404` |
 | PATCH `/api/entries/{entry_id}` | `{content?, journal_date?}` updates an owned entry; at least one field required; clears saved AI output only if content changes |
 | DELETE `/api/entries/{entry_id}` | Deletes an owned entry and linked mood/image records; returns `204` |
@@ -107,6 +109,46 @@ supplies these headers and includes cookies. API scripts and Swagger requests
 must supply the headers too; visiting `/docs` on the API host alone does not
 bypass the origin policy. CORS allows credentials only for the exact configured
 frontend origin. Never use `*` with credentialed access.
+
+### Export and delete an account
+
+Set `API_URL` and `FRONTEND_ORIGIN` for the environment. The login command reads
+`email` and `password` from a private JSON file and saves a session cookie.
+
+```sh
+umask 077
+curl --fail --silent --show-error --cookie-jar ./private-cookies.txt \
+  --header "Origin: $FRONTEND_ORIGIN" --header 'X-AuraJournal-CSRF: 1' \
+  --header 'Content-Type: application/json' --data-binary @private-login.json \
+  "$API_URL/api/auth/login" --output /dev/null
+```
+
+Use that cookie to download the export.
+
+```sh
+curl --fail --silent --show-error --cookie ./private-cookies.txt \
+  --output aurajournal-export.json "$API_URL/api/entries/export"
+```
+
+The export contains `journal_date` (YYYY-MM-DD), `title` (derived from the entry
+text), and `content`. Entries are ordered oldest date first and an empty journal
+exports as `[]`. Store the downloaded text privately. The export is read-only.
+
+Permanent deletion requires the exact confirmation string `DELETE`.
+
+```sh
+curl --fail --silent --show-error --cookie ./private-cookies.txt --cookie-jar ./private-cookies.txt \
+  --request DELETE --header "Origin: $FRONTEND_ORIGIN" \
+  --header 'X-AuraJournal-CSRF: 1' --header 'Content-Type: application/json' \
+  --data '{"confirmation":"DELETE"}' "$API_URL/api/auth/me"
+```
+
+A successful request returns `204` and clears the cookie. The live account,
+journals, saved reflections, image references, pending jobs, and sessions are
+removed. See the [storage and backup procedure](data-and-security-overview.md#7-image-storage-decision-and-operations)
+for image-file retries, backup expiry, and restore handling.
+
+### Login limits
 
 Five failed login attempts for one normalized email/client IP within fifteen
 minutes cause subsequent attempts to return `429` with `Retry-After`. Attempts

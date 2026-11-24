@@ -75,10 +75,9 @@ erDiagram
 Foreign keys reject nonexistent owners/parents. Unique entry foreign keys permit
 at most one mood row and one image row per entry. Deleting a user in SQL cascades
 to their sessions, journals and weekly reflections; journals cascade to mood/image
-rows. These database cascades do not delete filesystem bytes. Reconciliation
-removes orphan files afterward. There is currently no public account-deletion API.
-Login-attempt and budget rows are operational data with time-based cleanup, not
-children of a user row.
+rows. The authenticated account-deletion endpoint also removes login attempts
+for the account email and removes owned image files after commit. Reconciliation
+removes files left by failed cleanup. Rate-limit buckets expire independently.
 
 The reflection database constraint requires a nonblank summary and exactly two
 nonblank JSON strings. API validation additionally limits summary/question lengths
@@ -191,8 +190,7 @@ scenes are product features, not clinical assessments.
 No application-level encryption of journal text is implemented. A database dump
 contains readable private content. HTTPS protects transport; Argon2 protects
 password verification; neither encrypts stored journals. Disk and backup encryption
-must be configured in the deployment. Public sharing, OAuth login, and public
-account deletion are not implemented by these data tasks.
+must be configured in the deployment. Public sharing and OAuth login are deferred.
 
 ## 7. Image storage decision and operations
 
@@ -232,8 +230,18 @@ Restore both parts to a scratch database/private directory first. Verify revisio
 row counts, relationships and that every referenced image is readable through its
 owner's API while another owner receives 404. Only after that check should cleanup
 run. Do not reconcile a database against a partially restored image volume.
-Database restore alone cannot recover lost image bytes. Account deletions must be
-reapplied after restoring older backups according to the operator's retention policy.
+Database restore alone cannot recover lost image bytes. The authenticated
+[account deletion endpoint](authentication.md#export-and-delete-an-account) commits
+the account and linked-row deletion before removing owned image files. The image
+cleanup job retries files left by a crash or storage failure.
+
+Keep backups under the deployment's retention policy. Before a restore, obtain
+the account IDs deleted after the backup cutoff from the operator's restricted
+deletion record. On the isolated restored database, delete those accounts by ID
+as the database operator and verify the cascades. Then reconcile the restored
+image volume and verify the deleted accounts, sessions, and image references
+are absent before reopening traffic. Confirm the deletion record, backup expiry,
+and restore drill with the Data team before enabling deletion in production.
 
 ## 8. Reproducing the defense demonstration
 
@@ -279,8 +287,8 @@ external operation. Image generation also requires enabled PixelLab configuratio
 - **What if the database or file write fails?** Roll back database changes, preserve
   a previously saved result, and reconcile files only after checking references.
   A DB transaction cannot atomically include a filesystem write.
-- **What is not finished?** Production infrastructure verification, account recovery
-  and deletion workflows, OAuth, RLS, full-list pagination, broader provider quotas,
+- **What is not finished?** Production infrastructure verification, account recovery,
+  OAuth, RLS, full-list pagination, broader provider quotas,
   AI factuality evaluation, and formal provider/backup retention policies.
 - **How do you prove correctness?** Repeatable multi-user samples, real PostgreSQL
   migration/privacy/lifecycle tests, mocked provider error paths, and measured
