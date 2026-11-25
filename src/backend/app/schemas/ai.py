@@ -20,6 +20,8 @@ class JournalTitleRequest(BaseModel):
     def nonblank_content(cls, content: str) -> str:
         if not (content := content.strip()):
             raise ValueError("Journal content cannot be blank.")
+        if any(ord(char) < 32 and char not in "\n\r\t" for char in content):
+            raise ValueError("Journal content contains unsupported control characters.")
         return content
 
 

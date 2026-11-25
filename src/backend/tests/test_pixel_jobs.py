@@ -354,6 +354,11 @@ def test_edit_delete_during_provider_call_cannot_attach_stale_image(pixel_app, o
         assert old is None if operation == "DELETE" else old.status == "cancelled"
     if operation == "PATCH":
         assert job_for(app, entry).source_version == 2
+        # The replacement journal needs evidence from its own current text.
+        app.state.moment_extractor.extract.return_value = SignificantMoment(
+            kind="symbolic", moment="A new beginning", evidence="New content",
+            scene="An abstract emerging circle.",
+        )
         assert run_pixel_job_once(app.state)
         assert status(app, entry)["generation"]["status"] == "ready"
 

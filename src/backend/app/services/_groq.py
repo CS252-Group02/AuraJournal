@@ -12,6 +12,7 @@ from groq import (
 from pydantic import BaseModel, ValidationError
 
 from app.config import groq_api_key, groq_model
+from app.schemas.ai import JournalTitleRequest
 
 
 ResponseModel = TypeVar("ResponseModel", bound=BaseModel)
@@ -40,6 +41,18 @@ class AIInvalidResponseError(JournalSummaryError):
 class GroqChatClient(Protocol):
     @property
     def chat(self): ...
+
+
+def validate_journal_text(text: str) -> str:
+    """Reuse the existing single-journal budget, including for direct callers.
+
+    Keep the established empty-input exception; other input contract violations
+    are Pydantic validation errors. Never apply this limit to serialized weeks.
+    """
+    if not isinstance(text, str) or not text.strip():
+        raise EmptyJournalError("Journal text cannot be empty.")
+    JournalTitleRequest(content=text)
+    return text
 
 
 class _GroqJSONClient:

@@ -101,6 +101,14 @@ class WeeklyReflectionContent(WeeklyReflectionText):
     model_config = ConfigDict(revalidate_instances="always")
     source_dates: ReflectionSourceDates
 
+    @field_validator("summary", "questions")
+    @classmethod
+    def storable_text(cls, value):
+        texts = [value] if isinstance(value, str) else value
+        if any("\x00" in text for text in texts):
+            raise ValueError("Reflection contains an unsupported null character.")
+        return value
+
     @field_validator("questions")
     @classmethod
     def distinct_questions(cls, value):
