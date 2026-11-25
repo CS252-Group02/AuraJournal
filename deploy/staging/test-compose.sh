@@ -6,7 +6,14 @@ STAGING_CONFIG_DIR=$(mktemp -d)
 export RELEASE_SHA STAGING_HOST=localhost
 RELEASE_SHA=$(git rev-parse HEAD)
 compose() { docker compose -f deploy/staging/compose.yaml "$@"; }
-trap 'compose down --volumes' EXIT
+cleanup() {
+  local status=$?
+  if (( status != 0 )); then
+    compose logs --no-color --tail=80 db api web || true
+  fi
+  compose down --volumes
+}
+trap cleanup EXIT
 
 mkdir "$STAGING_CONFIG_DIR/tls"
 cd "$STAGING_CONFIG_DIR/tls"
@@ -36,6 +43,13 @@ SQL
 compose run --rm migrate
 compose exec -T -u postgres db psql -X -d aurajournal -f - < scripts/database-runtime-role.sql
 compose up -d --no-build --wait api web
+# Compose reports Caddy running before it has finished creating the local CA.
+for attempt in {1..15}; do
+  if compose exec -T web test -s /data/caddy/pki/authorities/local/root.crt; then
+    break
+  fi
+  sleep 1
+done
 compose cp web:/data/caddy/pki/authorities/local/root.crt "$STAGING_CONFIG_DIR/caddy-ca.crt"
 CURL_CA_BUNDLE="$STAGING_CONFIG_DIR/caddy-ca.crt" bash deploy/staging/check-https.sh https://localhost
 

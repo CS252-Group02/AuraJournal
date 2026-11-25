@@ -20,7 +20,8 @@ COPY --from=frontend /source/Caddyfile /etc/caddy/Caddyfile
 
 FROM python:3.12-slim AS api
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
-WORKDIR /app
+# Preserve the repository-relative paths used by Alembic and app config.
+WORKDIR /app/src/backend
 COPY src/backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY src/backend/app/ app/
