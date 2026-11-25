@@ -36,6 +36,8 @@ def test_one_structured_call_receives_dated_unicode_sources_and_prompt():
     json.dumps(OUTPUT | {"questions": [" ", "Two?"]}),
     json.dumps(OUTPUT | {"questions": ["x" * 301, "Two?"]}),
     json.dumps(OUTPUT | {"questions": ["Same question?", "  SAME   question? "]}),
+    json.dumps(OUTPUT | {"summary": "PRIVATE\x00summary"}),
+    json.dumps(OUTPUT | {"questions": ["PRIVATE\x00question?", "Other question?"]}),
     json.dumps(OUTPUT | {"extra": "not allowed"}),
 ])
 def test_invalid_outputs_and_duplicate_questions_are_rejected(content):

@@ -20,7 +20,8 @@ provider error payload is copied into a job or logged by the worker.
 exact source evidence. Short entries can supply a scene (such as a first day at
 university); states and feelings can supply a visual metaphor (such as an open-eye
 motif for sleeplessness). Negated or planned events must not be shown as completed.
-Only entries without a usable subject or theme use the neutral geometric fallback.
+Entries without a usable subject or theme do not submit an image prompt; they
+retain the bounded no-depictable-moment extraction retry described below.
 The prompt depicts the entry's content; book covers are not a default subject.
 Only the minimized visual prompt reaches PixelLab. Privacy instructions, pixel
 style, 128×128 resolution, model selection, prompt enhancement setting and PNG

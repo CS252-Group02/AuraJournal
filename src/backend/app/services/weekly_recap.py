@@ -1,8 +1,12 @@
 import json
+from datetime import datetime
 from uuid import UUID
 
+from pydantic import AwareDatetime, BaseModel, ConfigDict, field_validator, model_validator
+
+from app.schemas.entries import JournalDate
 from app.schemas.weekly import WeeklyRecap
-from app.services._groq import AIInvalidResponseError, GroqChatClient, _GroqJSONClient
+from app.services._groq import AIInvalidResponseError, EmptyJournalError, GroqChatClient, _GroqJSONClient
 
 MAX_WEEKLY_INPUT = 60_000
 
@@ -49,6 +53,36 @@ class WeeklyRecapTooLarge(ValueError):
     pass
 
 
+class _Source(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: UUID
+    content: str
+    recorded_at: AwareDatetime | None = None
+    journal_date: JournalDate | None = None
+
+    @field_validator("content")
+    @classmethod
+    def nonblank_content(cls, value):
+        if not value.strip():
+            raise EmptyJournalError("A source journal must contain text.")
+        return value
+
+    @field_validator("recorded_at", mode="before")
+    @classmethod
+    def recorded_timestamp(cls, value):
+        if not isinstance(value, (str, datetime)) or (isinstance(value, str) and "T" not in value):
+            raise ValueError("Use an ISO timestamp with a timezone.")
+        return value
+
+    @model_validator(mode="after")
+    def one_date_basis(self):
+        if (self.model_fields_set & {"recorded_at", "journal_date"}) not in ({"recorded_at"}, {"journal_date"}):
+            raise ValueError("Supply exactly one source date basis.")
+        if self.recorded_at is None and self.journal_date is None:
+            raise ValueError("A source date is required.")
+        return self
+
+
 def validate_recap_sources(result: WeeklyRecap, entries: list[dict]) -> None:
     allowed = {UUID(entry["id"]) for entry in entries}
     if any(not set(event.entry_ids) <= allowed for event in result.highlights):
@@ -60,10 +94,15 @@ class WeeklyRecapGenerator:
         self._ai = _GroqJSONClient(client=client, model=model)
 
     def generate(self, entries: list[dict]) -> WeeklyRecap:
-        source = json.dumps({"entries": entries}, ensure_ascii=False)
+        if not isinstance(entries, list):
+            raise ValueError("Recap sources must be a list of dated journals.")
+        if not entries:
+            raise EmptyJournalError("No journals were provided for recap.")
+        sources = [_Source.model_validate(entry).model_dump(mode="json", exclude_none=True) for entry in entries]
+        source = json.dumps({"entries": sources}, ensure_ascii=False)
         if len(source) > MAX_WEEKLY_INPUT:
             raise WeeklyRecapTooLarge("The week's entries exceed the recap input limit.")
         result = self._ai.generate(source, system_prompt=SYSTEM_PROMPT,
                                    response_model=WeeklyRecap, max_completion_tokens=1024)
-        validate_recap_sources(result, entries)
+        validate_recap_sources(result, sources)
         return result

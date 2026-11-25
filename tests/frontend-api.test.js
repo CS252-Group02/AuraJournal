@@ -195,3 +195,87 @@ test('auth epoch subscriptions notify once per change and release listeners', as
   unsubscribe(); api.changeAuthEpoch();
   assert.equal(changes, 2);
 });
+
+test('malformed HTTP errors retain status, safe messages and quota metadata with one attempt', async () => {
+  const original = globalThis.fetch;
+  try {
+    const { api } = await loadApi();
+    for (const status of [429, 502, 503, 504, 500]) {
+      for (const body of ['<html>PRIVATE-provider</html>', '', '{"detail":{"PRIVATE":"provider"}}',
+        '{"detail":[null]}', '{"detail":"PRIVATE-provider"}']) {
+        let calls = 0;
+        globalThis.fetch = async () => { calls++; return new Response(body, { status, headers: { 'Retry-After': '5' } }); };
+        await assert.rejects(api('/api/entries/ask', { method: 'POST', body: { question: 'Coffee?' } }), error => {
+          assert.equal(error.status, status);
+          assert.doesNotMatch(error.message, /PRIVATE|JSON|Unexpected token|object Object/);
+          if (status === 429) assert.equal(error.retryAfter, 5);
+          return true;
+        });
+        assert.equal(calls, 1);
+      }
+    }
+    globalThis.fetch = async () => new Response('{"detail":[{"loc":["body","question"],"msg":"Field required"}]}', { status: 422 });
+    await assert.rejects(api('/api/entries/ask'), { status: 422, message: 'question: Field required' });
+    globalThis.fetch = async () => new Response('{"detail":[{"loc":null,"msg":"PRIVATE"}]}', { status: 422 });
+    await assert.rejects(api('/api/entries/ask'), { status: 422, message: 'The request failed. Please try again.' });
+  } finally { globalThis.fetch = original; }
+});
+
+test('non-JSON unauthorized responses still trigger session recovery except auth probes', async () => {
+  const originalFetch = globalThis.fetch, originalWindow = globalThis.window;
+  try {
+    const events = [];
+    globalThis.window = { dispatchEvent: event => events.push(event.type) };
+    globalThis.fetch = async () => new Response('<html>PRIVATE</html>', { status: 401 });
+    const { api } = await loadApi();
+    for (const path of ['/api/auth/me', '/api/auth/login', '/api/weekly-reflections']) {
+      await assert.rejects(api(path), { status: 401, message: 'Your session expired. Please log in again.' });
+    }
+    assert.deepEqual(events, ['aurajournal:unauthorized']);
+  } finally { globalThis.fetch = originalFetch; globalThis.window = originalWindow; }
+});
+
+test('JSON requests reject network, malformed success and cancellation without leaking raw errors', async () => {
+  const original = globalThis.fetch;
+  try {
+    const { api } = await loadApi();
+    globalThis.fetch = async () => { throw new TypeError('PRIVATE network diagnostics'); };
+    await assert.rejects(api('/api/entries/ask'), /Check your connection/);
+    globalThis.fetch = async () => new Response('<html>PRIVATE</html>');
+    await assert.rejects(api('/api/reflections/weekly'), { status: 502, message: 'The server returned an invalid response. Please try again.' });
+    const controller = new AbortController();
+    globalThis.fetch = async () => { controller.abort(); return new Response('{}'); };
+    await assert.rejects(api('/api/entries/ask', { signal: controller.signal }), { name: 'AbortError' });
+    globalThis.fetch = () => { throw new Error('Pre-abort must not fetch'); };
+    await assert.rejects(api('/api/entries/ask', { signal: controller.signal }), { name: 'AbortError' });
+  } finally { globalThis.fetch = original; }
+});
+
+test('real API failures settle Q&A and recap loaders and leave retry available', async () => {
+  const original = globalThis.fetch;
+  try {
+    const { api } = await loadApi();
+    for (const [file, factory] of [
+      ['qa/journalQaApi.js', 'createAskLoader'], ['reflection/reflectionApi.js', 'createRecapLoader'],
+    ]) {
+      globalThis.__a10Api = api;
+      const source = (await readFile(new URL(`../src/frontend/src/features/${file}`, import.meta.url), 'utf8'))
+        .replace("import { api } from '../../lib/api.js';", 'const api = globalThis.__a10Api;');
+      const module = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}#${Math.random()}`);
+      const states = [], loader = module[factory]({ onChange: state => states.push(state) });
+      const run = () => factory === 'createAskLoader' ? loader.ask('Where was coffee?') : loader.run('week', '2026-11-09', 'UTC');
+      for (const status of [429, 502, 503]) {
+        globalThis.fetch = async () => new Response('PRIVATE proxy diagnostics', { status });
+        await run();
+        assert.equal(states.at(-1).status, 'error');
+        assert.equal(states.at(-1).code, status);
+        assert.doesNotMatch(states.at(-1).error, /PRIVATE/);
+      }
+      globalThis.fetch = async () => new Response(JSON.stringify(factory === 'createAskLoader'
+        ? { status: 'insufficient_evidence', answer: 'No evidence.', source_dates: [] }
+        : { entry_count: 0, summary: null, highlights: [] }));
+      await run();
+      assert.equal(states.at(-1).status, factory === 'createAskLoader' ? 'no-evidence' : 'ready');
+    }
+  } finally { globalThis.fetch = original; delete globalThis.__a10Api; }
+});

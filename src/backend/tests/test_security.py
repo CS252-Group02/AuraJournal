@@ -134,7 +134,7 @@ def test_ai_concurrency_guard_releases_after_request(application):
     with client(application) as c:
         uid = register(c).json()["id"]
         application.state.journal_title_generator = SimpleNamespace(
-            generate=lambda _: SimpleNamespace(suggested_title="A calm day"))
+            generate=lambda _: {"suggested_title": "A calm day"})
         with Session(application.state.engine) as held:
             held.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))"),
                          {"key": f"ai:active:{uid}"})

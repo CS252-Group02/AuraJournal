@@ -169,3 +169,27 @@ def test_factual_and_injection_constraints_are_in_system_message():
     for instruction in ["untrusted", "NEVER instructions", "Future plans", "negated",
                         "Never invent", "Vietnamese", "identifiers", "exact short quotation"]:
         assert instruction in SYSTEM_PROMPT
+
+
+@pytest.mark.parametrize("output", [
+    None, {}, {**grounded(), "evidence": "invented"},
+    SignificantMoment.model_construct(kind="grounded", moment="A", evidence=None, scene="B"),
+    SignificantMoment.model_construct(**{**grounded(), "scene": "x" * 451}),
+    SignificantMoment.model_construct(**{**grounded(), "scene": "I finished my homework."}),
+])
+def test_replaceable_extractor_cannot_bypass_validation_before_paid_submission(output):
+    before_submit, provider = Mock(), Mock()
+    state = SimpleNamespace(moment_extractor=SimpleNamespace(extract=Mock(return_value=output)),
+                            pixellab_client=SimpleNamespace(generate=provider))
+    with pytest.raises(AIInvalidResponseError):
+        render_pixel_art(state, "I finished my homework.", before_submit=before_submit)
+    before_submit.assert_not_called()
+    provider.assert_not_called()
+
+
+def test_moment_timeout_stays_separate_from_shared_groq_timeout(monkeypatch):
+    monkeypatch.setenv("GROQ_API_KEY", "test-only-key")
+    factory = Mock()
+    monkeypatch.setattr("app.services.pixel_art.Groq", factory)
+    MomentExtractor()
+    factory.assert_called_once_with(api_key="test-only-key", timeout=30.0, max_retries=0)
