@@ -51,6 +51,8 @@ for attempt in {1..15}; do
   sleep 1
 done
 compose cp web:/data/caddy/pki/authorities/local/root.crt "$STAGING_CONFIG_DIR/caddy-ca.crt"
+curl --fail --silent --show-error --retry 8 --retry-all-errors --retry-max-time 15 \
+  --max-time 3 --cacert "$STAGING_CONFIG_DIR/caddy-ca.crt" https://localhost/ >/dev/null
 CURL_CA_BUNDLE="$STAGING_CONFIG_DIR/caddy-ca.crt" bash deploy/staging/check-https.sh https://localhost
 
 request() {

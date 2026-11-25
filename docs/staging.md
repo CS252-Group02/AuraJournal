@@ -18,8 +18,9 @@ inside Compose. Restrict SSH to operators. Run commands from the checkout root.
    Copy `deploy/staging/.env.example` to the ignored `deploy/staging/.env`.
    Set `STAGING_HOST` to the DNS name, `STAGING_CONFIG_DIR` to the protected
    directory, and `RELEASE_SHA` to the full SHA of the clean checkout being built.
-   If `172.29.51.0/24` overlaps a host network, set both `EDGE_SUBNET` and
-   `CADDY_IP` to a free subnet and an address within it.
+   If `172.29.51.0/24` overlaps a host network, set `EDGE_SUBNET` to a free
+   subnet, `EDGE_DYNAMIC_RANGE` to a smaller CIDR block within it, and `CADDY_IP`
+   to an address in the subnet outside the dynamic range.
 2. In the protected directory, create `postgres-admin` with one random bootstrap
    password and mode `0600`. Under `tls/`, create `ca.crt`, `db.crt`, and
    `db.key` with a staging-only CA and a server certificate whose SAN is
