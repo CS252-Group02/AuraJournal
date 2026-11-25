@@ -49,6 +49,12 @@ class WeeklyRecapTooLarge(ValueError):
     pass
 
 
+def validate_recap_sources(result: WeeklyRecap, entries: list[dict]) -> None:
+    allowed = {UUID(entry["id"]) for entry in entries}
+    if any(not set(event.entry_ids) <= allowed for event in result.highlights):
+        raise AIInvalidResponseError("AI returned an unknown source entry.")
+
+
 class WeeklyRecapGenerator:
     def __init__(self, client: GroqChatClient | None = None, model: str | None = None):
         self._ai = _GroqJSONClient(client=client, model=model)
@@ -59,7 +65,5 @@ class WeeklyRecapGenerator:
             raise WeeklyRecapTooLarge("The week's entries exceed the recap input limit.")
         result = self._ai.generate(source, system_prompt=SYSTEM_PROMPT,
                                    response_model=WeeklyRecap, max_completion_tokens=1024)
-        allowed = {UUID(entry["id"]) for entry in entries}
-        if any(not set(event.entry_ids) <= allowed for event in result.highlights):
-            raise AIInvalidResponseError("AI returned an unknown source entry.")
+        validate_recap_sources(result, entries)
         return result
