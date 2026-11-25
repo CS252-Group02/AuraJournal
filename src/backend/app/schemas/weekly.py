@@ -7,9 +7,12 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
 
+from app.schemas.entries import JournalDate
+
+
 class WeeklyRecapRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    start: date
+    start: JournalDate
     timezone: str = Field(min_length=1, max_length=100)
     date_basis: Literal["recorded", "journal"] = "recorded"
 
