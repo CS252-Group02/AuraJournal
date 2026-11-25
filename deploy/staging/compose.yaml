@@ -111,6 +111,8 @@ networks:
     ipam:
       config:
         - subnet: ${EDGE_SUBNET:-172.29.51.0/24}
+          # Keep Caddy's fixed address outside the pool for automatic assignments.
+          ip_range: ${EDGE_DYNAMIC_RANGE:-172.29.51.128/25}
   database:
     internal: true
 volumes:
