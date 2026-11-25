@@ -119,3 +119,41 @@ def test_api_sort_ties_are_deterministic(searchable):
 ])
 def test_api_rejects_invalid_filters(searchable, params):
     assert asyncio.run(request(searchable, "GET", "/api/entries", params=params)).status_code == 422
+
+
+@pytest.mark.parametrize("params,expected", [
+    ({"offset": 1, "limit": 1}, [2]),
+    ({"offset": 1}, [2, 1]),
+    ({"sort": "oldest", "offset": 1, "limit": 1}, [2]),
+    ({"q": "sale", "offset": 1, "limit": 1}, [2]),
+    ({"q": "sale", "start": "2027-01-01", "end": "2027-01-01", "offset": 1}, []),
+    ({"offset": 100}, []),
+])
+def test_optional_pagination_is_applied_after_owned_filters(searchable, params, expected):
+    result = asyncio.run(request(searchable, "GET", "/api/entries", params=params))
+    assert result.status_code == 200
+    assert [UUID(entry["id"]).int for entry in result.json()] == expected
+
+
+@pytest.mark.parametrize("params", [
+    {"offset": -1}, {"offset": "no"}, {"limit": 0},
+    {"start": "2027-1-01"}, {"end": "2027-01-01T00:00:00Z"},
+    {"start": "0"}, {"end": "2027-W01-1"}, {"start": "2027-02-29"},
+])
+def test_pagination_and_dates_have_strict_validation(searchable, params):
+    response = asyncio.run(request(searchable, "GET", "/api/entries", params=params))
+    assert response.status_code == 422
+    assert all(set(error) == {"loc", "msg", "type"} for error in response.json()["detail"])
+
+
+def test_service_rejects_negative_offset(searchable):
+    with Session(searchable.state.engine) as session:
+        with pytest.raises(ValueError):
+            search_entries(session, searchable.user_id, offset=-1)
+
+
+def test_pagination_ties_do_not_duplicate_entries(searchable):
+    pages = [asyncio.run(request(searchable, "GET", "/api/entries", params={
+        "sort": "newest", "offset": offset, "limit": 1,
+    })).json() for offset in range(3)]
+    assert [UUID(page[0]["id"]).int for page in pages] == [3, 2, 1]

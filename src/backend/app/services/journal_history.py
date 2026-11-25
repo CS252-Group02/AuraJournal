@@ -47,6 +47,7 @@ def search_entries(
     session: Session, user_id: UUID, keyword: str = "",
     start: date | None = None, end: date | None = None,
     sort: Literal["newest", "oldest"] = "newest", limit: int | None = None,
+    offset: int = 0,
 ) -> list[JournalEntry]:
     """Literal, case-insensitive content search with inclusive optional dates.
 
@@ -58,6 +59,8 @@ def search_entries(
         raise ValueError("Sort must be 'newest' or 'oldest'.")
     if limit is not None and limit < 1:
         raise ValueError("The result limit must be a positive integer.")
+    if offset < 0:
+        raise ValueError("The result offset cannot be negative.")
     keyword = keyword.strip()
     if "\x00" in keyword:
         raise ValueError("The keyword cannot contain a null character.")
@@ -78,6 +81,7 @@ def search_entries(
             JournalEntry.journal_date.asc(), JournalEntry.created_at.asc(),
             JournalEntry.id.asc(),
         )
+    query = query.offset(offset)
     if limit is not None:
         query = query.limit(limit)
     return list(session.scalars(query))
