@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import current_user, revalidate_session_owner
 from app.limits import consume_ai_budget
+from app.ai_errors import ai_service_error
 from app.database import get_session
 from app.models import JournalEntry, User
 from app.schemas.weekly import WeeklyRecap, WeeklyRecapRequest, WeeklyRecapResponse
@@ -68,10 +69,11 @@ def weekly_recap(payload: WeeklyRecapRequest, request: Request, session: Session
         raise HTTPException(413, "This week's entries are too long for one recap. No entries were omitted.") from None
     except EmptyJournalError:
         raise HTTPException(422, "Selected journals contain empty text. Edit them before generating a recap.") from None
-    except (AIInvalidResponseError, ValidationError):
-        raise HTTPException(502, "AI service returned an invalid recap.") from None
-    except (AIServiceNotConfiguredError, AIServiceUnavailableError):
-        raise HTTPException(503, "AI recap service is unavailable. Please try again later.") from None
+    except (AIInvalidResponseError, ValidationError, AIServiceNotConfiguredError, AIServiceUnavailableError) as error:
+        raise ai_service_error(error,
+            invalid_detail="AI service returned an invalid recap.",
+            unavailable_detail="AI recap service is unavailable. Please try again later.",
+        ) from None
     revalidate_session_owner(request, session, user_id)
     if rows != session.execute(query).all():
         raise HTTPException(409, "Your journals changed during generation. Generate the recap again.")

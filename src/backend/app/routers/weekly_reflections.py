@@ -9,6 +9,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.auth import current_user, revalidate_session_owner
+from app.ai_errors import ai_service_error
 from app.database import get_session
 from app.models import User, WeeklyReflection
 from app.limits import consume_ai_budget
@@ -75,10 +76,11 @@ def generate_weekly_reflection(
         raise HTTPException(422, "Selected journals contain empty text. Edit them before generating a reflection.") from None
     except WeeklyReflectionTooLarge:
         raise HTTPException(413, "This period's entries are too long. No entries were omitted.") from None
-    except (AIInvalidResponseError, ValidationError):
-        raise HTTPException(502, "AI service returned an invalid weekly reflection.") from None
-    except (AIServiceNotConfiguredError, AIServiceUnavailableError):
-        raise HTTPException(503, "AI weekly reflection service is unavailable. Please try again later.") from None
+    except (AIInvalidResponseError, ValidationError, AIServiceNotConfiguredError, AIServiceUnavailableError) as error:
+        raise ai_service_error(error,
+            invalid_detail="AI service returned an invalid weekly reflection.",
+            unavailable_detail="AI weekly reflection service is unavailable. Please try again later.",
+        ) from None
 
     revalidate_session_owner(request, session, user_id)
     if snapshot != _source_snapshot(session, user_id, start, end):

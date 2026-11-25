@@ -69,3 +69,27 @@ with TEST_DATABASE_URL pointing to a disposable PostgreSQL database. Tests use
 isolated schemas and fake AI, covering one-session journeys, two accounts,
 calendar leap days, pagination, strict dates, restart persistence and revoked
 sessions. No application database migration or live provider call is needed.
+
+
+## AI and speech failure policies
+
+Recap, saved reflection and journal Q&A share typed-error HTTP mapping while
+retaining their existing public messages. Groq credentials, rate limits, network
+errors and timeouts map to 503; malformed/empty outputs and invalid evidence map
+to 502. The configured SDK uses timeout=20 seconds and max_retries=0. This is a
+provider transport timeout, not cancellation of arbitrary synchronous Python work.
+Unexpected programming exceptions are not disguised as provider failures.
+
+Audio keeps its specific mapping: invalid audio 422, invalid transcript 502,
+provider unavailable 503, timeout 504 and rate limit 429 with Retry-After.
+Uploads accept only raw audio/webm;codecs=opus, at most 10 MiB; upload deadline
+is 30 seconds and recognition deadline 60 seconds. These processing deadlines
+are not an assertion about the uploaded recording's media duration. Live capture
+has a separate 300-second session limit. Neither audio path stores the recording
+or creates a journal; saving remains an explicit authenticated action.
+
+`tests/test_ai_failure_contract.py` exercises the real Groq SDK through local
+MockTransport, checking one attempt, safe responses/logs and preserved saved data.
+Audio limit/timeout/disconnect/error cases remain covered by
+`test_transcription_upload.py`, `test_transcription_upload_auth.py` and the live
+transcription tests. All external network calls remain blocked in pytest.

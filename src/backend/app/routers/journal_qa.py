@@ -3,7 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
-from app.auth import COOKIE_NAME, authenticated_session, current_user
+from app.auth import current_user, revalidate_session_owner
+from app.ai_errors import ai_service_error
 from app.database import get_session
 from app.limits import consume_ai_budget
 from app.models import User
@@ -40,15 +41,13 @@ def ask_journals(payload: JournalQuestionRequest, request: Request,
         validate_answer_sources(result, context.sources)
     except JournalQuestionTooLarge:
         raise HTTPException(413, "Selected journal context is too large for one question.") from None
-    except (AIInvalidResponseError, ValidationError):
-        raise HTTPException(502, "AI service returned an invalid journal answer.") from None
-    except (AIServiceNotConfiguredError, AIServiceUnavailableError):
-        raise HTTPException(503, "AI question answering is unavailable. Please try again later.") from None
+    except (AIInvalidResponseError, ValidationError, AIServiceNotConfiguredError, AIServiceUnavailableError) as error:
+        raise ai_service_error(error,
+            invalid_detail="AI service returned an invalid journal answer.",
+            unavailable_detail="AI question answering is unavailable. Please try again later.",
+        ) from None
     # Re-read session/user state: the provider call can outlive logout or an edit.
-    session.expire_all()
-    verified, _ = authenticated_session(session, request.cookies.get(COOKIE_NAME, ""))
-    if verified.id != owner:
-        raise HTTPException(401, "Please log in.")
+    revalidate_session_owner(request, session, owner)
     if not sources_unchanged(session, owner, context):
         raise HTTPException(409, "Your journals changed while answering. Ask again with current entries.")
     return insufficient_answer(payload.question) if result.status == "insufficient_evidence" else result
