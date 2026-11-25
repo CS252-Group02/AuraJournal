@@ -5,6 +5,9 @@ A small React + FastAPI + PostgreSQL journal app. It is a tested starting point 
 For database and security architecture, implemented controls, data flows, and
 defense preparation, read the [Data and security overview](docs/data-and-security-overview.md).
 
+For journal API compatibility, AI/media failure behavior and verification steps,
+see the [backend integration handoff](docs/backend-integration-handoff.md).
+
 ## How it works
 
 `src/frontend/src/pages/JournalPage.jsx` sends journal requests to FastAPI through `lib/api.js`. The backend separates database setup, models, validation schemas, and routes. PostgreSQL stores users, journal entries, mood records, and journal images; the journal flow authenticates accounts and scopes entries to the signed-in user. Tests are in `src/backend/tests/`.
