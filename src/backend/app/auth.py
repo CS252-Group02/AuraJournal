@@ -71,6 +71,15 @@ def current_user(request: Request, session: Session = Depends(get_session)) -> U
     return authenticated_session(session, request.cookies.get(COOKIE_NAME, ""))[0]
 
 
+def revalidate_session_owner(request: Request, session: Session, owner_id) -> None:
+    """Start a fresh read after provider work; revoked sessions must not return AI text."""
+    session.rollback()
+    session.expire_all()
+    user, _ = authenticated_session(session, request.cookies.get(COOKIE_NAME, ""))
+    if user.id != owner_id:
+        raise HTTPException(401, "Please log in.")
+
+
 def issue_session(session: Session, request: Request, response: Response, user: User):
     session.execute(delete(AuthSession).where(AuthSession.expires_at <= utcnow()))
     old_token = request.cookies.get(COOKIE_NAME)

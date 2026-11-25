@@ -239,3 +239,19 @@ The [previous prompt evaluation](weekly-reflection-evaluation.md) records earlie
 results from main. The merged prompt additionally requires source dates and has
 a different hash; those historical results do not verify this exact prompt.
 No live evaluation of the merged prompt was performed during conflict resolution.
+
+
+## Generation boundary and private sessions
+
+Nonempty generation uses the shared AI budgets (10/account/minute,
+100/account/day, 30/client IP/minute), committed before the provider call.
+Empty periods do not call AI or consume this budget. Provider work holds no
+checked-out database connection. The HTTP endpoint independently validates the
+helper result and checks evidence against its original sources, even if a custom
+helper mutates the copy it receives. Invalid output returns 502.
+
+Before returning or saving generated content, the endpoint reloads the session
+and account from the database. Logout, expiry or a disabled account returns 401;
+a change to the selected sources returns 409. Failed generation never replaces
+an existing saved reflection. These checks are covered by
+`tests/test_weekly_generation_safety.py` with fake providers and isolated schemas.

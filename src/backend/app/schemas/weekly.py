@@ -7,9 +7,12 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
 
+from app.schemas.entries import JournalDate
+
+
 class WeeklyRecapRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    start: date
+    start: JournalDate
     timezone: str = Field(min_length=1, max_length=100)
     date_basis: Literal["recorded", "journal"] = "recorded"
 
@@ -31,13 +34,13 @@ class WeeklyRecapRequest(BaseModel):
 
 
 class WeeklyEvent(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, revalidate_instances="always")
     text: str = Field(min_length=1, max_length=400)
     entry_ids: list[UUID] = Field(min_length=1, max_length=5)
 
 
 class WeeklyRecap(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, revalidate_instances="always")
     summary: str = Field(min_length=1, max_length=2400)
     highlights: list[WeeklyEvent] = Field(max_length=5)
 
