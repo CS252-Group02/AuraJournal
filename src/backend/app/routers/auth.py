@@ -6,12 +6,13 @@ from sqlalchemy import delete, select, text, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.auth import (COOKIE_NAME, DUMMY_HASH, cookie_secure, current_user, digest,
+from app.auth import (COOKIE_NAME, DUMMY_HASH, authenticated_session, cookie_secure, current_user, digest,
                       issue_session, password_hasher, utcnow, verify_password)
 from app.database import get_session
-from app.models import AuthSession, LoginAttempt, User
-from app.schemas.auth import Credentials, RegistrationCredentials, UserResponse
+from app.models import AuthSession, JournalEntry, JournalImage, LoginAttempt, User
+from app.schemas.auth import AccountDeletion, Credentials, RegistrationCredentials, UserResponse
 from app.limits import client_ip, registration_budget, login_budget
+from app.services.journal_images import has_owned_image_reference
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -72,12 +73,47 @@ def me(response: Response, user: User = Depends(current_user)):
     return user
 
 
+@router.delete("/me", status_code=204)
+def delete_account(payload: AccountDeletion, request: Request, response: Response,
+                   session: Session = Depends(get_session), user: User = Depends(current_user)):
+    user_id, email = user.id, user.email
+    # Serialize with login before locking the account. A new session or entry
+    # cannot be inserted once the account row is locked for deletion.
+    session.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+                    {"key": "login:email:" + email})
+    account = session.scalar(select(User).where(User.id == user_id).with_for_update())
+    if account is None:
+        raise HTTPException(401, "Please log in.")
+    session.expire_all()
+    authenticated_session(session, request.cookies.get(COOKIE_NAME, ""))
+
+    # Hold entry locks before capturing references. Image workers also lock
+    # the entry before changing an image or job.
+    with session.execute(select(JournalEntry.id).where(JournalEntry.user_id == user_id)
+                         .order_by(JournalEntry.id).with_for_update()) as entries:
+        for _ in entries:
+            pass
+    images = session.scalars(select(JournalImage).join(JournalEntry)
+                             .where(JournalEntry.user_id == user_id))
+    image_keys = [image.image_url for image in images if has_owned_image_reference(image)]
+    session.execute(delete(LoginAttempt).where(LoginAttempt.email == email))
+    session.delete(account)
+    session.commit()
+    for key in image_keys:
+        request.app.state.image_storage.delete(key)
+    clear_session_cookie(response)
+
+
 @router.post("/logout", status_code=204)
 def logout(request: Request, response: Response, session: Session = Depends(get_session)):
     token = request.cookies.get(COOKIE_NAME)
     if token:
         session.execute(delete(AuthSession).where(AuthSession.token_hash == digest(token)))
         session.commit()
+    clear_session_cookie(response)
+
+
+def clear_session_cookie(response: Response):
     response.delete_cookie(COOKIE_NAME, path="/api", httponly=True,
                            secure=cookie_secure(), samesite="lax")
     response.headers["Cache-Control"] = "no-store"

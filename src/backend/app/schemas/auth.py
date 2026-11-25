@@ -1,3 +1,4 @@
+from typing import Literal
 from uuid import UUID
 from app.passwords import validate_new_password
 
@@ -23,6 +24,12 @@ class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     email: str
+
+
+class AccountDeletion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    confirmation: Literal["DELETE"]
 
 
 class RegistrationCredentials(Credentials):
