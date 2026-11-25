@@ -68,7 +68,7 @@ async function loadComponents() {
         contents: 'export const useLocalDay = () => ({todayKey: "2026-11-16", timezone: "Asia/Ho_Chi_Minh"});', loader: 'js',
       }));
       builder.onLoad({ filter: /[\\/]lib[\\/]api\.js$/ }, () => ({
-        contents: 'export const api = () => { throw new Error("No requests during render"); };', loader: 'js',
+        contents: 'export const api = () => { throw new Error("No requests during render"); }; export const getAuthEpoch = () => 0; export const subscribeAuthChanges = () => () => {};', loader: 'js',
       }));
     } }],
   });

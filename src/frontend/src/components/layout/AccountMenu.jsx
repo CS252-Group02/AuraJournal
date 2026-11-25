@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { usePresence } from '../../lib/motion.js';
 import { Link, useLocation, useOutletContext } from 'react-router-dom';
 import { useAuth } from '../../auth/Auth.jsx';
+import { api, getAuthEpoch, subscribeAuthChanges } from '../../lib/api.js';
 import AppearanceToggle from '../../theme/AppearanceToggle.jsx';
 import { ACCOUNT_NAVIGATION } from './accountNavigation.js';
 
@@ -13,8 +14,10 @@ export default function AccountMenu({ className = '', beforeLeave }) {
   const [open, setOpen] = useState(false), [pending, setPending] = useState(false);
   const presence = usePresence(open, 110);
   const [notice, setNotice] = useState('');
+  const [downloading, setDownloading] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const trigger = useRef(null), panel = useRef(null), submitting = useRef(false);
+  const exportRequest = useRef(null);
   const id = useId();
   const confirmLeave = shell?.confirmNavigation || beforeLeave || (() => true);
 
@@ -24,6 +27,10 @@ export default function AccountMenu({ className = '', beforeLeave }) {
   }
 
   useEffect(() => { setOpen(false); }, [location.key]);
+  useEffect(() => () => {
+    exportRequest.current?.abort();
+    exportRequest.current = null;
+  }, []);
   useLayoutEffect(() => {
     if (!open) return;
     function reposition() {
@@ -76,6 +83,40 @@ export default function AccountMenu({ className = '', beforeLeave }) {
     // AuthProvider owns session failures and protected-route navigation.
   }
 
+  async function downloadJournals() {
+    if (exportRequest.current) return;
+    const controller = new AbortController();
+    const epoch = getAuthEpoch();
+    const unsubscribe = subscribeAuthChanges(() => controller.abort());
+    exportRequest.current = controller;
+    setDownloading(true);
+    setNotice('');
+    try {
+      const journals = await api('/api/entries/export', { signal: controller.signal, cache: 'no-store' });
+      if (controller.signal.aborted || getAuthEpoch() !== epoch) return;
+      if (!Array.isArray(journals)) throw new Error('Invalid journal export');
+
+      const blob = new Blob([JSON.stringify(journals, null, 2) + '\n'], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      try {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'aurajournal-export.json';
+        link.click();
+      } finally {
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+      }
+    } catch {
+      if (!controller.signal.aborted) setNotice('Could not download your journals. Please try again.');
+    } finally {
+      unsubscribe();
+      if (exportRequest.current === controller) {
+        exportRequest.current = null;
+        setDownloading(false);
+      }
+    }
+  }
+
   return <div className={`account-menu ${className}`}>
     <button ref={trigger} type="button" className="account-trigger" aria-label="Your account" title={user?.email}
       aria-expanded={open} aria-controls={id} onClick={() => { setNotice(''); setOpen(value => !value); }}>
@@ -101,7 +142,10 @@ export default function AccountMenu({ className = '', beforeLeave }) {
           : <button key={item.id} type="button" className="account-action" disabled>{item.label} <span>— Coming soon</span></button>)}
       </nav>
       <div className="account-appearance"><span>Appearance</span><AppearanceToggle /></div>
-      <div className="account-session"><button type="button" className="account-action" onClick={signOut}
+      <div className="account-session">
+        <button type="button" className="account-action" onClick={downloadJournals}
+          disabled={downloading} aria-busy={downloading}>{downloading ? 'Preparing download…' : 'Download journals (JSON)'}</button>
+        <button type="button" className="account-action" onClick={signOut}
         disabled={pending} aria-busy={pending}>{pending ? 'Logging out…' : 'Log out'}</button></div>
       <p className="account-status" role="status">{notice}</p>
     </div>, document.body)}
