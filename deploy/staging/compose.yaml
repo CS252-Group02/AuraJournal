@@ -1,0 +1,123 @@
+name: aurajournal-staging
+services:
+  web:
+    image: aurajournal-staging-web:${RELEASE_SHA:?Set RELEASE_SHA}
+    build:
+      context: ../..
+      dockerfile: deploy/staging/Dockerfile
+      target: web
+      args:
+        STAGING_HOST: ${STAGING_HOST:?Set STAGING_HOST}
+    environment:
+      STAGING_HOST: ${STAGING_HOST}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      edge:
+        ipv4_address: ${CADDY_IP:-172.29.51.2}
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  api:
+    image: aurajournal-staging-api:${RELEASE_SHA:?Set RELEASE_SHA}
+    build:
+      context: ../..
+      dockerfile: deploy/staging/Dockerfile
+      target: api
+    env_file: ${STAGING_CONFIG_DIR:?Set STAGING_CONFIG_DIR}/api.env
+    environment:
+      APP_ENV: production
+      FRONTEND_ORIGIN: https://${STAGING_HOST}
+      AUTH_COOKIE_SECURE: "true"
+      PIXELLAB_ENABLED: "false"
+      PIXEL_ART_WORKER_ENABLED: "false"
+      JOURNAL_IMAGE_STORAGE_DIR: /journal-images
+    command:
+      - python
+      - -m
+      - uvicorn
+      - app.main:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8000"
+      - --proxy-headers
+      - --forwarded-allow-ips
+      - ${CADDY_IP:-172.29.51.2}
+      - --ws
+      - websockets
+      - --ws-max-size
+      - "1048576"
+      - --ws-max-queue
+      - "4"
+      - --ws-per-message-deflate
+      - "false"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    volumes:
+      - journal_images:/journal-images
+      - ${STAGING_CONFIG_DIR}/tls/ca.crt:/db-ca/ca.crt:ro
+    networks: [edge, database]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  migrate:
+    profiles: [ops]
+    image: aurajournal-staging-api:${RELEASE_SHA:?Set RELEASE_SHA}
+    env_file: ${STAGING_CONFIG_DIR}/migrate.env
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    volumes:
+      - ${STAGING_CONFIG_DIR}/tls/ca.crt:/db-ca/ca.crt:ro
+    networks: [database]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: aurajournal
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_admin
+    secrets: [postgres_admin]
+    command: ["postgres", "-c", "ssl=on", "-c", "ssl_cert_file=/db-tls/db.crt", "-c", "ssl_key_file=/db-tls/db.key", "-c", "hba_file=/etc/aurajournal/pg_hba.conf", "-c", "password_encryption=scram-sha-256"]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "aurajournal"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ${STAGING_CONFIG_DIR}/tls/db.crt:/db-tls/db.crt:ro
+      - ${STAGING_CONFIG_DIR}/tls/db.key:/db-tls/db.key:ro
+      - ./pg_hba.conf:/etc/aurajournal/pg_hba.conf:ro
+      - ./init-roles.sql:/docker-entrypoint-initdb.d/10-roles.sql:ro
+    networks: [database]
+    restart: unless-stopped
+
+networks:
+  edge:
+    ipam:
+      config:
+        - subnet: ${EDGE_SUBNET:-172.29.51.0/24}
+  database:
+    internal: true
+volumes:
+  postgres_data:
+  journal_images:
+  caddy_data:
+  caddy_config:
+secrets:
+  postgres_admin:
+    file: ${STAGING_CONFIG_DIR}/postgres-admin

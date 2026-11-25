@@ -2,10 +2,11 @@ from contextlib import asynccontextmanager
 from threading import BoundedSemaphore
 import asyncio
 
-from fastapi import Depends, FastAPI, status
+from fastapi import Depends, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 
@@ -71,6 +72,12 @@ def create_app(database_url: str | None = None) -> FastAPI:
     app.state.pixel_art_enabled = pixellab_enabled()
     app.state.pixel_art_concurrency = pixel_worker_concurrency()
     app.state.pixel_art_capacity = BoundedSemaphore(app.state.pixel_art_concurrency)
+
+    @app.get("/api/health", include_in_schema=False)
+    def health(request: Request):
+        with request.app.state.engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        return {"status": "ok"}
 
     @app.middleware("http")
     async def private_responses(request, call_next):
