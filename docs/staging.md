@@ -5,6 +5,9 @@ account or log in, and save a fictional journal. Open History and refresh to
 check that it persists. In Weekly Reflection, select a seven-day range that
 includes the journal and generate a reflection. The Record page can send a short
 fictional WebM/Opus recording to Deepgram. Use fictional content on staging.
+To export your saved journals, open **Your account** and choose **Download
+journals (JSON)**. Open `aurajournal-export.json` to see each saved journal's
+date, title, and text. An account with no journals downloads an empty list.
 
 ## First deploy
 
@@ -108,9 +111,11 @@ python scripts/smoke-api.py --api-url "https://YOUR_STAGING_HOST" \
 From a browser on another machine, create a disposable account, log out and back
 in, create a journal, and generate a weekly reflection. Refresh the page.
 Restart the API with `stage restart api`, wait for `stage up -d --no-build --wait api web`,
-then log in again and confirm both records survived. Check another disposable
-account cannot open the first journal and remove both test accounts afterward.
-Record this separately from the automated tests.
+then log in again and confirm both records survived. Create a different journal
+in a second disposable account. In each account, check that History and the JSON
+download contain only that account's journal. Confirm the second account cannot
+open the first journal's URL. Remove both test accounts and local exports after
+verification. Record the browser results separately from the automated checks.
 
 ## Redeploy and roll back
 

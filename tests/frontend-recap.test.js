@@ -115,7 +115,7 @@ async function loadPage() {
         contents: 'export const useJournalEntries = () => globalThis.__recapPageEntries;', loader: 'js',
       }));
       builder.onLoad({ filter: /[\\/]lib[\\/]api\.js$/ }, () => ({
-        contents: 'export const api = () => {throw new Error("Unexpected request during render")};', loader: 'js',
+        contents: 'export const api = () => {throw new Error("Unexpected request during render")}; export const getAuthEpoch = () => 0; export const subscribeAuthChanges = () => () => {};', loader: 'js',
       }));
     } }],
   });
