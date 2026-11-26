@@ -173,7 +173,7 @@ def _read_result(event: dict) -> _Result:
         raise _invalid_response() from None
 
 
-def _after(result: _Result, boundary: float) -> _Result:
+def _after(result: _Result, boundary: float, *, superseded_draft: bool = False) -> _Result:
     """Keep only audio after a final boundary; never guess by matching words."""
     if result.start >= boundary - _TIME_TOLERANCE:
         return result
@@ -181,10 +181,14 @@ def _after(result: _Result, boundary: float) -> _Result:
         return replace(result, start=boundary)
     if result.words is None:
         raise _invalid_response()
-    # A word straddling the final boundary cannot safely be assigned twice or
-    # discarded. Keep the old application state and report invalid mapping.
-    if any(word.start < boundary - _TIME_TOLERANCE and word.end > boundary + _TIME_TOLERANCE
-           for word in result.words):
+    # A new cumulative result must not ambiguously cross committed audio.
+    # An older provisional draft is different: a newer final may revise its
+    # word ends. Words beginning in the committed interval belong to that final;
+    # only later draft words survive, still unconfirmed and replaceable.
+    if not superseded_draft and any(
+        word.start < boundary - _TIME_TOLERANCE and word.end > boundary + _TIME_TOLERANCE
+        for word in result.words
+    ):
         raise _invalid_response()
     words = tuple(word for word in result.words if word.start >= boundary - _TIME_TOLERANCE)
     return replace(result, start=boundary, text=" ".join(word.text for word in words), words=words)
@@ -254,9 +258,9 @@ class TranscriptNormalizer:
         previous = self._pending
         suffix = None
         if previous is not None and previous.result.end > result.end + _TIME_TOLERANCE:
-            # Compute before changing state: an unmappable overlap must not lose
-            # the draft already shown to the user.
-            suffix = _after(previous.result, result.end)
+            # Final timestamps supersede the older draft's provisional word
+            # ends. Keep the unconfirmed suffix, without rejecting a valid final.
+            suffix = _after(previous.result, result.end, superseded_draft=True)
         segments = []
         if result.text:
             order = previous.order if previous else self._next_order

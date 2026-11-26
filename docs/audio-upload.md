@@ -1,11 +1,11 @@
 # HTTP recording transcription
 
-The reusable final-transcript collector, standalone verification command and
+The prerecorded client, standalone verification command and
 Vietnamese/English browser checklist are documented in
 [Browser-recording transcription](recording-transcription.md).
 
 `POST /api/transcriptions` accepts one transient WebM/Opus recording and returns
-one transcript using the existing Deepgram streaming helper. The Record screen
+one transcript using Deepgram prerecorded recognition. The Record screen
 uses it for completed local recordings and explicit recovery from failed live
 transcription. The `/api/transcriptions/live` WebSocket remains the live path.
 
@@ -258,3 +258,20 @@ speech. Each upload/retry can consume provider credit; perform these explicitly.
   take, and confirm no old response appears. Check navigation discard protection.
   Change authentication during a pending request and confirm cancellation and
   that no previous-session result enters the new account's draft.
+
+
+## Completed-file recognition update
+
+A07 comparisons isolated a mixed-language omission in the streaming results.
+The same audio/hints through Deepgram prerecorded returned the English sentence,
+so completed uploads now use DeepgramRecordedClient.transcribe, a single bounded
+HTTP request. The CLI uses the same client. Public API/size/session/quota/CSRF
+contracts stay unchanged. It validates completed results without reconstructing
+streaming intervals and preserves no_speech. Live WebSockets retain their separate
+streaming client and 12-second finish budget. There is no automatic fallback,
+second paid call, prompt correction or reference-text upload.
+
+HTTP read timeout is 45 seconds inside the unchanged 60-second recognition cap;
+upload reception remains limited to 30 seconds. See
+[verification results](transcription-verification.md) for measured CER/timing and
+residual recognition errors; manual review remains necessary.

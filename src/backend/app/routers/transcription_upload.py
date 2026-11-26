@@ -1,8 +1,8 @@
-"""Authenticated, transient WebM/Opus uploads using the live speech helper."""
+"""Authenticated, transient WebM/Opus uploads using prerecorded recognition."""
 
 import asyncio
 from email.message import Message
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
@@ -14,7 +14,7 @@ from app.database import get_session
 from app.limits import consume_ai_budget
 from app.models import User
 from app.schemas.transcription_upload import UploadedTranscript
-from app.services import DeepgramError, collect_recorded_transcript, transcribe_audio
+from app.services import DeepgramError
 from app.services.async_deadline import deadline
 from app.upload_policy import AUDIO_UPLOAD_PATH
 
@@ -80,14 +80,8 @@ def provider_error(event):
 
 
 async def recognize(request: Request, audio: bytearray) -> UploadedTranscript:
-    async def chunks():
-        for offset in range(0, len(audio), CHUNK_BYTES):
-            yield bytes(audio[offset:offset + CHUNK_BYTES])
-
     try:
-        result = await collect_recorded_transcript(transcribe_audio(
-            chunks(), session_id=str(uuid4()), client=request.app.state.deepgram_streaming_client,
-        ))
+        result = await request.app.state.deepgram_recording_client.transcribe(bytes(audio))
     except DeepgramError as error:
         provider_error({"code": error.code})
     return UploadedTranscript(transcript=result.transcript, outcome=result.outcome)
