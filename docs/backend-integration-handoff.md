@@ -227,3 +227,15 @@ fixtures (including a successful summary), review of actual Vietnamese/English
 model content, and the team's Q&A screen integration. UI failure injection used
 controlled browser responses, not real quota exhaustion. No provider quota was
 deliberately exhausted. A07/A08 acceptance and cross-platform CI remain separate.
+
+
+### A07 completed-recording update (2026-11-26)
+
+The previously documented mixed-sentence omission was resolved on the supplied
+replacement recording by routing completed audio to prerecorded Deepgram HTTP.
+Four live authenticated API requests and one mixed CLI confirmation use the new
+production adapter, retaining both languages. Latest CER is5.56% VI,4.11% EN,
+3.10% mixed and18.18% natural speech; word substitutions still require review.
+See [current verification](transcription-verification.md). Live streaming remains
+separate. Real-provider silence and full Record-screen acceptance are still
+manual follow-ups; this does not change the A08 semantic-grounding status.

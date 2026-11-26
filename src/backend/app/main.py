@@ -35,6 +35,7 @@ from app.services.pixel_jobs import PixelArtWorkers
 from app.routers.transcriptions import router as transcriptions_router
 from app.routers.transcription_upload import router as transcription_upload_router
 from app.services import DeepgramStreamingClient
+from app.services.deepgram_recorded import DeepgramRecordedClient
 
 
 def create_app(database_url: str | None = None) -> FastAPI:
@@ -66,6 +67,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
     app.state.weekly_reflection_generator = GroqWeeklyReflectionGenerator()
     app.state.journal_question_answerer = GroqJournalQuestionAnswerer()
     app.state.deepgram_streaming_client = DeepgramStreamingClient(open_timeout=8)
+    app.state.deepgram_recording_client = DeepgramRecordedClient()
     app.state.moment_extractor = MomentExtractor()
     app.state.pixellab_client = PixelLabClient()
     app.state.image_storage = ImageStorage(journal_image_storage_dir())

@@ -64,3 +64,16 @@ def test_unexpected_outcome_fails_and_cer_preserves_vietnamese_accents(inputs, m
     assert runner.main(inputs[1] + ["--expect", "no_speech"]) == 0
     assert runner.character_error_rate("Hôm nay!", "HÔM   NAY.") == 0
     assert runner.character_error_rate("học", "hoc") > 0
+
+
+
+def test_verification_uses_prerecorded_client_without_streaming(monkeypatch):
+    import asyncio
+    calls = []
+    class Client:
+        async def transcribe(self, audio):
+            calls.append(audio)
+            return RecordedTranscript("", "no_speech")
+    monkeypatch.setattr(runner, "DeepgramRecordedClient", Client)
+    assert asyncio.run(runner.verify(b"local audio")).outcome == "no_speech"
+    assert calls == [b"local audio"]

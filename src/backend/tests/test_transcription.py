@@ -204,3 +204,42 @@ def test_adapter_failure_closes_source_without_emitting_complete(invalid_result)
     asyncio.run(run())
     assert emitted == [segment("Draft")]
     assert source_closed == [True]
+
+
+
+def test_final_revises_provisional_word_end_without_rejecting_confirmed_audio():
+    # Minimized timing pattern captured from the authorized Nova-3 diagnostic.
+    # The older draft's "meet" ended at 9.60; the authoritative final ends at
+    # 9.57 and revises that word's end to 9.52. Later drafts start at 9.57.
+    normalizer = TranscriptNormalizer("take-1")
+    normalizer.consume(result("Earlier.", end=6.16, final=True))
+    normalizer.consume(result("meet Alex to prepare", start=6.16, end=10.739938, words=[
+        word("meet", 9.28, 9.599999), word("Alex", 9.599999, 9.92),
+        word("to", 9.92, 10.16), word("prepare", 10.16, 10.559999),
+    ]))
+    emitted = normalizer.consume(result("meet", start=6.16, end=9.5699998, final=True,
+                                        words=[word("meet", 9.28, 9.5199995)]))
+    assert [item["text"] for item in emitted] == ["meet", "Alex to prepare"]
+    assert [item["is_final"] for item in emitted] == [True, False]
+    assert normalizer.final_count == 2
+    normalizer.consume(result("Alex to prepare a presentation", start=9.57, end=11.2199376))
+    final = normalizer.consume(result("Alex to prepare a presentation", start=9.57, end=11.7200006, final=True))
+    assert len(final) == 1 and final[0]["is_final"]
+    assert normalizer.complete() == {"type": "complete", "session_id": "take-1",
+        "final_count": 3, "outcome": "transcribed"}
+
+
+def test_revised_draft_suffix_is_never_promoted_when_provider_ends_early():
+    normalizer = TranscriptNormalizer("take-1")
+    normalizer.consume(result("met Alex", end=4, words=[word("met", 1, 2.2), word("Alex", 2.3, 3)]))
+    emitted = normalizer.consume(result("met", end=2, final=True, words=[word("met", 1, 1.9)]))
+    assert [item["text"] for item in emitted] == ["met", "Alex"]
+    assert normalizer.complete()["outcome"] == "incomplete"
+
+
+def test_missing_word_times_in_a_superseded_draft_still_fail_safely():
+    normalizer = TranscriptNormalizer("take-1")
+    normalizer.consume(result("Unmappable draft", end=4))
+    with pytest.raises(DeepgramInvalidResponseError):
+        normalizer.consume(result("Confirmed", end=2, final=True))
+    assert normalizer.final_count == 0
