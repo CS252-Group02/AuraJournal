@@ -159,3 +159,10 @@ After configuring it, use fictional saved journals and explicit questions from
 a signed-in account, then inspect meaning and source dates. Try a related question,
 an unrelated topic, an unsupported date, mixed languages and a journal containing
 AI-directed instructions. A frontend Q&A screen is separate from this backend API.
+
+## Grounding verification
+
+The current prompt checks unsupported question premises and conflicting
+accounts, requiring the dates needed to support every retained claim. See the
+[shared grounding verification](journal-grounding-verification.md) for answerable,
+missing-information, conflicting and injected-input cases and live review status.

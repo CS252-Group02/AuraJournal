@@ -142,3 +142,10 @@ Each invocation is a new paid evaluation; do not run it in CI or substitute priv
 journals. Prompts, model behavior, and journal content can change results, so
 review grounding, language, naturalness, and user autonomy instead of demanding
 exact wording. These six cases cannot establish universal semantic correctness.
+
+## Current evaluation suite
+
+The results above describe earlier prompt versions. A08 refines both reflection
+and Q&A prompts and adds a joint [grounding evaluation](journal-grounding-verification.md).
+Its model/prompt hashes and review status must be checked separately; historical
+live results do not establish quality for the current prompt.

@@ -17,6 +17,7 @@ flows, security controls, limitations, and reproducible verification.
 | [Weekly recap](weekly-recap.md) | Factual weekly summaries, timezone boundaries, source links, API, and verification |
 | [Entry reflections](entry-reflections.md) | Per-entry short reflections, regeneration, and API response |
 | [Calendar and streak](calendar-and-streak.md) | Per-user endpoints, streak rules, repeatable sample demo, and verification |
+| [Journal grounding verification](journal-grounding-verification.md) | A08 reflection/Q&A fixtures, dated evidence, long/empty input, offline tests and separate live review |
 | [Weekly reflections](weekly-reflections.md) | Date-based seven-day summaries with two questions, private saving/reading, and generator integration contract |
 | [Accounts and private journals](authentication.md) | Registration, login/logout, seven-day sessions, journal privacy, API, code walkthrough, troubleshooting, and Google sign-in status |
 | [Journal-management API handoff](journal-management.md) | Person 1 task status, private detail reads, date-aware partial edits, two-user CRUD tests, and the transcription dependency |

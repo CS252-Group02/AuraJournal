@@ -103,3 +103,16 @@ def test_evaluation_report_serializes_evidence_dates_without_provider_calls(monk
     report = json.loads(capsys.readouterr().out)
     assert len(calls) == 1
     assert report["cases"][0]["result"]["source_dates"] == sorted({entry["journal_date"] for entry in calls[0]})
+
+
+def test_provider_input_limit_is_typed_without_truncation_or_retry():
+    import httpx
+    from groq import APIStatusError
+    cause = APIStatusError("PRIVATE PROVIDER BODY", response=httpx.Response(413, request=httpx.Request("POST", "https://provider.invalid")), body=None)
+    completions = FakeCompletions(error=cause)
+    generator = GroqWeeklyReflectionGenerator(client=client_for(completions))
+    with pytest.raises(WeeklyReflectionTooLarge) as caught:
+        generator.generate(SOURCES)
+    assert "PRIVATE" not in str(caught.value)
+    assert len(completions.calls) == 1
+    assert json.loads(completions.calls[0]["messages"][1]["content"])["entries"] == SOURCES
