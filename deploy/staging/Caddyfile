@@ -1,0 +1,30 @@
+{
+	servers {
+		timeouts {
+			read_header 10s
+			read_body 40s
+			idle 60s
+		}
+	}
+}
+
+{$STAGING_HOST} {
+	encode zstd gzip
+	@api path /api /api/*
+	handle @api {
+		request_body {
+			max_size 10485760
+		}
+		reverse_proxy api:8000
+	}
+	handle {
+		header {
+			X-Content-Type-Options nosniff
+			Referrer-Policy no-referrer
+			Content-Security-Policy "default-src 'self'; script-src 'self' 'sha256-THEME_SCRIPT_HASH'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' blob: data:; media-src 'self' blob:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' wss://{$STAGING_HOST}; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		}
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

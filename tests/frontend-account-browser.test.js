@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rmdir, unlink } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { createServer } from 'vite';
 import { launchBrowser } from './helpers/browser.js';
 
@@ -16,6 +17,7 @@ function installFixture() {
   const entry = { id, content: 'A quiet walk. I enjoyed the trees and a warm cup of tea.',
     journal_date: day, created_at: `${day}T10:00:00Z`, updated_at: `${day}T10:00:00Z`, ai_summary: 'A peaceful moment outdoors.' };
   const fixture = window.__fixture = { identity: Math.random(), requests: [], holdSave: false, releaseSave: null, failLogout: false };
+  fixture.exportData = [{ journal_date: day, title: 'A quiet walk', content: 'Tôi đi bộ.\nA quiet walk.' }];
   const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
   window.fetch = async (url, options = {}) => {
     const path = new URL(url, location.origin).pathname, method = options.method || 'GET';
@@ -43,6 +45,14 @@ function installFixture() {
       return new Response(bytes, { headers: { 'Content-Type': 'image/png' } });
     }
     if (path === '/api/entries' && method === 'GET') return json([entry]);
+    if (path === '/api/entries/export' && method === 'GET') {
+      fixture.exportOptions = { cache: options.cache, credentials: options.credentials };
+      if (fixture.holdExport) {
+        options.signal.addEventListener('abort', () => { fixture.exportAborted = true; }, { once: true });
+        await new Promise(resolve => { fixture.releaseExport = resolve; });
+      }
+      return fixture.failExport ? json({ detail: 'Service unavailable' }, 503) : json(fixture.exportData);
+    }
     if ((path === '/api/entries' && method === 'POST') || (path === `/api/entries/${id}` && method === 'PATCH')) {
       if (fixture.holdSave) await new Promise(resolve => { fixture.releaseSave = resolve; });
       return json({ ...entry, ...JSON.parse(options.body) });
@@ -112,7 +122,7 @@ test('account menu, appearance, and existing guards work in a real browser', {
   };
   const logoutCalls = () => evaluate("__fixture.requests.filter(r => r.path === '/api/auth/logout').length");
   const theme = () => evaluate('document.documentElement.dataset.theme');
-  const screenshots = '/tmp/aurajournal-account-checks';
+  const screenshots = join(tmpdir(), 'aurajournal-account-checks');
   await mkdir(screenshots, { recursive: true });
   await browser.call('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
   // Fail at startup if the app cannot mount, so later checks have a valid page.
@@ -131,7 +141,7 @@ test('account menu, appearance, and existing guards work in a real browser', {
       assert.match(await evaluate("document.querySelector('.account-navigation').textContent"), /Settings.*Coming soon/);
       assert.equal(await evaluate("document.querySelector('.account-navigation a')"), null);
       assert.equal(await evaluate("document.querySelector('.appearance-toggle button[aria-pressed=true]').textContent"), 'Light');
-      assert.ok(await evaluate("document.querySelector('.account-session button').textContent === 'Log out'"));
+      assert.equal(await evaluate(`Boolean(${textButton('Log out')})`), true);
       await key('Escape');
       assert.equal(await evaluate("document.activeElement.className"), 'account-trigger');
       assert.equal(await evaluate("document.querySelector('.account-panel')"), null);
@@ -149,6 +159,8 @@ test('account menu, appearance, and existing guards work in a real browser', {
     await key(' ');
     assert.equal(await theme(), 'dark');
     assert.ok(await evaluate("!!document.querySelector('.account-panel')"));
+    await key('Tab');
+    assert.equal(await evaluate('document.activeElement.textContent'), 'Download journals (JSON)');
     await key('Tab'); await key('Tab');
     assert.equal(await evaluate('document.activeElement.className'), 'account-trigger');
     await key(' '); await key('Tab', 8);
@@ -160,6 +172,59 @@ test('account menu, appearance, and existing guards work in a real browser', {
     await openMenu();
     await evaluate("document.querySelector('.sidebar-link').focus()");
     assert.equal(await evaluate("document.querySelector('.account-panel')"), null);
+  });
+
+  await context.test('journal export downloads JSON and discards results after a session change', async context => {
+    const directory = await mkdtemp(join(tmpdir(), 'aurajournal-export-'));
+    const filename = 'aurajournal-export.json';
+    const file = join(directory, filename);
+    context.after(async () => {
+      if (existsSync(file)) await unlink(file);
+      await rmdir(directory);
+    });
+    await browser.call('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: directory, eventsEnabled: true }, null);
+    const downloads = [];
+    const completed = new Set();
+    browser.on('Browser.downloadWillBegin', event => downloads.push(event));
+    browser.on('Browser.downloadProgress', event => {
+      if (event.state === 'completed') completed.add(event.guid);
+    });
+    await navigate('/', '.home-page');
+    await openMenu();
+    const label = 'Download journals (JSON)';
+    const readDownload = async (index, expected) => {
+      for (let attempt = 0; attempt < 100 && !completed.has(downloads[index]?.guid); attempt += 1) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      assert.ok(completed.has(downloads[index]?.guid), 'The browser should finish downloading');
+      assert.equal(downloads[index].suggestedFilename, filename);
+      assert.deepEqual(JSON.parse(await readFile(file, 'utf8')), expected);
+      await unlink(file);
+    };
+    await evaluate(`__fixture.holdExport = true; const button = ${textButton(label)}; button.click(); button.click()`);
+    await browser.waitFor('__fixture.releaseExport && document.querySelector(".account-session button[aria-busy=true]")?.disabled');
+    assert.equal(await evaluate("__fixture.requests.filter(r => r.path === '/api/entries/export').length"), 1);
+    assert.deepEqual(await evaluate('__fixture.exportOptions'), { credentials: 'include', cache: 'no-store' });
+    await evaluate('__fixture.holdExport = false; __fixture.releaseExport()');
+    await readDownload(0, await evaluate('__fixture.exportData'));
+
+    await evaluate('__fixture.failExport = true');
+    await clickText(label);
+    await browser.waitFor('document.querySelector(".account-status").textContent.includes("Please try again")');
+    assert.equal(downloads.length, 1);
+    await evaluate('__fixture.failExport = false; __fixture.exportData = []');
+    await clickText(label);
+    await readDownload(1, []);
+
+    await evaluate('__fixture.holdExport = true; __fixture.releaseExport = null');
+    await clickText(label);
+    await browser.waitFor('__fixture.releaseExport');
+    await evaluate("window.dispatchEvent(new Event('aurajournal:unauthorized'))");
+    await browser.waitFor("location.pathname === '/login' && __fixture.exportAborted");
+    await evaluate('__fixture.releaseExport()');
+    await evaluate('new Promise(resolve => setTimeout(resolve, 100))');
+    assert.equal(downloads.length, 2);
+    assert.equal(existsSync(file), false);
   });
 
   await context.test('theme survives reload/navigation, keeps session state, and never filters pixel art', async () => {
@@ -315,7 +380,7 @@ test('account menu, appearance, and existing guards work in a real browser', {
   await context.test('duplicate logout is prevented and server failures keep existing retry handling', async () => {
     await evaluate("localStorage.removeItem('test-logged-out')");
     await navigate('/', '.home-page'); await openMenu();
-    await evaluate("__fixture.failLogout = true;const button=document.querySelector('.account-session button');button.click();button.click()");
+    await evaluate(`__fixture.failLogout = true; const button = ${textButton('Log out')}; button.click(); button.click()`);
     await browser.waitFor("document.querySelector('.page[role=status]')?.textContent === 'Logging out…'");
     await browser.waitFor("document.querySelector('.page[role=alert]')");
     assert.equal(await logoutCalls(), 1);

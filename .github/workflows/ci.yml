@@ -8,6 +8,14 @@ permissions:
   contents: read
 
 jobs:
+  staging-compose:
+    name: Staging HTTPS container smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash deploy/staging/test-compose.sh
+
   backend-cross-platform:
     name: Backend tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
