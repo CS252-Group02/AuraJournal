@@ -21,6 +21,23 @@ HEADERS = {"Origin": "http://localhost:5173", "X-AuraJournal-CSRF": "1",
 AUDIO = upload.WEBM_SIGNATURE + b"fictional-audio"
 
 
+class RecordedFixtureClient:
+    """RecordedTranscriber stub reusing the existing adversarial stream fixtures.
+
+    Production uploads use DeepgramRecordedClient; its HTTP transport is tested
+    separately below and in test_deepgram_recorded.py.
+    """
+    def __init__(self, streaming): self.streaming = streaming
+
+    async def transcribe(self, audio):
+        from app.services import collect_recorded_transcript, transcribe_audio
+        async def chunks():
+            for offset in range(0, len(audio), upload.CHUNK_BYTES):
+                yield bytes(audio[offset:offset + upload.CHUNK_BYTES])
+        return await collect_recorded_transcript(transcribe_audio(
+            chunks(), session_id="fixture", client=self.streaming))
+
+
 @pytest.fixture
 def setup(monkeypatch):
     app = create_app()
@@ -28,7 +45,7 @@ def setup(monkeypatch):
     monkeypatch.setattr(upload, "verify_owner", lambda *args: None)
     socket = FakeSocket(final_events=[result("Hôm nay I finished homework.", final=True), {"type": "Metadata"}])
     connector = FakeConnector(socket)
-    app.state.deepgram_streaming_client = DeepgramStreamingClient("key", connector=connector)
+    app.state.deepgram_recording_client = RecordedFixtureClient(DeepgramStreamingClient("key", connector=connector))
     with TestClient(app) as client:
         yield SimpleNamespace(app=app, client=client, socket=socket, connector=connector)
 
@@ -131,10 +148,9 @@ def test_transcription_deadline_cancels_and_closes_helper(setup, monkeypatch):
     async def stalled(*args, **kwargs):
         try:
             await asyncio.Event().wait()
-            yield
         finally:
             closed.append(True)
-    monkeypatch.setattr(upload, "transcribe_audio", stalled)
+    setup.app.state.deepgram_recording_client = SimpleNamespace(transcribe=stalled)
     monkeypatch.setattr(upload, "TRANSCRIPTION_TIMEOUT", 0.02)
     response = setup.client.post(PATH, content=AUDIO, headers=HEADERS)
     assert response.status_code == 504
@@ -167,14 +183,13 @@ def test_disconnect_cancels_recognition_and_closes_helper(monkeypatch):
             try:
                 started.set()
                 await asyncio.Event().wait()
-                yield
             finally:
                 closed.append(True)
         async def receive():
             await started.wait()
             return {"type": "http.disconnect"}
-        monkeypatch.setattr(upload, "transcribe_audio", stalled)
-        request = SimpleNamespace(receive=receive, app=SimpleNamespace(state=SimpleNamespace(deepgram_streaming_client=None)))
+        request = SimpleNamespace(receive=receive, app=SimpleNamespace(state=SimpleNamespace(
+            deepgram_recording_client=SimpleNamespace(transcribe=stalled))))
         from starlette.requests import ClientDisconnect
         with pytest.raises(ClientDisconnect):
             await upload.recognize_connected(request, bytearray(AUDIO))
@@ -184,16 +199,16 @@ def test_disconnect_cancels_recognition_and_closes_helper(monkeypatch):
 
 def test_real_helper_provider_completion_timeout_closes_socket(setup):
     setup.socket.final_events = []
-    setup.app.state.deepgram_streaming_client = DeepgramStreamingClient(
+    setup.app.state.deepgram_recording_client = RecordedFixtureClient(DeepgramStreamingClient(
         "key", connector=setup.connector, finish_timeout=0.01,
-    )
+    ))
     response = setup.client.post(PATH, content=AUDIO, headers=HEADERS)
     assert response.status_code == 504
     assert setup.socket.close_calls == 1
 
 
 def test_empty_provider_credentials_are_safe_and_do_not_connect(setup):
-    setup.app.state.deepgram_streaming_client = DeepgramStreamingClient("", connector=setup.connector)
+    setup.app.state.deepgram_recording_client = RecordedFixtureClient(DeepgramStreamingClient("", connector=setup.connector))
     assert setup.client.post(PATH, content=AUDIO, headers=HEADERS).status_code == 503
     assert not setup.connector.calls
 
@@ -211,3 +226,36 @@ def test_expired_session_is_rejected_before_provider_or_before_return(setup, mon
     assert response.status_code == 401
     assert len(setup.connector.calls) == expired_on_check - 1
     assert "homework" not in response.text
+
+
+
+def test_completed_upload_uses_its_own_client_without_affecting_live_streaming(setup):
+    # A live session can keep its short flush budget; uploaded audio uses the
+    # independently injectable recording client and the outer 60-second deadline.
+    def forbidden():
+        raise AssertionError("Upload must not use the live client")
+    setup.app.state.deepgram_streaming_client = SimpleNamespace(connect=forbidden)
+    response = setup.client.post(PATH, content=AUDIO, headers=HEADERS)
+    assert response.status_code == 200
+    assert len(setup.connector.calls) == 1
+
+
+
+def test_real_prerecorded_adapter_sends_audio_once_and_returns_both_languages(setup):
+    from app.services.deepgram_recorded import DeepgramRecordedClient
+    from test_deepgram_recorded import response
+    calls = []
+    def handle(req):
+        calls.append(req)
+        assert req.content == AUDIO
+        assert "cookie" not in req.headers and "x-aurajournal-csrf" not in req.headers
+        return httpx.Response(200, json=response("Vietnamese. We tested the login flow. Vietnamese again."))
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as provider:
+            setup.app.state.deepgram_recording_client = DeepgramRecordedClient("key", client=provider)
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=setup.app), base_url="http://test") as client:
+                return await client.post(PATH, content=AUDIO, headers=HEADERS)
+    output = asyncio.run(run())
+    assert output.status_code == 200
+    assert "We tested the login flow" in output.json()["transcript"]
+    assert len(calls) == 1 and not setup.connector.calls

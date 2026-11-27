@@ -150,7 +150,9 @@ Use the shared `AIInvalidResponseError`, `AIServiceNotConfiguredError`, and
 `AIServiceUnavailableError` exceptions for invalid output, configuration, and
 provider failures, respectively. Timeout/rate-limit failures map to
 `AIServiceUnavailableError`. Oversized input raises `WeeklyReflectionTooLarge`
-without dropping sources. Whitespace-only source text raises `EmptyJournalError`.
+without dropping sources, including when Groq returns HTTP 413 below the local
+character budget. No automatic split, truncation or retry is attempted.
+Whitespace-only source text raises `EmptyJournalError`.
 
 ## Limits and errors
 
@@ -161,7 +163,7 @@ without dropping sources. Whitespace-only source text raises `EmptyJournalError`
   period, extra request fields (including client-supplied owner IDs), or unusable
   empty source text that needs editing.
 - `413`: `json.dumps({"entries": sources}, ensure_ascii=False)` exceeds 60,000
-  characters, or the generator rejects its input size. No entries are truncated
+  characters, or the generator/provider rejects its input size. No entries are truncated
   or omitted. The backend limit is checked before calling the generator.
 - `429`: existing shared AI budgets are exceeded (10/account/minute,
   100/account/day, 30/client-IP/minute). `Retry-After` indicates when to retry.
@@ -255,3 +257,10 @@ and account from the database. Logout, expiry or a disabled account returns 401;
 a change to the selected sources returns 409. Failed generation never replaces
 an existing saved reflection. These checks are covered by
 `tests/test_weekly_generation_safety.py` with fake providers and isolated schemas.
+
+## Grounding verification
+
+The current prompt adds a clause-by-clause grounding check and requires dates
+for retained summary events and question premises. See the shared
+[A08 verification guide](journal-grounding-verification.md) for sparse, mixed,
+long and uncertain weeks, offline tests and the separate live review status.

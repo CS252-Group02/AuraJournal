@@ -1,4 +1,4 @@
-"""Explicit live check of one non-private browser recording; no automatic retries.
+"""Explicit prerecorded check of one non-private browser recording; no automatic retries.
 
 Run from src/backend: python scripts/verify_transcription.py recording.webm
 Only an explicit --output writes the transcript to disk. No database is required.
@@ -12,7 +12,6 @@ import os
 from pathlib import Path
 import sys
 import unicodedata
-from uuid import uuid4
 
 from dotenv import load_dotenv
 
@@ -20,7 +19,8 @@ from dotenv import load_dotenv
 BACKEND = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND))
 
-from app.services import DeepgramError, collect_recorded_transcript, transcribe_audio  # noqa: E402
+from app.services import DeepgramError  # noqa: E402
+from app.services.deepgram_recorded import DeepgramRecordedClient
 from app.services.async_deadline import deadline  # noqa: E402
 
 
@@ -48,13 +48,7 @@ def character_error_rate(reference: str, transcript: str) -> float:
 
 
 async def verify(audio):
-    async def chunks():
-        for offset in range(0, len(audio), CHUNK_BYTES):
-            yield audio[offset:offset + CHUNK_BYTES]
-
-    return await deadline(collect_recorded_transcript(transcribe_audio(
-        chunks(), session_id=str(uuid4()),
-    )), 60)
+    return await deadline(DeepgramRecordedClient().transcribe(bytes(audio)), 60)
 
 
 def main(argv=None):
@@ -80,7 +74,7 @@ def main(argv=None):
             print("Not executed: DEEPGRAM_API_KEY is unavailable.", file=sys.stderr)
             return 2
         output = asyncio.run(verify(audio))
-        report = {**asdict(output), "audio_bytes": len(audio), "expected_outcome": args.expect,
+        report = {**asdict(output), "provider_mode": "prerecorded", "audio_bytes": len(audio), "expected_outcome": args.expect,
                   "outcome_matches": output.outcome == args.expect}
         if reference is not None:
             report["character_error_rate"] = character_error_rate(reference, output.transcript)

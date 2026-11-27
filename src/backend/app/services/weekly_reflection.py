@@ -4,11 +4,12 @@ import json
 from typing import Protocol, TypedDict
 from uuid import UUID
 
+from groq import APIStatusError
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.schemas.weekly import ReflectionSourceDate, WeeklyReflectionContent
 from app.services._groq import (
-    AIInvalidResponseError, EmptyJournalError, GroqChatClient, _GroqJSONClient,
+    AIInvalidResponseError, AIServiceUnavailableError, EmptyJournalError, GroqChatClient, _GroqJSONClient,
 )
 
 MAX_WEEKLY_REFLECTION_INPUT = 60_000
@@ -44,6 +45,14 @@ experiences. Leave room for the writer's own meaning and feelings.
 Do not presume that something was positive, difficult, important, or needs
 improvement. Do not force a positive/negative pair or repeat generic coaching
 questions. Sparse entries call for simple questions, not invented depth.
+Both questions refer to the recorded past, not the day this response is read.
+Do not carry over "today", "tonight", "yesterday", "hom nay", "toi nay" or their
+Vietnamese accented forms from source text into either question. Refer to the
+recorded event directly instead. Do not assume an unstated decision or motive:
+non-attendance alone does not establish a deliberate choice. For example, ask
+"What would you like to remember about staying home?", not "What influenced your
+decision not to attend?". Do not ask what made an event special unless the writer
+explicitly called it special.
 Look back rather than turn the questions into preparation plans or productivity
 coaching. Do not default to asking how the writer felt in every case; let them
 choose what to discuss. Never recast uncertainty as difficulty, hesitation,
@@ -61,11 +70,19 @@ Preserve names and natural mixed-language expressions. Do not translate a
 predominantly Vietnamese week into English. Use natural second-person wording
 (you/bạn), not "the user" or a first-person impersonation of the writer.
 
+FINAL GROUNDING CHECK
+Before returning, check each factual clause in the summary and each premise in
+both questions against the supplied records. Remove unsupported details rather
+than completing a plausible story. In a mixed-topic week, keep unrelated events
+separate; do not invent a cause or a theme connecting them. A long week may be
+summarized selectively, but do not claim it represents every experience.
+
 SOURCE DATES
 Return one to seven distinct exact journal_date values supporting the summary
-and questions. Use only dates from the supplied records, not dates mentioned
-inside their prose or the style examples. Never invent a date or include a day
-without a source entry. Do not classify mood or infer diagnoses.
+and questions. Include the supporting date for every event you retain, including
+question premises; do not cite unrelated entries just to fill the list. Use only
+dates from the supplied records, not dates mentioned inside their prose or the
+style examples. Never invent a date or include a day without a source entry. Do not classify mood or infer diagnoses.
 
 STYLE EXAMPLES (illustrations only, never facts to copy into another week)
 For records with journal_date 2026-11-12 saying the writer handed in a report and cooked with a
@@ -77,6 +94,12 @@ For equivalent Vietnamese records, an appropriate result is:
 {"summary":"Bạn đã nộp báo cáo và nấu ăn cùng anh trai vào thứ Bảy.",
  "questions":["Nhìn lại lúc nộp báo cáo, điều gì đọng lại với bạn?",
               "Bạn muốn nhớ điều gì về lần nấu ăn cùng anh trai?"], "source_dates":["2026-11-12"]}
+
+FINAL OUTPUT LANGUAGE
+Choose the language from the journal CONTENT only, never from these instructions
+or style examples. If the supplied records are entirely English, the summary
+and BOTH questions must be English. If they are Vietnamese, use Vietnamese.
+For mixed records use their predominant language. Recheck all three text fields.
 
 Keep the summary within 2400 characters and each question within 300.
 Return plain text inside JSON strings, with no Markdown or additional fields.
@@ -133,7 +156,15 @@ class GroqWeeklyReflectionGenerator:
         source = json.dumps({"entries": sources}, ensure_ascii=False)
         if len(source) > MAX_WEEKLY_REFLECTION_INPUT:
             raise WeeklyReflectionTooLarge("The period exceeds the reflection input limit. No entries were omitted.")
-        result = self._ai.generate(source, system_prompt=SYSTEM_PROMPT,
-                                   response_model=WeeklyReflectionContent, max_completion_tokens=2048)
+        try:
+            result = self._ai.generate(source, system_prompt=SYSTEM_PROMPT,
+                                       response_model=WeeklyReflectionContent, max_completion_tokens=2048)
+        except AIServiceUnavailableError as error:
+            cause = error.__cause__
+            if isinstance(cause, APIStatusError) and cause.status_code == 413:
+                # Provider account limits can be smaller than our local character budget.
+                # Preserve all sources and the established too-large API response.
+                raise WeeklyReflectionTooLarge("The provider rejected the period input size. No entries were omitted.") from cause
+            raise
         validate_reflection_sources(result, sources)
         return result

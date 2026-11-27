@@ -12,14 +12,14 @@ from app.services.deepgram import DeepgramStreamingClient
 from test_api import app, request  # noqa: F401 - real migrated DB and session cookies
 from test_deepgram_service import FakeConnector, FakeSocket
 from test_transcription import result
-from test_transcription_upload import AUDIO, HEADERS, PATH
+from test_transcription_upload import RecordedFixtureClient, AUDIO, HEADERS, PATH
 
 
 @pytest.fixture
 def provider(app):
     socket = FakeSocket(final_events=[result("A private fictional day.", final=True), {"type": "Metadata"}])
     connector = FakeConnector(socket)
-    app.state.deepgram_streaming_client = DeepgramStreamingClient("key", connector=connector)
+    app.state.deepgram_recording_client = RecordedFixtureClient(DeepgramStreamingClient("key", connector=connector))
     return socket, connector
 
 

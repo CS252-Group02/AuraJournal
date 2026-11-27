@@ -1,76 +1,76 @@
 # Browser-recording transcription
 
-The recording service reuses the existing Deepgram transport, transcript normalizer
-and session helper. The HTTP endpoint exposes `POST /api/transcriptions` with the same raw
-WebM/Opus request and `{transcript, outcome}` response. The Record screen uses
-this endpoint for completed local recordings and explicit live-failure recovery;
-see the [integrated Record flow](audio-upload.md#record-flow). No database
-migration, new dependency or separate speech provider is needed.
+Completed browser recordings use the Deepgram **prerecorded HTTP API**. Live
+WebSockets retain the streaming transport/normalizer. Both accept WebM/Opus and
+share safe Deepgram error types; neither automatically retries or saves audio.
 
-## Reusable helper contract
+## Completed-recording helper
 
 ```python
-from app.services import collect_recorded_transcript, transcribe_audio
+from app.services.deepgram_recorded import DeepgramRecordedClient
 
-async def recording_chunks():
-    # Ordered bytes from ONE continuous WebM/Opus recording, including its header
-    # and final chunk. A silent recording still contains nonempty audio bytes.
-    yield first_chunk
-    yield last_chunk
-
-result = await collect_recorded_transcript(
-    transcribe_audio(recording_chunks(), session_id="unique-recording-id")
-)
+result = await DeepgramRecordedClient().transcribe(webm_opus_bytes)
 # result.transcript: str
 # result.outcome: "transcribed" | "no_speech"
 ```
 
-`transcribe_audio()` remains the streaming interface used by WebSocket callers.
-`collect_recorded_transcript()` is its final-only adapter for completed recordings;
-the HTTP upload endpoint now uses this same adapter. It owns and closes the
-event generator on success, error and cancellation. It retains real repeated
-phrases, uses only finalized segments and rejects incomplete/missing completion,
-inconsistent final counts and unresolved drafts. Transcript text is excluded
-from the result object's `repr()`.
+The HTTP endpoint `POST /api/transcriptions` and verification CLI use this client.
+It sends original audio bytes once to `https://api.deepgram.com/v1/listen`, with
+model=nova-3, language=multi and vi/en language hints. It never sends a reference
+.txt, journal prompt, auth cookie or user ID to the provider. The backend key
+stays in the Authorization header. No reference text is used to fill missing speech.
 
-The collector raises existing `DeepgramError` subclasses. Callers can use
-`error.code`: `invalid_audio`, `not_configured`, `invalid_response`, `timeout`,
-`rate_limited`, or `provider_unavailable`. Raw provider messages are never copied
-into those errors. The upload endpoint keeps its existing HTTP status mapping, limits, session
-checks and cancellation behavior. See [HTTP upload](audio-upload.md).
+The client bounds audio at 10 MiB and response JSON at 2 MiB. Open/read/write/pool
+HTTP budgets are 8/45/10/5 seconds, with a 60-second whole-recognition deadline.
+Redirects and environment proxies are disabled. Completed JSON must have valid
+metadata and one result channel with a transcript; an empty transcript yields
+no_speech. Duplicate fields, non-finite numbers, excessive nesting and malformed
+results fail safely. Cancellation closes response/client work. The immutable
+RecordedTranscript excludes its text from repr().
 
-The Deepgram transport also rejects ambiguous/invalid JSON responses: duplicate
-fields, non-finite JSON constants and excessive nesting become
-`invalid_response` and release the connection.
+The upload retains `{transcript, outcome}`, cookie/Origin/CSRF checks, shared AI
+quota, a 30-second upload deadline, session rechecks and no journal writes. See
+[HTTP upload](audio-upload.md) for the browser contract and status mapping.
 
-## Audio and language behavior
+## Live streaming remains separate
 
-Use `audio/webm;codecs=opus` only when
-`MediaRecorder.isTypeSupported('audio/webm;codecs=opus')` succeeds. MP4, WAV and
-Ogg are not supported by this browser-upload contract; renaming files or changing
-their MIME does not convert them. A WebM header is only a preliminary check;
-Deepgram must still decode the complete recording.
+`transcribe_audio`, `TranscriptNormalizer` and `collect_recorded_transcript` remain
+available for streaming. Only confirmed segments can become saved transcript text;
+unresolved drafts remain incomplete. A final may revise timestamps in an older
+draft, while genuinely ambiguous new cumulative overlap still fails safely.
+Live transport keeps its 12-second finish budget. The streaming diagnostic below
+is not the production completed-file recognition path.
 
-The existing provider configuration stays `model=nova-3`, `language=multi`, with
-`language_hint=vi` and `language_hint=en`. Hints favor those languages rather
-than restricting recognition to them. The live protocol's legacy `language: vi`
-alias still selects this same multilingual configuration. See the official
-[Nova-3 language prompting](https://developers.deepgram.com/docs/nova-3-language-prompting)
-and [streaming errors](https://developers.deepgram.com/docs/stt-troubleshooting-websocket-data-and-net-errors)
-references. No automatic reconnect or billable retry is added.
+## Language and quality
 
-## Offline regression
+WebM/Opus is the current browser contract. A .weba filename can contain the same
+WebM/Opus bytes; changing extensions is unnecessary and never converts audio.
+WAV, MP4 and Ogg are not added by this change. Language hints bias recognition;
+they do not enforce a language or guarantee correct words. See the official
+[language-hint documentation](https://developers.deepgram.com/docs/nova-3-language-prompting)
+and [prerecorded API](https://developers.deepgram.com/reference/speech-to-text/listen-pre-recorded).
 
-From `src/backend` with the backend environment active:
+Controlled A07 comparisons found that the streaming results omitted an English
+sentence in the mixed recording. The same file and hints through prerecorded
+recognition retained both languages. The production upload and CLI were therefore
+moved to prerecorded, without an automatic second request or a fallback chain.
+See [verification results](transcription-verification.md) for CER, timing, call
+budgets, residual word substitutions and the separate live/browser checks.
 
-```sh
-python -m pytest tests/test_recorded_transcript.py tests/test_verify_transcription.py tests/test_deepgram_service.py tests/test_transcription.py tests/test_transcription_session.py tests/test_transcription_upload.py tests/test_transcriptions_api.py tests/test_transcription_validation.py tests/test_http_isolation.py -q
+## Offline verification
+
+Run these suites with TEST_DATABASE_URL targeting a disposable PostgreSQL database:
+
+```cmd
+cd /d D:\Lab_CT\AuraJournal\src\backend
+..\..\.venv\Scripts\python.exe -B -m pytest tests/test_deepgram_recorded.py tests/test_verify_transcription.py tests/test_transcription_upload.py tests/test_transcription_upload_auth.py tests/test_transcriptions_api.py tests/test_transcription_validation.py tests/test_transcription.py tests/test_transcription_session.py tests/test_recorded_transcript.py tests/test_deepgram_service.py tests/test_diagnose_transcription.py -q -p no:cacheprovider
 ```
 
-These suites block external HTTP/WebSocket calls and use a fake provider. They
-do not require a real key or PostgreSQL. Database-backed authentication tests in
-`test_transcription_upload_auth.py` additionally need a disposable
-`TEST_DATABASE_URL` as described in the repository README.
+Tests use MockTransport/fake providers and block real external connections. The
+recorded REST adapter has independent schema/status/limit/deadline/cancellation
+tests, including an actual adapter-to-upload route test. Legacy timed streaming
+fixtures are adapted to the recorded interface only to retain existing adversarial
+API-boundary cases; they are not evidence of real prerecorded provider behavior.
 
 ## Real-provider check using browser exports
 
@@ -125,7 +125,7 @@ python scripts/verify_transcription.py recording-silence.webm --expect no_speech
 ```
 
 The command validates the local input before a provider call, sends one recording
-through the same session/collector as the HTTP upload endpoint, and bounds transcription at 60 seconds.
+through the same prerecorded client as the HTTP upload endpoint, and bounds transcription at 60 seconds.
 It has no database dependency and does not verify authentication or the HTTP
 upload itself. It prints outcome/length and optional character error rate (CER),
 not the transcript. Only explicit `--output` writes the transcript, into a new
@@ -142,18 +142,16 @@ Confirm raw upload bytes, session behavior, safe errors, playback and manual
 review/save. With live transcription enabled, confirm that its final text agrees
 with the recording and that successful live completion does not also upload it.
 
-## Completion evidence
+## Optional streaming diagnostics
 
-Implementation verification: the offline regression above passed all 196 tests
-(190 service/HTTP/WebSocket tests and six verification-command tests). Provider
-calls were blocked/mocked; no live calls were made. The existing environment
-emits dependency deprecation warnings. On this Windows sandbox, pytest's private
-temporary directories needed the normal user context for the CLI tests.
+`src/backend/scripts/diagnose_transcription.py` requires --live and a new --output
+file. It captures exactly one explicitly authorized streaming connection with no
+retry and replays the normalizer offline. --finish-timeout can be >0 and <=55
+seconds; the total capture deadline remains 60 seconds. This is useful for live
+mapping comparisons, not for evaluating the new prerecorded production adapter.
 
-The HTTP upload documentation records an English synthetic-audio provider check.
-It does not establish browser microphone behavior or Vietnamese recognition.
-At implementation time neither the process environment nor the repository
-`.env` provides a Deepgram key, so no new real-provider quality claim is made.
-Run the four browser checks above and record their results before marking the
-recording transcription verification complete. Do not substitute mocked transcripts for
-that evidence.
+The report contains speech text/timings and must stay in a Git-ignored local
+folder. It omits credentials, request headers and top-level provider metadata.
+An existing output file blocks provider access. Incomplete provisional text is
+never reported as a successful transcript. Use the normal verify_transcription.py
+command for production prerecorded quality checks.

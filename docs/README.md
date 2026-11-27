@@ -11,11 +11,13 @@ flows, security controls, limitations, and reproducible verification.
 | [Shared HTTPS staging](staging.md) | Teammate usage, deployment, verification, redeploy, rollback and troubleshooting |
 | [Backend integration handoff](backend-integration-handoff.md) | Verification commands, AI/media contracts and pending real-provider acceptance |
 | [Authenticated API contracts](journal-api-contracts.md) | Shared sessions, journal filters/pagination, calendar dates, weekly contracts and errors |
+| [Transcription verification](transcription-verification.md) | A07 microphone results, prerecorded mixed-language fix, regression tests and remaining manual checks |
 | [HTTP audio upload](audio-upload.md) | Authenticated raw WebM/Opus transcription, browser request contract, safe errors, and real-provider verification status |
 | [Speech-to-text streaming service and API](speech-to-text.md) | Provider transport, transcript normalization, authenticated WebSocket protocol, frontend configuration, and offline tests |
 | [Weekly recap](weekly-recap.md) | Factual weekly summaries, timezone boundaries, source links, API, and verification |
 | [Entry reflections](entry-reflections.md) | Per-entry short reflections, regeneration, and API response |
 | [Calendar and streak](calendar-and-streak.md) | Per-user endpoints, streak rules, repeatable sample demo, and verification |
+| [Journal grounding verification](journal-grounding-verification.md) | A08 reflection/Q&A fixtures, dated evidence, long/empty input, offline tests and separate live review |
 | [Weekly reflections](weekly-reflections.md) | Date-based seven-day summaries with two questions, private saving/reading, and generator integration contract |
 | [Accounts and private journals](authentication.md) | Registration, login/logout, seven-day sessions, journal privacy, API, code walkthrough, troubleshooting, and Google sign-in status |
 | [Journal-management API handoff](journal-management.md) | Person 1 task status, private detail reads, date-aware partial edits, two-user CRUD tests, and the transcription dependency |

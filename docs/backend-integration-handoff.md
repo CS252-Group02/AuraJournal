@@ -227,3 +227,38 @@ fixtures (including a successful summary), review of actual Vietnamese/English
 model content, and the team's Q&A screen integration. UI failure injection used
 controlled browser responses, not real quota exhaustion. No provider quota was
 deliberately exhausted. A07/A08 acceptance and cross-platform CI remain separate.
+
+
+### A07 completed-recording update (2026-11-26)
+
+The previously documented mixed-sentence omission was resolved on the supplied
+replacement recording by routing completed audio to prerecorded Deepgram HTTP.
+Four live authenticated API requests and one mixed CLI confirmation use the new
+production adapter, retaining both languages. Latest CER is5.56% VI,4.11% EN,
+3.10% mixed and18.18% natural speech; word substitutions still require review.
+See [current verification](transcription-verification.md). Live streaming remains
+separate. Real-provider silence and full Record-screen acceptance are still
+manual follow-ups; this does not change the A08 semantic-grounding status.
+
+## A08 grounding handoff (2026-11-27)
+
+Reflection and Q&A retain their dated contracts and owner-scoped selection.
+New prompt checks address unsupported clauses/question premises, mixed topics
+and conflicting accounts. The shared [verification guide](journal-grounding-verification.md)
+includes eight fictional cases, a default-offline evaluator and authenticated
+DB-to-adapter tests. No migration or frontend change is needed.
+
+The earlier A08 browser checklist remains a manual follow-up. The guide records
+actual provider review separately from schema/date checks; fake outputs do not
+establish model quality.
+
+A08 live review used 12 explicitly authorized fictional Groq requests across two
+budgets, without retries. All four Q&A cases passed review; reflection exposed
+writing/language weaknesses refined in the prompt. The final language change
+still needs live verification. A provider HTTP 413 now maps to the existing
+safe too-long response, preserving journals and saved reflections. Successful
+long-week model generation and the browser check remain pending; see the guide.
+
+Verification: full backend run 1,180 passed / 2 existing skips; final focused
+regression after the 413 change 214 passed; frontend tests 210 passed.
+`git diff --check` passed. No application migration, commit or push performed.

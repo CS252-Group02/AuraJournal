@@ -10,7 +10,7 @@ from app.services.deepgram import DeepgramStreamingClient
 from test_api import application_for
 from test_deepgram_service import FakeConnector, FakeSocket
 from test_transcription import result
-from test_transcription_upload import AUDIO
+from test_transcription_upload import RecordedFixtureClient, AUDIO
 
 
 RUNNER = runpy.run_path(str(Path(__file__).resolve().parents[3] / "scripts" / "smoke-api.py"))
@@ -31,7 +31,7 @@ def test_smoke_runner_against_real_routes_and_database(migrated_engine, scenario
     app = application_for(migrated_engine)
     if scenario == "normal":
         socket = FakeSocket(final_events=[result("I took a walk.", final=True), {"type": "Metadata"}])
-        app.state.deepgram_streaming_client = DeepgramStreamingClient("test-key", connector=FakeConnector(socket))
+        app.state.deepgram_recording_client = RecordedFixtureClient(DeepgramStreamingClient("test-key", connector=FakeConnector(socket)))
         app.state.weekly_reflection_generator = ReflectionGenerator()
     else:
         app.state.weekly_reflection_generator = None

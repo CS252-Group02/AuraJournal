@@ -175,3 +175,10 @@ Regression evidence is in `test_ai_contract_boundaries.py`,
 `test_weekly_generation_safety.py`, the existing Q&A/reflection/pixel/transcription
 suites, and `tests/frontend-api.test.js`. Use the complete verification commands
 in [the backend handoff](backend-integration-handoff.md#repeatable-automated-verification).
+
+
+Completed-file transcription uses the prerecorded HTTP adapter: one raw-audio
+request, 45-second HTTP read timeout inside the 60-second recognition deadline,
+strict completed-result validation and no automatic retry/fallback. Live keeps its
+12-second streaming finish budget. The upload response remains transcript/outcome.
+See [verification results](transcription-verification.md).

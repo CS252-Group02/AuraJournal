@@ -240,3 +240,6 @@ Thumbs.db
 .vscode/
 # Local database migration backup
 *.dump
+
+# Local microphone samples, references and provider reports
+/external_api_tests/test-local-data/
