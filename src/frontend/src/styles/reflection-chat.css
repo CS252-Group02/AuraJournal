@@ -1,0 +1,25 @@
+.chat-page { max-width: 1300px; margin: auto; padding: 36px clamp(16px, 4vw, 48px); }
+.chat-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+.chat-header h1 { margin: 0; font-family: var(--aj-serif); font-size: clamp(2rem, 4vw, 3rem); }
+.chat-workspace { display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 65vh; gap: 24px; }
+.chat-history { border-right: 1px solid var(--aj-line); padding-right: 20px; }
+.chat-page h2 { font-size: 1.2rem; }
+.chat-history-list { list-style: none; padding: 0; display: grid; gap: 8px; }
+.chat-history-list a { display: block; padding: 12px; border-radius: 8px; color: var(--aj-ink); overflow-wrap: anywhere; text-decoration: none; }
+.chat-history-list a:hover, .chat-history-list a[aria-current] { background: var(--aj-soft); }
+.chat-conversation { min-width: 0; padding: clamp(16px, 3vw, 32px); background: var(--aj-surface); border: 1px solid var(--aj-line); border-radius: 16px; }
+.chat-empty { max-width: 480px; margin: 60px auto; line-height: 1.7; }
+.chat-history-toggle { display: none; }
+.chat-history-dialog { color: var(--aj-ink); background: var(--aj-surface); border: 1px solid var(--aj-line); border-radius: 12px; width: min(360px, 90vw); max-height: 85dvh; padding: 24px; }
+.chat-history-dialog::backdrop { background: #0006; }
+.chat-message { background: var(--aj-bg); border-radius: 12px; padding: 16px; margin: 16px 0; overflow-wrap: anywhere; }
+.chat-message-user { background: var(--aj-soft); margin-left: 12%; }
+.chat-message p { white-space: pre-wrap; line-height: 1.7; margin: 6px 0 0; }
+.chat-page button:focus-visible, .chat-page a:focus-visible, .chat-page textarea:focus-visible, .chat-page select:focus-visible, .chat-page input:focus-visible { outline: 2px solid var(--aj-focus); outline-offset: 3px; }
+@media (max-width: 767px) {
+  .chat-page { padding-top: 70px; }
+  .chat-workspace { display: block; }
+  .chat-history { display: none; }
+  .chat-history-toggle { display: inline-flex; }
+  .chat-message-user { margin-left: 5%; }
+}

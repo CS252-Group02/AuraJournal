@@ -27,3 +27,25 @@ test('chat adapters preserve server errors including retry metadata', async () =
   const api = createChatApi(async () => { throw error; });
   await assert.rejects(api.send('id', fixtures.turn_request), actual => actual === error);
 });
+
+async function loadWorkspace(api) {
+  const result = await build({ entryPoints: ['src/frontend/src/features/reflection-chat/chatWorkspace.js'], bundle: true,
+    write: false, platform: 'node', format: 'esm', define: { 'import.meta.env.VITE_API_URL': '""' } });
+  const module = await import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`);
+  return module.createChatWorkspace(api);
+}
+function deferred() { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; }
+
+test('history pagination merges chats and conversation switching discards late reads', async () => {
+  const late = deferred(), signals = [];
+  const workspace = await loadWorkspace({ list: async cursor => ({ chats: [{ ...fixtures.chat, id: cursor || 'a' }], next_cursor: cursor ? null : 'b' }),
+    read: (id, before, signal) => { signals.push(signal); return id === 'a' ? late.promise : Promise.resolve(fixtures.empty_detail); } });
+  await workspace.list(); await workspace.list(true);
+  assert.deepEqual(workspace.getSnapshot().chats.map(chat => chat.id), ['a', 'b']);
+  const first = workspace.open('a'); await workspace.open('b');
+  late.resolve({ ...fixtures.empty_detail, chat: { ...fixtures.chat, title: 'Stale' } }); await first;
+  assert.ok(signals[0].aborted); assert.equal(workspace.getSnapshot().detail.chat.title, 'New reflection');
+  workspace.setDraft('private'); await workspace.open('a');
+  await workspace.open('b'); assert.equal(workspace.getSnapshot().draft, 'private');
+  workspace.clear(); assert.equal(workspace.getSnapshot().draft, ''); assert.deepEqual(workspace.getSnapshot().chats, []);
+});

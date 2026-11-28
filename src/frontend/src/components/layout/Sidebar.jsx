@@ -3,6 +3,7 @@ import { Link, matchPath, useLocation } from 'react-router-dom';
 import NavigationIcon from './NavigationIcon.jsx';
 
 const ITEMS = [
+  { to: '/reflection-chat', label: 'Reflection Chat', icon: 'chat', secondary: true },
   { to: '/', label: 'Main', icon: 'main' },
   { to: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
   { to: '/history', label: 'History', icon: 'history' },
@@ -21,7 +22,7 @@ export default function Sidebar({ drawer = false, onClose, onNavigate }) {
     {drawer && <button type="button" className="sidebar-close" onClick={onClose} aria-label="Close navigation"><NavigationIcon name="close" /></button>}
     <nav aria-label="Main navigation"><ul>{ITEMS.map(item => {
       const detail = item.to === '/history' && pathname.startsWith('/journal/');
-      const active = Boolean(matchPath(item.to, pathname)) || detail;
+      const active = Boolean(matchPath({ path: item.to, end: item.to !== '/reflection-chat' }, pathname)) || detail;
       return <li key={item.to} className={item.secondary ? 'sidebar-secondary' : undefined}>
         <Link to={item.to} aria-label={item.label} aria-current={active ? 'page' : undefined}
           className={`sidebar-link${active ? ' is-active' : ''}`}

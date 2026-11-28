@@ -7,6 +7,7 @@ import RegisterPage from './pages/RegisterPage.jsx';
 import RecordPage from './pages/RecordPage.jsx';
 import HistoryPage from './pages/HistoryPage.jsx';
 import EntryPage from './pages/EntryPage.jsx';
+import ReflectionChatPage from './pages/ReflectionChatPage.jsx';
 import ReflectionPage from './pages/ReflectionPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import PixelMemoriesPage from './pages/PixelMemoriesPage.jsx';
@@ -27,6 +28,8 @@ createRoot(document.getElementById('root')).render(
               <Route path="/memories" element={<PixelMemoriesPage />} />
               <Route path="/history" element={<HistoryPage />} />
               <Route path="/journal/:id" element={<EntryPage />} />
+              <Route path="/reflection-chat" element={<ReflectionChatPage />} />
+              <Route path="/reflection-chat/:chatId" element={<ReflectionChatPage />} />
               <Route path="/reflection" element={<ReflectionPage />} />
               <Route path="/record" element={<RecordPage />} />
             </Route>

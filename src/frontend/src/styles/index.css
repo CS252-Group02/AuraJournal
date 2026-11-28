@@ -8,6 +8,7 @@
 @import "./home.css";
 @import "./app-shell.css";
 @import "../features/pixelMemories/pixelMemories.css";
+@import "./reflection-chat.css";
 @import "./theme.css";
 @import "./account-menu.css";
 @import "./motion.css";
