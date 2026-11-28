@@ -369,3 +369,10 @@ The existing `api()` client remains the cookie/CSRF/session boundary.
 Journal consent uses the server's access version and defaults off. Keep the
 opt-out control available during generation, discard late local results after
 access changes, and link only backend-returned sources to `/journal/:id`.
+
+Contextual follow-ups use the existing turn API: send only the current message
+and metadata, and leave query expansion/history selection to the backend. Keep
+history reads independent of failed sends; successful turns supersede older
+history reads through the existing request tokens. Contextual browser fixtures
+are scripted presentation/request checks, not a frontend retrieval implementation
+or proof of live model quality. Embeddings remain deferred.
