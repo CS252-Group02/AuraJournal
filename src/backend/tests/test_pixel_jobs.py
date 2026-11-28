@@ -205,6 +205,40 @@ def test_manual_retry_requires_owner_csrf_and_enabled_service(pixel_app):
     assert job_for(app, entry).status == "failed"
 
 
+@pytest.mark.parametrize("unavailable", ["disabled", "groq", "pixellab"])
+def test_retry_status_and_feed_follow_artwork_availability(pixel_app, unavailable):
+    app = pixel_app
+    app.state.pixel_art_enabled = unavailable != "disabled"
+    app.state.moment_extractor.configured = unavailable != "groq"
+    app.state.pixellab_client.configured = unavailable != "pixellab"
+    entry = create(app)
+    if unavailable != "disabled":
+        assert run_pixel_job_once(app.state)
+
+    def feed_generation():
+        response = call(app, "GET", f"/api/entries/pixel-art/memories?as_of={entry['journal_date']}")
+        assert response.status_code == 200
+        return response.json()["days"][0]["entries"][0]["generation"]
+
+    for generation in (status(app, entry)["generation"], feed_generation()):
+        assert generation["status"] == "unavailable"
+        assert generation["retryable"] is False
+    assert call(app, "POST", path(entry) + "/retry", json={}).status_code == 503
+    assert job_for(app, entry).status == "unavailable"
+    app.state.moment_extractor.extract.assert_not_called()
+    app.state.pixellab_client.generate.assert_not_called()
+
+    app.state.pixel_art_enabled = True
+    app.state.moment_extractor.configured = True
+    app.state.pixellab_client.configured = True
+    assert status(app, entry)["generation"]["retryable"] is True
+    assert feed_generation()["retryable"] is True
+    response = call(app, "POST", path(entry) + "/retry", json={})
+    assert response.status_code == 200
+    assert response.json()["generation"]["status"] == "pending"
+    assert response.json()["generation"]["retryable"] is False
+
+
 @pytest.mark.parametrize("action", ["edit", "delete"])
 def test_queued_symbolic_attempt_is_invalidated_when_journal_changes(pixel_app, action):
     app = pixel_app
