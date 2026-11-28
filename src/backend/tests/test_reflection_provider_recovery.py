@@ -154,3 +154,54 @@ def test_opt_out_stops_resending_prepared_excerpts(migrated_engine):
             assert sending.result(timeout=10).status_code == 409
         assert [call['model'] for call in transport.calls] == [PRIMARY, PRIMARY]
         assert alice.get(path).json()['turns'] == []
+
+
+
+def test_retry_stops_when_another_tab_advances_revision(migrated_engine):
+    entered, release = Event(), Event()
+    stale_message = 'I took a walk.'
+    current_message = 'I read a book.'
+
+    class RacingCompletions(Completions):
+        def __init__(self):
+            super().__init__()
+            self.steps = []
+
+        def create(self, **kwargs):
+            step = kwargs['response_format']['json_schema']['name']
+            message = json.loads(kwargs['messages'][1]['content'])['message']
+            self.steps.append((message, step))
+            if message == stale_message and step == 'RoutingDecision':
+                entered.set()
+                assert release.wait(10)
+                raise status_error(502)
+            result = {
+                'RoutingDecision': ROUTE,
+                'GeneratedReflection': {'reply': 'What stood out about the book?', 'source_ids': []},
+                'ReflectionReview': {'approved': True},
+            }[step]
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(result)))])
+
+    transport = RacingCompletions()
+    app = application_for(migrated_engine)
+    app.state.reflection_chat_assistant = ReflectionChatAssistant(transport, model=PRIMARY, fallback_model=FALLBACK)
+    with TestClient(app, headers=HEADERS) as alice, TestClient(app, headers=HEADERS) as second_tab:
+        register(alice, 'alice')
+        second_tab.cookies.set(COOKIE_NAME, alice.cookies.get(COOKIE_NAME))
+        path = f'{PATH}/{alice.post(PATH, json={}).json()["id"]}'
+        current = payload(current_message)
+        with ThreadPoolExecutor() as pool:
+            sending = pool.submit(alice.post, path + '/turns', json=payload(stale_message))
+            try:
+                assert entered.wait(8)
+                saved = second_tab.post(path + '/turns', json=current)
+                assert saved.status_code == 200
+            finally:
+                release.set()
+            assert sending.result(timeout=10).status_code == 409
+
+        assert [step for message, step in transport.steps if message == stale_message] == ['RoutingDecision']
+        assert alice.get(path).json()['turns'] == [saved.json()]
+        count = len(transport.steps)
+        assert alice.post(path + '/turns', json=current).json() == saved.json()
+        assert len(transport.steps) == count

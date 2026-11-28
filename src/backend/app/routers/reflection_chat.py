@@ -227,6 +227,7 @@ def send_turn(chat_id: UUID, payload: ReflectionTurnRequest, request: Request,
     def recheck_before_provider_retry():
         guard_session_write(request, session, owner)
         current = owned_chat(session, owner, chat_id, lock=True)
+        require_revision(current, payload.expected_revision)
         require_access_version(current, access_version)
         if not lock_reflection_sources(session, owner, context):
             raise HTTPException(409, 'A journal changed while preparing the reply. Please try again.')
