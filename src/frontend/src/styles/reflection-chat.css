@@ -29,3 +29,10 @@
 .chat-composer-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; justify-content: space-between; }
 .chat-page select, .chat-page input { background: var(--aj-bg); color: var(--aj-ink); border: 1px solid var(--aj-line); padding: 8px; border-radius: 6px; font: inherit; }
 .chat-composer > p { color: var(--aj-muted); font-size: .85rem; margin: 0; }
+.chat-conversation-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.chat-support { border-top: 1px solid var(--aj-line); padding-top: 16px; margin-top: 16px; }
+.chat-support form { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+.chat-support label { display: grid; gap: 8px; }
+.chat-support input { width: 100px; }
+.chat-support a { color: var(--aj-green-dark); }
+.chat-page .aj-dialog { max-width: min(480px, 90vw); }

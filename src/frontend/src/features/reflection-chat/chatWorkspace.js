@@ -29,10 +29,10 @@ export function createChatWorkspace(api = chatApi) {
   }
   async function open(id) {
     if (state.chatId) drafts.set(state.chatId, { draft: state.draft, retry: state.retry || state.pending, retryAt: state.retryAt });
-    cancel('detail'); cancel('turn'); cancel('older'); cancel('create');
+    cancel('detail'); cancel('turn'); cancel('older'); cancel('create'); cancel('delete');
     update({ chatId: id || null, detail: null, status: id ? 'loading' : 'idle', error: '',
       draft: drafts.get(id)?.draft || '', retry: drafts.get(id)?.retry || null, retryAt: drafts.get(id)?.retryAt || 0,
-      sending: false, pending: null, refreshing: false, loadingOlder: false, creating: false, needsRefresh: false });
+      sending: false, pending: null, refreshing: false, loadingOlder: false, creating: false, deleting: false, deleteError: '', needsRefresh: false });
     if (!id) return;
     const task = job('detail');
     try {
@@ -74,7 +74,7 @@ export function createChatWorkspace(api = chatApi) {
   }
   async function send(locale) {
     const message = state.draft.trim();
-    if (state.sending || state.needsRefresh || state.refreshing || state.accessPending || state.retryAt > Date.now() || !state.detail || !message || message.length > 2000) return;
+    if (state.deleting || state.sending || state.needsRefresh || state.refreshing || state.accessPending || state.retryAt > Date.now() || !state.detail || !message || message.length > 2000) return;
     const id = state.chatId;
     const payload = state.retry?.message === message && state.retry.locale === locale
       ? { ...state.retry, expected_revision: state.detail.chat.revision }
@@ -98,8 +98,24 @@ export function createChatWorkspace(api = chatApi) {
       }
     }
   }
+  async function remove() {
+    if (!state.chatId || state.deleting) return false;
+    const id = state.chatId, task = job('delete');
+    cancel('turn'); cancel('detail'); cancel('older');
+    update({ deleting: true, deleteError: '', sending: false, pending: null });
+    try {
+      await api.remove(id, task.signal);
+      if (!task.current()) return false;
+      cancel('list'); drafts.delete(id);
+      update({ deleting: false, chats: state.chats.filter(chat => chat.id !== id), detail: null, draft: '', retry: null });
+      return true;
+    } catch (error) {
+      if (task.current()) update({ deleting: false, deleteError: error.message, needsRefresh: true });
+      return false;
+    }
+  }
   return { subscribe: fn => { listeners.add(fn); return () => listeners.delete(fn); }, getSnapshot: () => state,
-    list, open, create, older, send, refresh, cancelAll,
+    list, open, create, older, send, refresh, remove, cancelAll,
     setDraft: draft => update({ draft, retry: draft.trim() === state.retry?.message ? state.retry : null }),
     clear() { cancelAll(); drafts.clear(); update({ chats: [], detail: null, draft: '', chatId: null, sending: false, pending: null, retry: null, retryAt: 0, creating: false, loadingOlder: false, refreshing: false, needsRefresh: false, error: '' }); },
   };

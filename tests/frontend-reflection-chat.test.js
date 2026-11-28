@@ -93,3 +93,20 @@ test('429 cooldown blocks sends and conflict reload failure blocks stale revisio
   await workspace.send('en'); await workspace.send('en');
   assert.equal(count, 2); assert.equal(workspace.getSnapshot().needsRefresh, true);
 });
+
+test('deletion is confirmed by the server, prevents duplicates, and keeps failed chats', async () => {
+  const deletion = deferred(); let calls = 0;
+  const workspace = await loadWorkspace({ read: async () => fixtures.empty_detail,
+    remove: () => { calls++; return deletion.promise; } });
+  await workspace.open('a'); workspace.setDraft('keep');
+  const first = workspace.remove(); assert.equal(await workspace.remove(), false); assert.equal(calls, 1);
+  deletion.reject(new Error('Offline')); assert.equal(await first, false);
+  assert.equal(workspace.getSnapshot().draft, 'keep'); assert.ok(workspace.getSnapshot().detail);
+});
+
+test('support links accept HTTPS and call actions and reject executable metadata', async () => {
+  const { safeSupportUrl } = await import('../src/frontend/src/features/reflection-chat/supportLinks.js');
+  assert.equal(safeSupportUrl('https://example.test/support'), 'https://example.test/support');
+  assert.equal(safeSupportUrl('tel:+1234'), 'tel:+1234');
+  for (const value of ['javascript:alert(1)', 'data:text/html,bad', '//evil.test', 'https://user:pass@example.test', 'tel:abc', 'https://a.test/\n']) assert.equal(safeSupportUrl(value), null);
+});
