@@ -150,3 +150,5 @@
   .home-record-circle, .home-record-halo { transition: none; }
   .home-record-link:hover .home-record-circle { transform: none; }
 }
+.home-page button.home-write-first { padding: 0; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.home-write-first .home-record-circle > span { width: 46px; height: 6px; aspect-ratio: auto; border-radius: 3px; }

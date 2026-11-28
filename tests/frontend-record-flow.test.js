@@ -149,6 +149,17 @@ test('empty, long and unavailable proofreading results open manual review withou
   }
 });
 
+test('turning proofreading off in Settings opens the original transcript without a warning', async () => {
+  const f = fixture({ services: { proofreadEnabled: () => false } });
+  await f.flow.start(); f.emit(result('a', 0, 'Original words'));
+  await f.flow.stop();
+  assert.equal(f.flow.getSnapshot().phase, 'review');
+  assert.equal(f.flow.getSnapshot().editorText, 'Original words');
+  assert.equal(f.flow.getSnapshot().warning, '');
+  assert.equal(f.proofreads.length, 0);
+  f.cleanup();
+});
+
 test('a late AI response cannot replace a bypassed/edited draft', async () => {
   const ai = deferred();
   const f = fixture({ services: { proofread: () => ai.promise } });

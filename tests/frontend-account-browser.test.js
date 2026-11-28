@@ -129,7 +129,7 @@ test('account menu, appearance, and existing guards work in a real browser', {
   try { await navigate('/', '.home-page'); }
   catch (error) { throw new Error(`${error.message}; runtime errors: ${JSON.stringify(errors)}`); }
 
-  await context.test('all content pages share email, safe Settings, and the same account controls', async () => {
+  await context.test('all content pages share email, Settings, and the same account controls', async () => {
     for (const [path, ready] of [['/', '.home-page'], ['/dashboard', '.calendar'], ['/history', '.history-grid'],
       ['/journal/11111111-1111-4111-8111-111111111111', '.entry-paper'], ['/reflection', '.reflection-page'], ['/memories', '.pixel-memories-page']]) {
       await navigate(path, ready);
@@ -137,9 +137,9 @@ test('account menu, appearance, and existing guards work in a real browser', {
       assert.equal(await evaluate("document.querySelectorAll('.account-trigger').length"), 1);
       await openMenu();
       assert.equal(await evaluate("document.querySelector('.account-info p').textContent"), 'journal@example.test');
-      assert.equal(await evaluate("document.querySelector('.account-navigation button').disabled"), true);
-      assert.match(await evaluate("document.querySelector('.account-navigation').textContent"), /Settings.*Coming soon/);
-      assert.equal(await evaluate("document.querySelector('.account-navigation a')"), null);
+      assert.equal(await evaluate("document.querySelector('.account-navigation button')"), null);
+      assert.equal(await evaluate("document.querySelector('.account-navigation a').getAttribute('href')"), '/settings');
+      assert.equal(await evaluate("document.querySelector('.account-navigation a').textContent"), 'Settings');
       assert.equal(await evaluate("document.querySelector('.appearance-toggle button[aria-pressed=true]').textContent"), 'Light');
       assert.equal(await evaluate(`Boolean(${textButton('Log out')})`), true);
       await key('Escape');
@@ -153,7 +153,9 @@ test('account menu, appearance, and existing guards work in a real browser', {
   await context.test('keyboard activation, Tab boundaries, Escape, focus exit, and outside click', async () => {
     await evaluate("document.querySelector('.account-trigger').focus()");
     await key('Enter');
-    await browser.waitFor("document.activeElement.textContent === 'Light'");
+    await browser.waitFor("document.activeElement.textContent === 'Settings'");
+    await key('Tab');
+    assert.equal(await evaluate('document.activeElement.textContent'), 'Light');
     await key('Tab');
     assert.equal(await evaluate('document.activeElement.textContent'), 'Dark');
     await key(' ');

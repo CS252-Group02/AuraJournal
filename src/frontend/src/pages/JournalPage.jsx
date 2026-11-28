@@ -13,6 +13,7 @@ import { dailyReflection } from '../features/journal/homeContent.js';
 import { useNavigationGuard } from '../components/layout/navigation.js';
 import AccountMenu from '../components/layout/AccountMenu.jsx';
 import AutomaticArtDisclosure from '../features/pixelMemories/AutomaticArtDisclosure.jsx';
+import { usePreferences } from '../features/settings/usePreferences.js';
 
 function Companion() {
   return <aside className="home-companion" aria-label="A gentle reminder">
@@ -28,6 +29,8 @@ function HomeContent() {
   const today = parseDateKey(todayKey);
   const { byDay, invalidCount } = useMemo(() => groupEntriesByDay(entries), [entries, timezone]);
   const streak = useMemo(() => currentStreak(byDay, today), [byDay, todayKey, timezone]);
+  const [preferences] = usePreferences();
+  const writeFirst = preferences.startWith === 'writing';
   const [writing, setWriting] = useState(false), [content, setContent] = useState('');
   const [busy, setBusy] = useState(false), [notice, setNotice] = useState(''), [failure, setFailure] = useState('');
   const editor = useRef(null), writeButton = useRef(null), request = useRef(null), active = useRef(false), saving = useRef(false);
@@ -47,6 +50,10 @@ function HomeContent() {
     if (saving.current || (content.trim() && !window.confirm('Discard this unsaved journal draft?'))) return;
     setWriting(false); setContent(''); setFailure('');
     writeButton.current?.focus();
+  }
+  function toggleWriting() {
+    if (writing) closeWriting();
+    else { setWriting(true); setNotice(''); }
   }
   function confirmLeave() {
     return !saving.current && (!content.trim() || window.confirm('Leave this page and discard your unsaved journal draft?'));
@@ -99,14 +106,23 @@ function HomeContent() {
             <span className="home-date-month">{today.toLocaleDateString(undefined, { month: 'long' })}</span>
           </time>
         </div>
-        <div className="home-quote"><p className="aj-kicker">Quote of the day</p><blockquote>“{dailyReflection(todayKey)}”</blockquote></div>
+        {preferences.showQuote && <div className="home-quote"><p className="aj-kicker">Quote of the day</p><blockquote>“{dailyReflection(todayKey)}”</blockquote></div>}
         <div className="home-start">
-          <Link className="home-record-link" to="/record" aria-label="Start journaling with your voice">
-            <span className="home-record-halo" aria-hidden="true"><span className="home-record-circle"><span /></span></span>
-            <span className="home-record-label">Start journaling</span>
-          </Link>
-          <button ref={writeButton} className="home-write-link" type="button" aria-expanded={writing} aria-controls="home-writing"
-            onClick={() => { if (writing) closeWriting(); else { setWriting(true); setNotice(''); } }}>Write instead <span aria-hidden="true">↗</span></button>
+          {writeFirst ? <>
+            <button ref={writeButton} className="home-record-link home-write-first" type="button" aria-label="Start journaling in writing"
+              aria-expanded={writing} aria-controls="home-writing" onClick={toggleWriting}>
+              <span className="home-record-halo" aria-hidden="true"><span className="home-record-circle"><span /></span></span>
+              <span className="home-record-label">Start journaling</span>
+            </button>
+            <Link className="home-write-link" to="/record">Record instead <span aria-hidden="true">↗</span></Link>
+          </> : <>
+            <Link className="home-record-link" to="/record" aria-label="Start journaling with your voice">
+              <span className="home-record-halo" aria-hidden="true"><span className="home-record-circle"><span /></span></span>
+              <span className="home-record-label">Start journaling</span>
+            </Link>
+            <button ref={writeButton} className="home-write-link" type="button" aria-expanded={writing} aria-controls="home-writing"
+              onClick={toggleWriting}>Write instead <span aria-hidden="true">↗</span></button>
+          </>}
         </div>
         <Companion />
       </section>
@@ -128,7 +144,7 @@ function HomeContent() {
 
       <section className="home-journey" aria-labelledby="home-journey-heading">
         <div className="home-journey-heading"><h2 id="home-journey-heading" className="visually-hidden">Your journals</h2>
-          {ready && <p className="home-streak">{streak.count > 0 ? `${streak.count}-day streak` : ''}</p>}
+          {ready && preferences.showStreak && <p className="home-streak">{streak.count > 0 ? `${streak.count}-day streak` : ''}</p>}
         </div>
         {status === 'error' && <StatePanel title="Your journals are taking a little longer" tone="error" role="alert"
           action={<button className="aj-btn" type="button" onClick={reload}>Try again</button>}>{error}</StatePanel>}

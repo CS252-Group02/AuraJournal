@@ -20,3 +20,9 @@ export function forgetLastOpened(userId, entryId) {
     if (getLastOpened(userId)?.id === entryId) localStorage.removeItem(PREFIX + userId);
   } catch {}
 }
+
+export function clearLastOpened(userId) {
+  try {
+    localStorage.removeItem(PREFIX + userId);
+  } catch {}
+}

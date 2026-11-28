@@ -152,6 +152,7 @@ names listed above are intentional; renaming them is not required cleanup.
 | `/history` | `HistoryPage` | `PrivatePage` |
 | `/journal/:id` | `EntryPage` | `PrivatePage` |
 | `/reflection` | `ReflectionPage` | `PrivatePage` |
+| `/settings` | `SettingsPage` | `PrivatePage` |
 
 Preserve `React.StrictMode`, `BrowserRouter`, and the single `AuthProvider` around
 the route tree. Register an authorized new route in `main.jsx`, choosing access

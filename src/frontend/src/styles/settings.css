@@ -1,0 +1,33 @@
+.settings-page .aj-inner { width: min(100%, 760px); }
+.settings-section { display: grid; gap: 10px; margin-bottom: 28px; }
+.settings-card { border: 1px solid var(--aj-line); border-radius: 4px; background: var(--aj-surface); }
+.settings-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; padding: 18px 20px; }
+.settings-row + .settings-row { border-top: 1px solid var(--aj-line); }
+.settings-row-text { flex: 1 1 220px; min-width: 0; }
+.settings-row-text > :is(span, label) { font-weight: 500; }
+.settings-row-text p { margin: 2px 0 0; color: var(--aj-muted); font-size: 13px; }
+.settings-page .appearance-toggle button { border: 0; cursor: pointer; }
+.settings-select {
+  min-height: 44px; min-width: 240px; max-width: 100%; padding: 8px 12px;
+  border: 1px solid var(--aj-line); border-radius: 4px; background: var(--aj-surface); color: var(--aj-ink); font: inherit; font-size: 14px;
+}
+.settings-switch { display: grid; place-items: center; width: 60px; height: 44px; padding: 0; border: 0; background: transparent; cursor: pointer; }
+.settings-switch > span {
+  position: relative; display: block; width: 44px; height: 26px; border-radius: 13px; background: #c9d3ca;
+  transition: background-color 200ms;
+}
+.settings-switch > span::after {
+  content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgb(20 35 27 / 25%); transition: translate 200ms var(--ease-drawer);
+}
+.settings-switch[aria-checked="true"] > span { background: var(--aj-green); }
+.settings-switch[aria-checked="true"] > span::after { translate: 18px 0; }
+.settings-action { display: flex; align-items: center; gap: 16px; }
+.settings-action > span { color: var(--aj-muted); font-size: 13px; }
+.settings-page :is(button, select):focus-visible { outline: 3px solid var(--aj-focus); outline-offset: 3px; }
+:root[data-theme="dark"] .settings-switch > span { background: var(--aj-line); }
+:root[data-theme="dark"] .settings-switch > span::after { background: var(--aj-ink); }
+@media (max-width: 640px) {
+  .settings-row { padding: 16px; }
+  .settings-select { min-width: 0; width: 100%; }
+}

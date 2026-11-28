@@ -67,6 +67,7 @@ src/frontend/
 | `/history` | `HistoryPage.jsx` | `PrivatePage` |
 | `/journal/:id` | `EntryPage.jsx` | `PrivatePage` |
 | `/reflection` | `ReflectionPage.jsx` | `PrivatePage` |
+| `/settings` | `SettingsPage.jsx` | `PrivatePage` |
 
 `/reflection` is the **Weekly recap** screen. Generation is explicit: POST
 `/api/reflections/weekly` with `{start: "YYYY-MM-DD", timezone: "Asia/Bangkok"}`.
@@ -377,6 +378,10 @@ saved conversations separately from Weekly recap. `features/reflection-chat/`
 owns API adapters, cancellable workspace state, the composer, message history,
 and server-provided support options. The route page composes these controls;
 `styles/reflection-chat.css` uses the existing theme tokens.
+
+`/settings` stores device-only preferences under `aurajournal-preferences`
+(`features/settings/preferences.js`). `styles/settings.css` loads after
+`reflection-chat.css`.
 
 Drafts and retry IDs stay only in memory while the workspace is mounted and are
 cleared on account changes. Chat text is never sent to analytics or browser
