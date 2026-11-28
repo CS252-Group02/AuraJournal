@@ -24,6 +24,8 @@ Retry a network error with the original `turn_id` and message. A completed turn 
 
 New and existing chats default to `use_journals: false`. The frontend should explain that opting in lets AuraJournal search that account’s saved journals and send selected excerpts to Groq. Access is checked per chat. Journal retrieval runs only on reflection turns after safety classification. Journal matches are ranked by distinct search terms, then by newest journal date. A message can request an exact `YYYY-MM-DD` date or an inclusive range such as `2024-02-27 to 2024-02-29` or `2024-02-27 đến 2024-02-29`. When there are no matches, the reply uses conversation context.
 
+For an underspecified follow-up, the safety classifier can also suggest searching with the latest completed turn’s user message from the same opted-in chat. Prior dates are removed before search. Explicit dates in the current message take precedence, and new topics use only the current message. The expanded search text stays inside retrieval. The classifier still receives chat-only history without journal-grounded turns or excerpts.
+
 Turns include a `sources` array with `entry_id` and `journal_date` for each validated citation. Link each source to `/journal/{entry_id}`. Phase 1 turns have an empty array. If an entry changes or is deleted, its citation disappears from the saved turn and the reply remains readable.
 
 Turning journal access off keeps old messages visible and excludes journal-grounded turns from future AI prompts. An in-flight reply based on the previous setting is discarded. Provider calls already sent cannot be recalled.
@@ -79,3 +81,5 @@ Local frontend verification (2026-11-28): 224 frontend tests, 33 browser checks
 (including the existing account/gallery/AI-contract regressions), and production
 build passed. Browser checks ran with headless Brave and fictional API fixtures;
 PostgreSQL, live provider behavior, and joint staging sign-off were not exercised.
+
+See the [Phase 3 retrieval benchmark](reflection-retrieval-benchmark.md) for the semantic comparison and the Groq conversation-context checks.
