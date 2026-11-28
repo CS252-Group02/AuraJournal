@@ -34,6 +34,19 @@ Turning journal access off keeps old messages visible and excludes journal-groun
 
 Apply Alembic revision `0012` and rerun `scripts/database-runtime-role.sql` after upgrading a restricted PostgreSQL deployment. The routes are enabled in development and tests. On staging, set `REFLECTION_CHAT_ENABLED=true` in the API environment only after a team owner validates the support guidance and directory links and checks the configured model with fictional journals. Provider-backed turns require the existing `GROQ_API_KEY`. A normal reflection uses separate classification, generation, and reply review calls. Direct urgent disclosures covered by the local rules use a fixed response and can succeed when the provider is unavailable. The bundled urgent directory points to [the Vietnam listings from Find A Helpline](https://findahelpline.com/countries/vn). Other countries and professional support use general guidance until a suitable local listing is reviewed.
 
+### Groq recovery
+
+Reflection Chat gives provider work a 30-second turn budget and caps an individual call at 10 seconds or the remaining budget. Recoverable transport and output failures get one retry of the failed step. With `REFLECTION_GROQ_FALLBACK_MODEL` set, that retry uses the second model. With it empty, it uses `GROQ_MODEL` again. Both GPT-OSS models use strict structured output and every generated reply still passes local citation validation and AI review. A provider rate limit returns `429` with `Retry-After`. The browser keeps the draft available for retry. The backend rechecks the session, journal consent, and source versions before resending a failed request.
+
+Use the commands below with fictional cases to verify each model before enabling fallback. Each command makes up to 22 provider calls and prints outcome, citation count, and latency. Use `--case urgent_support` to rerun a single case after a cooldown.
+
+```sh
+python scripts/check-reflection-groq.py --model openai/gpt-oss-120b
+python scripts/check-reflection-groq.py --model openai/gpt-oss-20b
+```
+
+The local check with the tightened mixed-language prompt passed **5/5** on `openai/gpt-oss-120b` with a median of **2.77 s**. `openai/gpt-oss-20b` passed **4/5** in the continuous run with a median of **2.14 s**. Groq rate-limited that run’s urgent-support classification. The targeted urgent-support retry passed in **1.08 s**. These times describe the local fictional checks. The fallback setting is opt-in, and a Groq outage or shared quota can affect both models.
+
 Run `python -m pytest tests/test_reflection_chat.py tests/test_reflection_chat_journals.py tests/test_account_data.py tests/test_database.py -q` from `src/backend` with the disposable PostgreSQL `TEST_DATABASE_URL`. Tests use fake provider transports. Before enabling staging, review routing, excerpts, and citations with fictional English, Vietnamese, and mixed-language conversations. Check present danger, past disclosures, mood-label requests, an older high-relevance match, and an opt-out during generation.
 
 ## Phase 1 frontend
