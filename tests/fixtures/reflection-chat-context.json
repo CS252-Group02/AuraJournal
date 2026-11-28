@@ -1,0 +1,39 @@
+{
+  "description": "Scripted fictional API replies for client acceptance only; these cases do not measure retrieval or model quality.",
+  "recent_distractor": { "entry_id": "22222222-2222-4222-8222-222222222222", "journal_date": "2026-11-28" },
+  "cases": [
+    {
+      "name": "English",
+      "locale": "en",
+      "turns": [
+        { "kind": "initial", "message": "Help me reflect on the harbor walk after my meeting.", "reply": "Your older entry describes walking beside the harbor after a meeting. What stood out on that walk?", "sources": [{ "entry_id": "11111111-1111-4111-8111-111111111111", "journal_date": "2024-02-27" }] },
+        { "kind": "follow_up", "message": "What did I notice next?", "reply": "In that entry, you noticed a blue boat and stayed to watch it. What about that moment stays with you?", "sources": [{ "entry_id": "11111111-1111-4111-8111-111111111111", "journal_date": "2024-02-27" }] },
+        { "kind": "new_topic", "message": "Help me reflect on making pottery with my sister.", "reply": "The pottery entry describes time with your sister. What part would you like to think through?", "sources": [{ "entry_id": "33333333-3333-4333-8333-333333333333", "journal_date": "2025-08-12" }] },
+        { "kind": "explicit_dates", "message": "Reflect on my walks from 2024-02-28 to 2024-02-29.", "reply": "The entry from February 29 describes a walk through the park. What did you notice on that walk?", "sources": [{ "entry_id": "44444444-4444-4444-8444-444444444444", "journal_date": "2024-02-29" }] },
+        { "kind": "empty_sources", "message": "Help me reflect on the observatory visit I have not written about.", "reply": "What happened during your observatory visit?", "sources": [] }
+      ]
+    },
+    {
+      "name": "Vietnamese",
+      "locale": "vi",
+      "turns": [
+        { "kind": "initial", "message": "Giúp mình nhìn lại lần đi bộ ở bến cảng sau cuộc họp.", "reply": "Bài viết cũ kể về lần bạn đi bộ ở bến cảng sau cuộc họp. Bạn muốn nhìn lại chi tiết nào?", "sources": [{ "entry_id": "11111111-1111-4111-8111-111111111111", "journal_date": "2024-02-27" }] },
+        { "kind": "follow_up", "message": "Sau đó mình đã chú ý điều gì?", "reply": "Trong bài viết đó, bạn chú ý đến một chiếc thuyền xanh và dừng lại ngắm. Chi tiết nào khiến bạn nhớ đến lúc ấy?", "sources": [{ "entry_id": "11111111-1111-4111-8111-111111111111", "journal_date": "2024-02-27" }] },
+        { "kind": "new_topic", "message": "Giúp mình nhìn lại buổi làm gốm cùng chị gái.", "reply": "Bài viết về làm gốm kể về khoảng thời gian cùng chị gái. Bạn muốn suy nghĩ thêm về khoảnh khắc nào?", "sources": [{ "entry_id": "33333333-3333-4333-8333-333333333333", "journal_date": "2025-08-12" }] },
+        { "kind": "explicit_dates", "message": "Nhìn lại những lần đi bộ từ 2024-02-28 đến 2024-02-29.", "reply": "Bài viết ngày 29 tháng 2 kể về lần đi bộ trong công viên. Bạn đã chú ý điều gì khi đi bộ?", "sources": [{ "entry_id": "44444444-4444-4444-8444-444444444444", "journal_date": "2024-02-29" }] },
+        { "kind": "empty_sources", "message": "Mình muốn nhìn lại chuyến đi đài thiên văn chưa ghi vào nhật ký.", "reply": "Chuyện gì đã diễn ra trong chuyến đi đài thiên văn của bạn?", "sources": [] }
+      ]
+    },
+    {
+      "name": "Mixed language",
+      "locale": "vi",
+      "turns": [
+        { "kind": "initial", "message": "Help me reflect on lần đi bộ ở bến cảng sau meeting.", "reply": "Bài viết cũ kể về lần đi bộ ở bến cảng sau cuộc họp. What stood out to you?", "sources": [{ "entry_id": "11111111-1111-4111-8111-111111111111", "journal_date": "2024-02-27" }] },
+        { "kind": "follow_up", "message": "What did mình notice tiếp theo?", "reply": "Bạn kể rằng mình dừng lại ngắm một chiếc thuyền xanh. What do you remember about that moment?", "sources": [{ "entry_id": "11111111-1111-4111-8111-111111111111", "journal_date": "2024-02-27" }] },
+        { "kind": "new_topic", "message": "Now giúp mình reflect on làm gốm với chị gái.", "reply": "Bài viết về làm gốm kể về thời gian cùng chị gái. What part would you like to explore?", "sources": [{ "entry_id": "33333333-3333-4333-8333-333333333333", "journal_date": "2025-08-12" }] },
+        { "kind": "explicit_dates", "message": "Reflect on đi bộ from 2024-02-28 đến 2024-02-29.", "reply": "Bài viết ngày 29 tháng 2 kể về lần đi bộ trong công viên. What did you notice there?", "sources": [{ "entry_id": "44444444-4444-4444-8444-444444444444", "journal_date": "2024-02-29" }] },
+        { "kind": "empty_sources", "message": "Giúp mình reflect on an observatory visit chưa viết lại.", "reply": "What happened trong chuyến đi đài thiên văn đó?", "sources": [] }
+      ]
+    }
+  ]
+}

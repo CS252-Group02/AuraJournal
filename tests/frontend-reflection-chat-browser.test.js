@@ -5,6 +5,7 @@ import { createServer } from 'vite';
 import { launchBrowser } from './helpers/browser.js';
 
 const fixtures = JSON.parse(readFileSync(new URL('../docs/fixtures/reflection-chat.json', import.meta.url)));
+const contextual = JSON.parse(readFileSync(new URL('./fixtures/reflection-chat-context.json', import.meta.url)));
 function installFixture(f) {
   const original = window.fetch, chats = new Map(); let sequence = 0;
   const control = window.__chat = { calls: [], outcome: 'reflection', fail: 0, hold: false, release: null, conflict: false, supportFail: false };
@@ -20,6 +21,12 @@ function installFixture(f) {
     if (path === '/api/auth/logout') return json({}, 204);
     if (path === '/api/reflection-chats/support') return control.supportFail ? json({}, 503) : json({ ...f.support, country: parsed.searchParams.get('country') });
     if (path === '/api/reflection-chats' && method === 'GET') {
+      if (control.holdHistory) {
+        control.historyAborted = false;
+        options.signal?.addEventListener('abort', () => { control.historyAborted = true; }, { once: true });
+        await new Promise(resolve => { control.releaseHistory = resolve; });
+      }
+      if (control.failHistory) { control.failHistory = false; return json({ detail: 'History unavailable' }, 503); }
       if (parsed.searchParams.has('cursor')) {
         const id = '00000000-0000-4000-8000-000000000999';
         chats.set(id, { chat: { ...f.chat, id, title: 'Archived chat', revision: 2 },
@@ -45,11 +52,16 @@ function installFixture(f) {
       return json(detail.chat);
     }
     if (match[2] && method === 'POST') {
+      // Deliberately scripted: frontend checks must not duplicate backend retrieval.
+      const scripted = control.turnScript?.shift();
+      if (scripted && scripted.message !== body.message) return json({ detail: 'Unexpected fictional request' }, 400);
+      const accessVersion = detail.chat.journal_access_version;
       if (control.hold) await new Promise(resolve => { control.release = resolve; });
       if (control.fail) { const status = control.fail; control.fail = 0; return json({ detail: 'Try again' }, status, { 'Retry-After': '1' }); }
       if (control.conflict) { control.conflict = false; detail.chat.revision++; return json({ detail: 'Conversation changed.' }, 409); }
+      if (detail.chat.journal_access_version !== accessVersion) return json({ detail: 'Journal access changed.' }, 409);
       const existing = detail.turns.find(turn => turn.turn_id === body.turn_id); if (existing) return json(existing);
-      const turn = { ...f.turn_responses[control.outcome], turn_id: body.turn_id, message: body.message, revision: ++detail.chat.revision };
+      const turn = { ...f.turn_responses[control.outcome], ...(scripted ? { reply: scripted.reply, sources: scripted.sources } : {}), turn_id: body.turn_id, message: body.message, revision: ++detail.chat.revision };
       detail.turns.push(turn); detail.chat.title = body.message.slice(0, 60); return json(turn);
     }
     return json({}, 400);
@@ -150,7 +162,7 @@ test('Reflection Chat browser acceptance with fictional local fixtures', { skip:
     assert.equal(await evaluate(`document.querySelector('${toggle}').checked`), true);
     await evaluate("__chat.hold=true; __chat.release=null"); await draft('Pending journal reflection'); await button('Send'); await browser.waitFor('__chat.release');
     await click(toggle); await browser.waitFor(`!document.querySelector('${toggle}').checked && !document.querySelector('${toggle}').disabled`);
-    await evaluate('__chat.fail=409;__chat.hold=false;__chat.release()');
+    await evaluate('__chat.hold=false;__chat.release()');
     assert.equal(await evaluate("document.querySelector('#chat-draft').value"), 'Pending journal reflection');
     // Clear citations in the server fixture to represent an edited/deleted source.
     await evaluate("__chat.clearSources=true");
@@ -160,6 +172,84 @@ test('Reflection Chat browser acceptance with fictional local fixtures', { skip:
     await click(`.chat-history a[href="${firstUrl}"]`);
     await browser.waitFor(`location.pathname === ${JSON.stringify(firstUrl)} && document.querySelector('#chat-draft')?.value === 'Pending journal reflection' && document.querySelectorAll('.chat-sources a').length === 0`);
     await evaluate("__chat.outcome='reflection';__chat.fail=0"); await draft('No matching journal evidence'); await button('Send'); await waitReply('No matching journal evidence');
+    assert.equal(await evaluate("document.querySelectorAll('.chat-sources a').length"), 0);
+  });
+  await context.test('history pagination remains recoverable after a failed turn', async () => {
+    await evaluate('__chat.holdHistory=true;__chat.releaseHistory=null');
+    await button('Load more chats', "document.querySelector('.chat-history')"); await browser.waitFor('__chat.releaseHistory');
+    await evaluate("__chat.fail=503"); await draft('A failed turn during history loading'); await button('Send');
+    await browser.waitFor("document.querySelector('.chat-composer button').textContent==='Retry message'");
+    assert.equal(await evaluate('__chat.historyAborted'), false);
+    assert.equal(await evaluate("document.querySelector('#chat-draft').value"), 'A failed turn during history loading');
+    await evaluate('__chat.holdHistory=false;__chat.releaseHistory()');
+    await browser.waitFor("!document.querySelector('.chat-history').innerText.includes('Loading chats…')");
+    assert.equal(await evaluate("Boolean(document.querySelector('.chat-history a[href$=\"000000000999\"]'))"), true);
+    await evaluate('__chat.holdHistory=true;__chat.releaseHistory=null;__chat.failHistory=true');
+    await button('Retry message'); await browser.waitFor('__chat.releaseHistory');
+    await evaluate('__chat.holdHistory=false;__chat.releaseHistory()');
+    await browser.waitFor("document.querySelector('.chat-history [role=alert]')");
+    // Reach the recovery action with actual Tab navigation, then activate it.
+    await evaluate("document.querySelector('.chat-history button').focus()");
+    for (let step = 0; step < 12; step++) {
+      if (await evaluate("document.activeElement.textContent==='Retry history'")) break;
+      await browser.call('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
+      await browser.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
+    }
+    assert.equal(await evaluate("document.activeElement.textContent"), 'Retry history');
+    await browser.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', text: '\r', unmodifiedText: '\r', windowsVirtualKeyCode: 13 });
+    await browser.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+    await browser.waitFor("!document.querySelector('.chat-history [role=alert]') && !document.querySelector('.chat-history').innerText.includes('Loading chats…')");
+    await button('Load more chats', "document.querySelector('.chat-history')");
+    await browser.waitFor("!document.querySelector('.chat-history').innerText.includes('Loading chats…')");
+  });
+
+  for (const scenario of contextual.cases) {
+    await context.test(`${scenario.name} contextual replies retain message boundaries and dated citations`, async () => {
+      await button('New chat', "document.querySelector('.chat-history')");
+      await browser.waitFor("document.querySelector('#chat-draft')?.value==='' && document.querySelector('.chat-journal-access input')?.checked===false");
+      await click('.chat-journal-access input');
+      await browser.waitFor("document.querySelector('.chat-journal-access input').checked && !document.querySelector('.chat-journal-access input').disabled");
+      await evaluate(`__chat.turnScript=${JSON.stringify(scenario.turns)};__chat.outcome='reflection';__chat.clearSources=false`);
+      await evaluate(`{ const el=document.querySelector('[aria-label="Reply language"]');el.value=${JSON.stringify(scenario.locale)};el.dispatchEvent(new Event('change',{bubbles:true})); }`);
+      const ids = new Set();
+      for (const [revision, turn] of scenario.turns.entries()) {
+        await draft(turn.message); await button('Send'); await waitReply(turn.reply);
+        await browser.waitFor("document.querySelector('#chat-draft')?.value===''");
+        const request = await evaluate("__chat.calls.filter(call=>call.path.endsWith('/turns')).at(-1)");
+        assert.deepEqual(Object.keys(request.body).sort(), ['expected_revision', 'locale', 'message', 'turn_id']);
+        assert.equal(request.body.message, turn.message);
+        assert.equal(request.body.locale, scenario.locale);
+        assert.equal(request.body.expected_revision, revision);
+        assert.match(request.body.turn_id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+        assert.equal(ids.has(request.body.turn_id), false); ids.add(request.body.turn_id);
+        const sources = await evaluate("Array.from(document.querySelector('.chat-messages article:last-of-type').querySelectorAll('.chat-sources a')).map(el=>({href:el.getAttribute('href'),label:el.textContent}))");
+        assert.deepEqual(sources.map(source => source.href), turn.sources.map(source => `/journal/${source.entry_id}`));
+        if (turn.kind === 'follow_up') assert.equal(sources[0].label, 'Feb 27, 2024');
+        if (turn.kind === 'explicit_dates') assert.equal(sources[0].label, 'Feb 29, 2024');
+        assert.equal(sources.some(source => source.href.includes(contextual.recent_distractor.entry_id)), false);
+      }
+      assert.equal(await evaluate('__chat.turnScript.length'), 0);
+    });
+  }
+  await context.test('switching contextual chats isolates consent, drafts, sources and late replies', async () => {
+    const oldUrl = await evaluate('location.pathname');
+    const late = { ...contextual.cases[0].turns[1], message: 'A private contextual follow-up pending in another chat' };
+    await evaluate(`__chat.turnScript=[${JSON.stringify(late)}];__chat.hold=true;__chat.release=null`);
+    await draft(late.message); await button('Send'); await browser.waitFor('__chat.release');
+    await button('New chat', "document.querySelector('.chat-history')");
+    await browser.waitFor(`location.pathname!==${JSON.stringify(oldUrl)} && document.querySelector('.chat-journal-access input')?.checked===false && document.querySelector('#chat-draft')?.value===''`);
+    const newUrl = await evaluate('location.pathname');
+    await evaluate('__chat.hold=false;__chat.release()');
+    await browser.waitFor("document.querySelector('.chat-messages')");
+    assert.equal(await evaluate("document.querySelectorAll('.chat-sources a').length"), 0);
+    assert.equal(await evaluate(`document.querySelector('.chat-messages').innerText.includes(${JSON.stringify(late.reply)})`), false);
+    await draft('Keep this draft only in the new chat');
+    await click(`.chat-history a[href="${oldUrl}"]`);
+    await browser.waitFor("document.querySelector('.chat-journal-access input')?.checked===true && document.querySelector('.chat-sources a')");
+    assert.equal(await evaluate("document.querySelector('#chat-draft').value"), '');
+    await click(`.chat-history a[href="${newUrl}"]`);
+    await browser.waitFor("document.querySelector('#chat-draft')?.value==='Keep this draft only in the new chat'");
+    assert.equal(await evaluate("document.querySelector('.chat-journal-access input').checked"), false);
     assert.equal(await evaluate("document.querySelectorAll('.chat-sources a').length"), 0);
   });
   await context.test('mobile history, keyboard composition, deletion focus, and themes', async () => {
@@ -183,7 +273,9 @@ test('Reflection Chat browser acceptance with fictional local fixtures', { skip:
   });
   await context.test('session expiry discards pending replies and a new account has no inherited draft', async () => {
     await button('Start a new chat'); await browser.waitFor("document.querySelector('#chat-draft')");
-    await evaluate("__chat.hold=true;__chat.release=null;__chat.outcome='reflection'");
+    await click('.chat-journal-access input');
+    await browser.waitFor("document.querySelector('.chat-journal-access input').checked && !document.querySelector('.chat-journal-access input').disabled");
+    await evaluate(`__chat.turnScript=[${JSON.stringify({ ...contextual.cases[0].turns[1], message: 'Private old account message' })}];__chat.hold=true;__chat.release=null;__chat.outcome='reflection'`);
     await draft('Private old account message'); await button('Send'); await browser.waitFor('__chat.release');
     await evaluate("dispatchEvent(new Event('aurajournal:unauthorized'))");
     await browser.waitFor("location.pathname==='/login'");
@@ -197,6 +289,9 @@ test('Reflection Chat browser acceptance with fictional local fixtures', { skip:
     await button('Start a new chat'); await browser.waitFor("document.querySelector('#chat-draft')");
     assert.equal(await evaluate("document.querySelector('#chat-draft').value"), '');
     assert.equal(await evaluate("document.body.innerText.includes('Private old account message')"), false);
+    assert.equal(await evaluate("document.querySelector('.chat-journal-access input').checked"), false);
+    assert.equal(await evaluate("document.querySelectorAll('.chat-sources a').length"), 0);
+    assert.equal(await evaluate(`document.body.innerText.includes(${JSON.stringify(contextual.cases[0].turns[1].reply)})`), false);
   });
   assert.deepEqual(errors, []);
 });
