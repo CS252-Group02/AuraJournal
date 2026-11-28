@@ -101,6 +101,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
         allow_credentials=True,
         allow_methods=["GET", "POST", "PATCH", "DELETE"],
         allow_headers=["Content-Type", "X-AuraJournal-CSRF"],
+        expose_headers=["Retry-After"],
     )
 
     @app.exception_handler(SQLAlchemyError)

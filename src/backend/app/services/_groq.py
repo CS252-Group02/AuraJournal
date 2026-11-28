@@ -34,6 +34,12 @@ class AIServiceUnavailableError(JournalSummaryError):
     """Raised when the AI provider cannot complete a request."""
 
 
+class AIRateLimitError(AIServiceUnavailableError):
+    def __init__(self, retry_after: int):
+        super().__init__('AI service is rate limited.')
+        self.retry_after = retry_after
+
+
 class AIInvalidResponseError(JournalSummaryError):
     """Raised when the AI provider returns an unusable response."""
 
@@ -69,12 +75,15 @@ class _GroqJSONClient:
 
     def generate(
         self, text: str, *, system_prompt: str, response_model: type[ResponseModel],
-        max_completion_tokens: int = 300,
+        max_completion_tokens: int = 300, json_schema: dict | None = None, timeout: float | None = None,
     ) -> ResponseModel:
         if not isinstance(text, str) or not (journal_text := text.strip()):
             raise EmptyJournalError("Journal text cannot be empty.")
 
         client = self._configured_client()
+        response_format = ({"type": "json_schema", "json_schema": json_schema}
+                           if json_schema is not None else {"type": "json_object"})
+        options = {"timeout": timeout} if timeout is not None else {}
         try:
             completion = client.chat.completions.create(
                 model=self._model,
@@ -82,9 +91,10 @@ class _GroqJSONClient:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": journal_text},
                 ],
-                response_format={"type": "json_object"},
+                response_format=response_format,
                 temperature=0,
                 max_completion_tokens=max_completion_tokens,
+                **options,
             )
         except (AuthenticationError, PermissionDeniedError) as error:
             raise AIServiceNotConfiguredError(
@@ -94,7 +104,11 @@ class _GroqJSONClient:
             raise AIInvalidResponseError(
                 "AI service returned an invalid response."
             ) from error
-        except (APIConnectionError, RateLimitError, APIStatusError) as error:
+        except RateLimitError as error:
+            retry = error.response.headers.get('Retry-After', '')
+            seconds = max(1, int(retry)) if retry.isascii() and retry.isdecimal() and len(retry) <= 6 else 30
+            raise AIRateLimitError(seconds) from error
+        except (APIConnectionError, APIStatusError) as error:
             raise AIServiceUnavailableError(
                 "AI service is unavailable."
             ) from error

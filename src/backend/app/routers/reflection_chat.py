@@ -2,6 +2,7 @@ from base64 import urlsafe_b64decode, urlsafe_b64encode
 from binascii import Error as Base64Error
 from collections import defaultdict
 from datetime import datetime
+from time import monotonic
 from typing import Annotated
 from uuid import UUID
 
@@ -20,8 +21,9 @@ from app.schemas.reflection_chat import (
     ReflectionSource, ReflectionSupport, ReflectionTurn, ReflectionTurnRequest,
 )
 from app.services import AIInvalidResponseError, AIServiceNotConfiguredError, AIServiceUnavailableError
+from app.services._groq import AIRateLimitError
 from app.services.journal_retrieval import ReflectionJournalContext, lock_reflection_sources, retrieve_reflection_journals
-from app.services.reflection_chat import is_direct_urgent
+from app.services.reflection_chat import REFLECTION_PROVIDER_SECONDS, is_direct_urgent
 from app.services.reflection_support import BOUNDARY_COPY, support_for
 
 router = APIRouter(prefix='/api/reflection-chats', tags=['reflection chats'])
@@ -221,6 +223,15 @@ def send_turn(chat_id: UUID, payload: ReflectionTurnRequest, request: Request,
     context = ReflectionJournalContext([], {})
     cited_ids = []
     used_history = False
+
+    def recheck_before_provider_retry():
+        guard_session_write(request, session, owner)
+        current = owned_chat(session, owner, chat_id, lock=True)
+        require_access_version(current, access_version)
+        if not lock_reflection_sources(session, owner, context):
+            raise HTTPException(409, 'A journal changed while preparing the reply. Please try again.')
+        session.rollback()
+
     if is_direct_urgent(payload.message):
         outcome = 'urgent_support'
         reply = BOUNDARY_COPY[payload.locale][outcome]
@@ -229,8 +240,9 @@ def send_turn(chat_id: UUID, payload: ReflectionTurnRequest, request: Request,
         consume_ai_budget(request, user, session)
         session.rollback()
         assistant = request.app.state.reflection_chat_assistant
+        deadline = monotonic() + REFLECTION_PROVIDER_SECONDS
         try:
-            decision = assistant.classify(payload, history)
+            decision = assistant.classify(payload, history, deadline=deadline, before_retry=recheck_before_provider_retry)
             outcome = decision.outcome
             if outcome == 'reflection':
                 if use_journals:
@@ -249,10 +261,14 @@ def send_turn(chat_id: UUID, payload: ReflectionTurnRequest, request: Request,
                     context = retrieve_reflection_journals(session, owner, payload.message,
                                                            previous_user_message=previous_message)
                     session.rollback()
-                result = assistant.reflect(payload, history, context.sources)
+                result = assistant.reflect(payload, history, context.sources, deadline=deadline,
+                                           before_retry=recheck_before_provider_retry)
                 reply, cited_ids = result.reply, result.source_ids
             else:
                 reply = BOUNDARY_COPY[payload.locale][outcome]
+        except AIRateLimitError as error:
+            raise HTTPException(429, 'Reflection chat is busy. Please try again later.',
+                                headers={'Retry-After': str(error.retry_after)}) from None
         except (AIInvalidResponseError, ValidationError, AIServiceNotConfiguredError, AIServiceUnavailableError) as error:
             raise ai_service_error(error, invalid_detail='AI service returned an invalid reflection.',
                                    unavailable_detail='Reflection chat is unavailable. Please try again later.') from None

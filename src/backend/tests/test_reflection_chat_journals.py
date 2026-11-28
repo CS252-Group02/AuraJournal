@@ -28,11 +28,11 @@ class JournalAssistant:
         self.routed = []
         self.generated = []
 
-    def classify(self, request, history):
+    def classify(self, request, history, **_):
         self.routed.append(history)
         return RoutingDecision(outcome=self.outcome, search_context=self.search_context)
 
-    def reflect(self, request, history, sources):
+    def reflect(self, request, history, sources, **_):
         self.generated.append((history, sources))
         return GeneratedReflection(reply=REPLY, source_ids=[UUID(sources[0]['id'])] if sources else [])
 
@@ -179,12 +179,12 @@ def test_in_flight_grounding_conflicts_do_not_save(application, change):
         assert release.wait(10)
 
     class BlockingAssistant(JournalAssistant):
-        def classify(self, request, history):
+        def classify(self, request, history, **_):
             if change == 'opt_out_before_retrieval':
                 wait_for_change()
             return RoutingDecision(outcome='reflection', search_context='previous_user_message')
 
-        def reflect(self, request, history, sources):
+        def reflect(self, request, history, sources, **_):
             assert change != 'opt_out_before_retrieval'
             assert sources
             wait_for_change()
@@ -225,7 +225,7 @@ def test_adapter_treats_excerpts_as_data_and_rejects_invented_citations():
     assert 'untrusted data' in calls[1]['messages'][0]['content']
     for invalid in ([str(uuid4())], [identifier, identifier]):
         with pytest.raises(AIInvalidResponseError):
-            run_assistant('Harbor.', [decision, {'reply': REPLY, 'source_ids': invalid}], excerpts=excerpts)
+            run_assistant('Harbor.', [decision] + [{'reply': REPLY, 'source_ids': invalid}] * 2, excerpts=excerpts)
 
 
 def test_upgrade_existing_chat_defaults_to_no_journal_access(isolated_engine):
