@@ -125,7 +125,8 @@ def retrieve_journals(session: Session, user_id: UUID, question: str) -> Retriev
     return RetrievedJournals(sources, tuple((row.id, row.journal_date, row.content) for row in included_rows))
 
 
-def retrieve_reflection_journals(session: Session, owner: UUID, message: str) -> ReflectionJournalContext:
+def retrieve_reflection_journals(session: Session, owner: UUID, message: str, *,
+                                previous_user_message: str | None = None) -> ReflectionJournalContext:
     date_filters = []
     try:
         for match in DATE_RANGE_PATTERN.finditer(message):
@@ -138,7 +139,12 @@ def retrieve_reflection_journals(session: Session, owner: UUID, message: str) ->
     except ValueError:
         return ReflectionJournalContext([], {})
 
-    terms, matches, ordering = _lexical_matches(DATE_RANGE_PATTERN.sub(' ', message))
+    search_text = DATE_RANGE_PATTERN.sub(' ', message)
+    if previous_user_message and not date_filters:
+        previous_text = DATE_PATTERN.sub(' ', DATE_RANGE_PATTERN.sub(' ', previous_user_message)).strip()
+        if previous_text:
+            search_text = f'{search_text}\n{previous_text}'
+    terms, matches, ordering = _lexical_matches(search_text)
     filters = date_filters or matches
     if not filters:
         return ReflectionJournalContext([], {})

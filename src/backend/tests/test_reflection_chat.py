@@ -13,7 +13,7 @@ from app.auth import COOKIE_NAME
 from app.models import ReflectionChat, ReflectionChatMessage
 from app.schemas.reflection_chat import ReflectionTurnRequest
 from app.services import AIInvalidResponseError, AIServiceUnavailableError
-from app.services.reflection_chat import GeneratedReflection, ReflectionChatAssistant, is_direct_urgent
+from app.services.reflection_chat import GeneratedReflection, ReflectionChatAssistant, RoutingDecision, is_direct_urgent
 from conftest import migrate
 from test_account_data import HEADERS, register
 from test_api import application_for
@@ -37,7 +37,7 @@ class FakeAssistant:
         self.histories.append(history)
         if self.error:
             raise self.error
-        return 'reflection'
+        return RoutingDecision(outcome='reflection')
 
     def reflect(self, request, history, sources):
         return GeneratedReflection(reply=REPLY, source_ids=[])
@@ -156,7 +156,7 @@ def test_changes_while_provider_is_running(application, change, expected):
 
     class BlockingAssistant:
         def classify(self, request, history):
-            return 'reflection'
+            return RoutingDecision(outcome='reflection')
 
         def reflect(self, request, history, sources):
             if request.message == QUESTION:
@@ -199,7 +199,7 @@ def run_assistant(text, outputs, locale='en', excerpts=None):
     client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
     assistant = ReflectionChatAssistant(client)
     request = ReflectionTurnRequest.model_validate(payload(text, locale=locale))
-    outcome = assistant.classify(request, [])
+    outcome = assistant.classify(request, []).outcome
     result = assistant.reflect(request, [], excerpts or []) if outcome == 'reflection' else None
     return (outcome, result), calls
 

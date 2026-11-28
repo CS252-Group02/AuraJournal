@@ -14,7 +14,7 @@ from app.config import DEVELOPMENT_USER_ID
 from app.models import JournalEntry, ReflectionChat, ReflectionChatSource
 from app.services import AIInvalidResponseError
 from app.services.journal_retrieval import retrieve_reflection_journals
-from app.services.reflection_chat import GeneratedReflection
+from app.services.reflection_chat import GeneratedReflection, RoutingDecision
 from conftest import migrate
 from test_account_data import HEADERS, register
 from test_api import application_for
@@ -24,12 +24,13 @@ from test_reflection_chat import PATH, REPLY, payload, run_assistant
 class JournalAssistant:
     def __init__(self):
         self.outcome = 'reflection'
+        self.search_context = 'current_message'
         self.routed = []
         self.generated = []
 
     def classify(self, request, history):
         self.routed.append(history)
-        return self.outcome
+        return RoutingDecision(outcome=self.outcome, search_context=self.search_context)
 
     def reflect(self, request, history, sources):
         self.generated.append((history, sources))
@@ -103,6 +104,7 @@ def test_boundary_outcomes_do_not_retrieve_journals(application, monkeypatch):
         path = f'{PATH}/{client.post(PATH, json={}).json()["id"]}'
         assert set_access(client, path, True, 0).status_code == 200
         assistant = application.state.reflection_chat_assistant
+        assistant.search_context = 'previous_user_message'
         for revision, outcome in enumerate(('out_of_scope', 'mood_boundary', 'professional_support', 'urgent_support')):
             assistant.outcome = outcome
             result = client.post(path + '/turns', json=payload(revision=revision)).json()
@@ -180,7 +182,7 @@ def test_in_flight_grounding_conflicts_do_not_save(application, change):
         def classify(self, request, history):
             if change == 'opt_out_before_retrieval':
                 wait_for_change()
-            return 'reflection'
+            return RoutingDecision(outcome='reflection', search_context='previous_user_message')
 
         def reflect(self, request, history, sources):
             assert change != 'opt_out_before_retrieval'
