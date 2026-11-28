@@ -32,7 +32,7 @@ export default function SavedReflection({ periodStart }) {
     active.current?.abort();
     const controller = new AbortController();
     active.current = controller;
-    setState((old) => ({ ...old, loading: true, error: '' }));
+    setState((old) => ({ ...old, loading: true, error: '', errorCode: null }));
     try {
       const result = await generateSavedReflection(periodStart, { signal: controller.signal });
       if (controller.signal.aborted) return;
@@ -43,15 +43,21 @@ export default function SavedReflection({ periodStart }) {
       }
       setState({ data: { ...result, updated_at: new Date().toISOString() }, loading: false, error: '' });
     } catch (error) {
-      if (!controller.signal.aborted) setState((old) => ({ ...old, loading: false,
-        error: error.status === 409 ? 'Your journals changed. Generate again with the latest entries.'
+      if (!controller.signal.aborted) setState((old) => ({ ...old, loading: false, errorCode: error.status,
+        error: error.status === 413 ? 'This week contains too much text for one reflection.'
+          : error.status === 409 ? 'Your journals changed. Generate again with the latest entries.'
           : old.data ? 'Could not save a new reflection. Your previous one is unchanged.'
             : 'Could not generate a reflection. Try again later.' }));
     }
   }
 
-  const { data, loading, error } = state;
+  const { data, loading, error, errorCode } = state;
   const periodEnd = data?.period_end || toDateKey(addDays(parseDateKey(periodStart), 6));
+  const entriesLink = errorCode === 413
+    ? <Link className="aj-btn aj-btn-outline" to={`/history?start=${periodStart}&end=${periodEnd}`}>
+      View this week’s entries
+    </Link>
+    : null;
   const range = `${shortDate(periodStart)} – ${shortDate(periodEnd)}`;
 
   if (!data && !loading) {
@@ -62,7 +68,7 @@ export default function SavedReflection({ periodStart }) {
           <h2 id="saved-reflection-heading">No reflection for {range}</h2>
           {error && <p className="saved-reflection-error" role="alert">{error}</p>}
         </div>
-        <button type="button" className="aj-btn" onClick={generate}>{error ? 'Try again' : 'Generate'}</button>
+        {entriesLink ?? <button type="button" className="aj-btn" onClick={generate}>{error ? 'Try again' : 'Generate'}</button>}
       </section>
     );
   }
@@ -109,7 +115,7 @@ export default function SavedReflection({ periodStart }) {
             ))}
           </div>
         ) : <span />}
-        <button type="button" className="aj-btn aj-btn-outline" disabled={loading} onClick={generate}>Regenerate</button>
+        {entriesLink ?? <button type="button" className="aj-btn aj-btn-outline" disabled={loading} onClick={generate}>Regenerate</button>}
       </div>
     </section>
   );

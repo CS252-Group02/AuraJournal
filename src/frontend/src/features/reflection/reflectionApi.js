@@ -12,7 +12,7 @@ export function generateSavedReflection(start, { signal } = {}) {
 
 export function fetchWeeklyRecap(weekStartKey, timezone, { signal } = {}) {
   return api('/api/reflections/weekly', {
-    method: 'POST', body: { start: weekStartKey, timezone }, signal,
+    method: 'POST', body: { start: weekStartKey, timezone, date_basis: 'journal' }, signal,
   });
 }
 

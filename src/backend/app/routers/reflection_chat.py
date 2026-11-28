@@ -224,9 +224,10 @@ def send_turn(chat_id: UUID, payload: ReflectionTurnRequest, request: Request,
     cited_ids = []
     used_history = False
 
-    def recheck_before_provider_retry():
+    def recheck_provider_context():
         guard_session_write(request, session, owner)
         current = owned_chat(session, owner, chat_id, lock=True)
+        require_revision(current, payload.expected_revision)
         require_access_version(current, access_version)
         if not lock_reflection_sources(session, owner, context):
             raise HTTPException(409, 'A journal changed while preparing the reply. Please try again.')
@@ -242,7 +243,7 @@ def send_turn(chat_id: UUID, payload: ReflectionTurnRequest, request: Request,
         assistant = request.app.state.reflection_chat_assistant
         deadline = monotonic() + REFLECTION_PROVIDER_SECONDS
         try:
-            decision = assistant.classify(payload, history, deadline=deadline, before_retry=recheck_before_provider_retry)
+            decision = assistant.classify(payload, history, deadline=deadline, before_retry=recheck_provider_context)
             outcome = decision.outcome
             if outcome == 'reflection':
                 if use_journals:
@@ -262,7 +263,8 @@ def send_turn(chat_id: UUID, payload: ReflectionTurnRequest, request: Request,
                                                            previous_user_message=previous_message)
                     session.rollback()
                 result = assistant.reflect(payload, history, context.sources, deadline=deadline,
-                                           before_retry=recheck_before_provider_retry)
+                                           before_retry=recheck_provider_context,
+                                           before_review=recheck_provider_context)
                 reply, cited_ids = result.reply, result.source_ids
             else:
                 reply = BOUNDARY_COPY[payload.locale][outcome]

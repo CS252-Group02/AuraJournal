@@ -92,7 +92,8 @@ control flow and a safe generic fallback for unrecognized future error codes.
   extraction allowance. Retries consume provider budgets and may incur charges.
   Jobs with a recorded submission, existing images, and pending/processing jobs
   return 409; uncertain submissions remain recovery-only. Status includes
-  `retryable`, projected from the current job and submission marker.
+  `retryable`, projected from the current job, submission marker, feature flag
+  and configuration of both providers.
 - There are **zero automatic PixelLab retries**, including timeout, transport/5xx,
   rate-limit, malformed output, storage failure and lost commit acknowledgement.
   A submission marker can exist even if a crash prevented the actual request;

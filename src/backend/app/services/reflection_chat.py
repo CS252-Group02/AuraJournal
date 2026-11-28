@@ -182,7 +182,8 @@ class ReflectionChatAssistant:
 
     def reflect(self, request: ReflectionTurnRequest, history: list[dict[str, str]],
                 sources: list[JournalQASource], *, deadline: float | None = None,
-                before_retry: Callable[[], None] | None = None) -> GeneratedReflection:
+                before_retry: Callable[[], None] | None = None,
+                before_review: Callable[[], None] | None = None) -> GeneratedReflection:
         data = {'history': history, 'message': request.message, 'locale': request.locale, 'journal_excerpts': sources}
         deadline = monotonic() + REFLECTION_PROVIDER_SECONDS if deadline is None else deadline
         allowed = {UUID(source['id']) for source in sources}
@@ -199,6 +200,9 @@ class ReflectionChatAssistant:
         result = self._generate(data, prompt=REFLECTION_PROMPT, response_model=GeneratedReflection,
                                 tokens=REFLECTION_COMPLETION_TOKENS, deadline=deadline,
                                 before_retry=before_retry, validate_result=validate_candidate)
+        # Review sends the excerpts again, even when generation succeeded.
+        if before_review is not None:
+            before_review()
         candidate = {**data, 'candidate_reply': result.model_dump(mode='json')}
         review = self._generate(candidate, prompt=REVIEW_PROMPT, response_model=ReflectionReview,
                                 tokens=REFLECTION_COMPLETION_TOKENS, deadline=deadline, before_retry=before_retry)

@@ -7,7 +7,7 @@ requests a new result. The page shows an AI-generated factual recap and up to fi
 key events with links to their source entries. It does not ask reflection
 questions, coach the user, or overwrite journal text.
 
-Empty weeks do not call AI. The seven-day strip links to recorded entries; its
+Empty weeks do not call AI. The seven-day strip links to entries by journal date; its
 colored tiles are navigation, not generated pixel art. Image generation remains
 separate work. Entry-level reflections are separate; see [entry reflections](entry-reflections.md).
 
@@ -17,12 +17,14 @@ separate work. Entry-level reflections are separate; see [entry reflections](ent
 `Origin`, `X-AuraJournal-CSRF: 1`, and JSON content type:
 
 ```json
-{"start":"2026-11-09","timezone":"Asia/Bangkok"}
+{"start":"2026-11-09","timezone":"Asia/Bangkok","date_basis":"journal"}
 ```
 
 `start` must be a Monday; `timezone` must be an IANA timezone. Boundaries are
 midnight Monday through, but not including, the following Monday in that zone.
-Timezone conversion accounts for DST. The server selects only the logged-in
+Dashboard and Weekly recap request `date_basis: "journal"` to select calendar
+days by `journal_date`. The default `recorded` basis uses creation timestamps in
+the supplied zone and accounts for DST. The server selects only the logged-in
 user's entries, sorted by creation time and ID, using their current text rather
 than stored AI summaries. Recording dates are context, not proof that described
 events occurred on those dates.
@@ -59,8 +61,8 @@ entries. These structural checks do not prove that a claim is factually correct.
 
 - `401`: invalid/missing session; `403`: origin/CSRF failure; `415`: not JSON.
 - `422`: invalid date, non-Monday start, invalid timezone, or extra request fields.
-- `413`: serialized source records exceed 60,000 characters. Nothing is silently
-  truncated or omitted, and the provider is not called.
+- `413`: serialized source records exceed 60,000 characters or the provider rejects the request size. The local
+  check runs before the provider call. The app never truncates or omits entries.
 - `409`: selected journals were inserted, edited, or deleted during generation.
   Refresh entries, then generate again. Server revalidation compares IDs, text,
   creation times, and update times; the frontend discards cancelled/older requests.

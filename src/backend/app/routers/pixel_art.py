@@ -15,7 +15,7 @@ from app.schemas.pixel_art import (
 from app.services.journal_images import (
     has_owned_image_reference, recent_journal_images, recent_journal_memories,
 )
-from app.services.pixel_status import generation_status
+from app.services.pixel_status import artwork_retry_available, generation_status, is_retryable_job
 from app.services.pixellab import PixelArtError
 from app.limits import consume
 
@@ -72,11 +72,10 @@ def retry_pixel_art(entry_id: UUID, payload: PixelArtRequest, request: Request,
     job = session.scalar(select(PixelArtJob).where(
         PixelArtJob.entry_id == entry.id, PixelArtJob.source_version == entry.content_version,
     ).with_for_update())
-    if entry.image is not None or job is None or job.status not in {"failed", "unavailable"} or job.submitted_at is not None:
+    if not is_retryable_job(entry.image, job):
         raise HTTPException(409, "This artwork cannot be retried safely.")
     state = request.app.state
-    if (not state.pixel_art_enabled or not getattr(state.moment_extractor, "configured", True)
-            or not getattr(state.pixellab_client, "configured", True)):
+    if not artwork_retry_available(state):
         raise HTTPException(503, "Artwork generation is unavailable. Please try again later.")
     # Apply the same shared budgets to explicit retries. consume commits, so
     # release locks first, then reacquire and recheck eligibility atomically.
@@ -87,14 +86,16 @@ def retry_pixel_art(entry_id: UUID, payload: PixelArtRequest, request: Request,
     job = session.scalar(select(PixelArtJob).where(
         PixelArtJob.entry_id == entry.id, PixelArtJob.source_version == entry.content_version,
     ).with_for_update())
-    if entry.image is not None or job is None or job.id != job_id or job.status not in {"failed", "unavailable"} or job.submitted_at is not None:
+    if not is_retryable_job(entry.image, job) or job.id != job_id:
         raise HTTPException(409, "This artwork cannot be retried safely.")
+    if not artwork_retry_available(state):
+        raise HTTPException(503, "Artwork generation is unavailable. Please try again later.")
     from app.auth import utcnow
     job.status, job.error_code, job.attempts = "pending", None, 0
     job.attempt_token, job.lease_expires_at, job.available_at = None, None, utcnow()
     session.commit()
     return PixelArtStatusResponse(entry_id=entry.id, journal_date=entry.journal_date,
-                                  image=None, generation=generation_status(state.image_storage, None, job))
+                                  image=None, generation=generation_status(state.image_storage, None, job, retry_available=True))
 
 
 @router.get("/pixel-art/recent", response_model=list[DatedPixelArt])
@@ -111,11 +112,13 @@ def recent_pixel_art(as_of: JournalDate, user: User = Depends(current_user),
 def pixel_memories(as_of: JournalDate, request: Request, user: User = Depends(current_user),
                    session: Session = Depends(get_session)):
     groups = {}
+    state = request.app.state
+    retry_available = artwork_retry_available(state)
     for day, entry_id, image, job in recent_journal_memories(session, user.id, as_of, include_jobs=True):
         available = image is not None and has_owned_image_reference(image)
         groups.setdefault(day, []).append(PixelMemoryEntry(
             entry_id=entry_id, image=metadata(image).image if available else None,
-            generation=generation_status(request.app.state.image_storage, image, job),
+            generation=generation_status(state.image_storage, image, job, retry_available=retry_available),
         ))
     return PixelMemoryFeed(as_of=as_of, days=[
         PixelMemoryDay(journal_date=day, entries=entries) for day, entries in groups.items()
@@ -133,7 +136,8 @@ def get_pixel_art_status(entry_id: UUID, request: Request, user: User = Depends(
     return PixelArtStatusResponse(
         entry_id=entry.id, journal_date=entry.journal_date,
         image=metadata(entry.image).image if available else None,
-        generation=generation_status(request.app.state.image_storage, entry.image, job),
+        generation=generation_status(request.app.state.image_storage, entry.image, job,
+                                     retry_available=artwork_retry_available(request.app.state)),
     )
 
 
