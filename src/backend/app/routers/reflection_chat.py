@@ -230,7 +230,8 @@ def send_turn(chat_id: UUID, payload: ReflectionTurnRequest, request: Request,
         session.rollback()
         assistant = request.app.state.reflection_chat_assistant
         try:
-            outcome = assistant.classify(payload, history)
+            decision = assistant.classify(payload, history)
+            outcome = decision.outcome
             if outcome == 'reflection':
                 if use_journals:
                     revalidate_session_owner(request, session, owner)
@@ -243,7 +244,10 @@ def send_turn(chat_id: UUID, payload: ReflectionTurnRequest, request: Request,
                     require_revision(chat, payload.expected_revision)
                     require_access_version(chat, access_version)
                     history, used_history = prompt_history(session, chat, include_grounded=True)
-                    context = retrieve_reflection_journals(session, owner, payload.message)
+                    previous_message = (history[-1]['message']
+                                        if decision.search_context == 'previous_user_message' and history else None)
+                    context = retrieve_reflection_journals(session, owner, payload.message,
+                                                           previous_user_message=previous_message)
                     session.rollback()
                 result = assistant.reflect(payload, history, context.sources)
                 reply, cited_ids = result.reply, result.source_ids
