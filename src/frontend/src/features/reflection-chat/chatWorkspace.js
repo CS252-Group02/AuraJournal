@@ -8,7 +8,7 @@ export function mergeBy(items, added, key) {
 // transports that complete after abort (including the server finishing a turn).
 export function createChatWorkspace(api = chatApi) {
   let state = { chats: [], cursor: null, listStatus: 'idle', listError: '', chatId: null,
-    detail: null, status: 'idle', error: '', draft: '', sending: false };
+    detail: null, status: 'idle', error: '', draft: '', sending: false, retry: null, retryAt: 0, needsRefresh: false };
   const listeners = new Set(), jobs = new Map(), drafts = new Map();
   function update(patch) { state = { ...state, ...patch }; listeners.forEach(fn => fn()); }
   function cancel(slot) { jobs.get(slot)?.abort(); jobs.delete(slot); }
@@ -28,10 +28,11 @@ export function createChatWorkspace(api = chatApi) {
     } catch (error) { if (task.current()) update({ listStatus: 'error', listError: error.message }); }
   }
   async function open(id) {
-    if (state.chatId) drafts.set(state.chatId, state.draft);
-    cancel('detail'); cancel('turn'); cancel('older');
+    if (state.chatId) drafts.set(state.chatId, { draft: state.draft, retry: state.retry || state.pending, retryAt: state.retryAt });
+    cancel('detail'); cancel('turn'); cancel('older'); cancel('create');
     update({ chatId: id || null, detail: null, status: id ? 'loading' : 'idle', error: '',
-      draft: drafts.get(id) || '', sending: false });
+      draft: drafts.get(id)?.draft || '', retry: drafts.get(id)?.retry || null, retryAt: drafts.get(id)?.retryAt || 0,
+      sending: false, pending: null, refreshing: false, loadingOlder: false, creating: false, needsRefresh: false });
     if (!id) return;
     const task = job('detail');
     try {
@@ -58,24 +59,48 @@ export function createChatWorkspace(api = chatApi) {
         turns: mergeBy(data.turns, state.detail.turns, 'turn_id'), next_before_revision: data.next_before_revision }, loadingOlder: false });
     } catch (error) { if (task.current()) update({ loadingOlder: false, error: error.message }); }
   }
+  async function refresh() {
+    if (!state.chatId) return;
+    const task = job('detail');
+    update({ refreshing: true, error: '' });
+    try {
+      const data = await api.read(state.chatId, null, task.signal);
+      if (!task.current()) return;
+      const saved = state.retry && data.turns.some(turn => turn.turn_id === state.retry.turn_id);
+      update({ detail: data, status: 'ready', refreshing: false, needsRefresh: false,
+        ...(saved ? { draft: '', retry: null, error: '' } : {}) });
+      if (saved) drafts.delete(state.chatId);
+    } catch (error) { if (task.current()) update({ refreshing: false, needsRefresh: true, error: error.message }); }
+  }
   async function send(locale) {
     const message = state.draft.trim();
-    if (state.sending || !state.detail || !message || message.length > 2000) return;
+    if (state.sending || state.needsRefresh || state.refreshing || state.accessPending || state.retryAt > Date.now() || !state.detail || !message || message.length > 2000) return;
     const id = state.chatId;
-    const payload = { turn_id: crypto.randomUUID(), expected_revision: state.detail.chat.revision, message, locale };
-    const task = job('turn'); update({ sending: true, pending: payload, error: '' });
+    const payload = state.retry?.message === message && state.retry.locale === locale
+      ? { ...state.retry, expected_revision: state.detail.chat.revision }
+      : { turn_id: crypto.randomUUID(), expected_revision: state.detail.chat.revision, message, locale };
+    const task = job('turn'); update({ sending: true, pending: payload, retry: payload, error: '' });
     try {
       const turn = await api.send(id, payload, task.signal);
       if (!task.current()) return;
       drafts.delete(id);
       update({ detail: { ...state.detail, chat: { ...state.detail.chat, revision: turn.revision },
-        turns: mergeBy(state.detail.turns, [turn], 'turn_id') }, draft: '', sending: false, pending: null });
+        turns: mergeBy(state.detail.turns, [turn], 'turn_id') }, draft: '', sending: false, pending: null, retry: null });
       list();
-    } catch (error) { if (task.current()) update({ sending: false, pending: null, error: error.message }); }
+    } catch (error) {
+      if (!task.current()) return;
+      update({ sending: false, pending: null, error: error.message,
+        retryAt: error.status === 429 ? Date.now() + (error.retryAfter ?? 30) * 1000 : 0 });
+      if (error.status === 409) {
+        update({ needsRefresh: true });
+        await refresh();
+        if (task.current() && state.retry && !state.needsRefresh) update({ error: 'The conversation changed. Review the latest messages, then send again.' });
+      }
+    }
   }
   return { subscribe: fn => { listeners.add(fn); return () => listeners.delete(fn); }, getSnapshot: () => state,
-    list, open, create, older, send, cancelAll,
-    setDraft: draft => update({ draft }),
-    clear() { cancelAll(); drafts.clear(); update({ chats: [], detail: null, draft: '', chatId: null }); },
+    list, open, create, older, send, refresh, cancelAll,
+    setDraft: draft => update({ draft, retry: draft.trim() === state.retry?.message ? state.retry : null }),
+    clear() { cancelAll(); drafts.clear(); update({ chats: [], detail: null, draft: '', chatId: null, sending: false, pending: null, retry: null, retryAt: 0, creating: false, loadingOlder: false, refreshing: false, needsRefresh: false, error: '' }); },
   };
 }

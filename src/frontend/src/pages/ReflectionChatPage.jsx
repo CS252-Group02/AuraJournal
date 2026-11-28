@@ -45,7 +45,7 @@ function ChatWorkspace() {
       <section className="chat-conversation" aria-label="Reflection conversation" aria-busy={state.status === 'loading'}>
         {!chatId && <div className="chat-empty"><h2>What would you like to reflect on?</h2><p>Start a private conversation about something you experienced. Chats are saved until you delete them or your account.</p><button className="aj-btn" onClick={newChat} disabled={state.creating}>Start a new chat</button></div>}
         {state.status === 'loading' && <p role="status">Loading conversation…</p>}
-        {state.error && <div role="alert"><p>{state.error}</p><button onClick={() => workspace.open(chatId)}>Reload conversation</button> <Link to="/reflection-chat">Back to chats</Link></div>}
+        {state.error && <div role="alert"><p>{state.error}</p><button onClick={() => workspace.refresh()}>Reload conversation</button> <Link to="/reflection-chat">Back to chats</Link></div>}
         {state.detail && <><h2>{state.detail.chat.title}</h2>
           <ChatMessages key={chatId} state={state} onOlder={() => workspace.older()} />
           <ChatComposer state={state} locale={locale} onLocale={setLocale} onDraft={workspace.setDraft} onSend={workspace.send} />

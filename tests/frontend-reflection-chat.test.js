@@ -61,3 +61,35 @@ test('sending prevents duplicates and clears draft only after a saved response',
   response.resolve({ ...fixtures.turn_responses.reflection, turn_id: calls[0].turn_id }); await sending;
   assert.equal(workspace.getSnapshot().draft, ''); assert.equal(workspace.getSnapshot().detail.turns.length, 1);
 });
+
+test('retry preserves IDs, edits create new IDs, conflicts refresh before explicit resend', async () => {
+  const calls = []; let failure = 503, revision = 0;
+  const workspace = await loadWorkspace({ read: async () => ({ ...fixtures.empty_detail, chat: { ...fixtures.chat, revision } }),
+    send: async (id, body) => { calls.push(body); throw Object.assign(new Error('Try again'), { status: failure }); } });
+  await workspace.open('a'); workspace.setDraft('An experience.'); await workspace.send('en'); await workspace.send('en');
+  assert.equal(calls[0].turn_id, calls[1].turn_id);
+  workspace.setDraft('A different experience.'); await workspace.send('en'); assert.notEqual(calls[1].turn_id, calls[2].turn_id);
+  failure = 409; revision = 2; await workspace.send('en');
+  assert.equal(workspace.getSnapshot().detail.chat.revision, 2); assert.equal(calls.length, 4);
+  await workspace.send('en'); assert.equal(calls[4].expected_revision, 2);
+});
+
+test('account clear and switching cancel turns even if transport ignores abort', async () => {
+  const response = deferred(); let signal;
+  const workspace = await loadWorkspace({ read: async () => fixtures.empty_detail,
+    send: (id, payload, value) => { signal = value; return response.promise; } });
+  await workspace.open('a'); workspace.setDraft('private'); const pending = workspace.send('en');
+  workspace.clear(); response.resolve(fixtures.turn_responses.reflection); await pending;
+  assert.ok(signal.aborted); assert.equal(workspace.getSnapshot().detail, null); assert.equal(workspace.getSnapshot().draft, '');
+});
+
+test('429 cooldown blocks sends and conflict reload failure blocks stale revisions', async () => {
+  let count = 0, readFails = false, code = 429;
+  const workspace = await loadWorkspace({ read: async () => { if (readFails) throw new Error('Offline'); return fixtures.empty_detail; },
+    send: async () => { count++; throw Object.assign(new Error('Wait'), { status: code, retryAfter: 10 }); } });
+  await workspace.open('a'); workspace.setDraft('hello'); await workspace.send('en'); await workspace.send('en');
+  assert.equal(count, 1); assert.ok(workspace.getSnapshot().retryAt > Date.now());
+  await workspace.open('b'); workspace.setDraft('hello'); code = 409; readFails = true;
+  await workspace.send('en'); await workspace.send('en');
+  assert.equal(count, 2); assert.equal(workspace.getSnapshot().needsRefresh, true);
+});
