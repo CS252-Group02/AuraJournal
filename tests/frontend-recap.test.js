@@ -6,6 +6,7 @@ import { build } from 'esbuild'; // Installed by the existing Vite toolchain.
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
+import { entriesByDay, parseDateKey } from '../src/frontend/src/features/reflection/week.js';
 
 async function loadApi(api = () => { throw new Error('Unexpected network request'); }) {
   globalThis.__recapTestApi = api;
@@ -36,18 +37,30 @@ test('saved reflections load privately and generate only through an explicit POS
   ]);
 });
 
-test('weekly recap uses explicit POST with timezone, cookies handled by shared API', async () => {
+test('weekly recap explicitly requests journal dates and sends the timezone', async () => {
   let called = 0;
   const signal = new AbortController().signal;
   const { fetchWeeklyRecap } = await loadApi((path, options) => {
     called += 1;
     assert.equal(path, '/api/reflections/weekly');
-    assert.deepEqual(options, { method: 'POST', body: { start: '2026-11-09', timezone: 'Asia/Bangkok' }, signal });
+    assert.deepEqual(options, { method: 'POST', body: { start: '2026-11-09', timezone: 'Asia/Bangkok', date_basis: 'journal' }, signal });
     return Promise.resolve({ summary: 'A factual recap.' });
   });
   assert.equal(called, 0);
   await fetchWeeklyRecap('2026-11-09', 'Asia/Bangkok', { signal });
   assert.equal(called, 1);
+});
+
+test('a backdated journal belongs to its journal week and follows a date edit', () => {
+  const entry = { id: 'backdated', journal_date: '2026-11-18', created_at: '2026-11-25T12:00:00Z' };
+  const earlier = parseDateKey('2026-11-16');
+  const later = parseDateKey('2026-11-23');
+  assert.deepEqual(entriesByDay([entry], earlier).get('2026-11-18'), [entry]);
+  assert.equal([...entriesByDay([entry], later).values()].flat().length, 0);
+
+  const moved = { ...entry, journal_date: '2026-11-25' };
+  assert.equal([...entriesByDay([moved], earlier).values()].flat().length, 0);
+  assert.deepEqual(entriesByDay([moved], later).get('2026-11-25'), [moved]);
 });
 
 test('no automatic generation and old week responses are discarded after retry', async () => {

@@ -134,7 +134,7 @@ export default function ReflectionPage() {
   // Include source revisions/content, not just entry count: an edit must invalidate
   // the recap even if the number of entries in the week stays unchanged.
   const sourceKey = JSON.stringify([...byDay.values()].flat().map(
-    (entry) => [entry.id, entry.created_at, entry.updated_at, entry.content],
+    (entry) => [entry.id, entry.journal_date, entry.created_at, entry.updated_at, entry.content],
   ));
   const scope = `${user.id}:${weekKey}:${timezone}:${sourceKey}`;
   useEffect(() => {

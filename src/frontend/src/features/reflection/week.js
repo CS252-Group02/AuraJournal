@@ -1,4 +1,5 @@
 import { addDays, toDateKey } from '../../lib/localDate.js';
+import { journalDayKey } from '../calendar/calendarModel.js';
 export { addDays, parseDateKey, toDateKey } from '../../lib/localDate.js';
 
 export function startOfWeek(date) {
@@ -22,7 +23,7 @@ export function weekLabel(start) {
 export function entriesByDay(entries, start) {
   const days = new Map(weekDays(start).map((day) => [toDateKey(day), []]));
   for (const entry of entries) {
-    const key = toDateKey(new Date(entry.created_at));
+    const key = journalDayKey(entry);
     days.get(key)?.push(entry);
   }
   return days;

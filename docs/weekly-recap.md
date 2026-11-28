@@ -7,7 +7,7 @@ requests a new result. The page shows an AI-generated factual recap and up to fi
 key events with links to their source entries. It does not ask reflection
 questions, coach the user, or overwrite journal text.
 
-Empty weeks do not call AI. The seven-day strip links to recorded entries; its
+Empty weeks do not call AI. The seven-day strip links to entries by journal date; its
 colored tiles are navigation, not generated pixel art. Image generation remains
 separate work. Entry-level reflections are separate; see [entry reflections](entry-reflections.md).
 
@@ -17,12 +17,14 @@ separate work. Entry-level reflections are separate; see [entry reflections](ent
 `Origin`, `X-AuraJournal-CSRF: 1`, and JSON content type:
 
 ```json
-{"start":"2026-11-09","timezone":"Asia/Bangkok"}
+{"start":"2026-11-09","timezone":"Asia/Bangkok","date_basis":"journal"}
 ```
 
 `start` must be a Monday; `timezone` must be an IANA timezone. Boundaries are
 midnight Monday through, but not including, the following Monday in that zone.
-Timezone conversion accounts for DST. The server selects only the logged-in
+Dashboard and Weekly recap request `date_basis: "journal"` to select calendar
+days by `journal_date`. The default `recorded` basis uses creation timestamps in
+the supplied zone and accounts for DST. The server selects only the logged-in
 user's entries, sorted by creation time and ID, using their current text rather
 than stored AI summaries. Recording dates are context, not proof that described
 events occurred on those dates.
