@@ -72,8 +72,8 @@ test('startup applies saved appearance before React and uses the same fallback r
   assert.ok(html.indexOf('<script>') < html.indexOf('/src/main.jsx'));
 });
 
-test('Settings reserves /settings and stays unavailable until the route ships', () => {
+test('Settings links to the shipped /settings route', () => {
   assert.deepEqual(ACCOUNT_NAVIGATION.find(item => item.id === 'settings'), {
-    id: 'settings', label: 'Settings', to: '/settings', available: false,
+    id: 'settings', label: 'Settings', to: '/settings', available: true,
   });
 });

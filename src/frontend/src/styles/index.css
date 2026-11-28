@@ -9,6 +9,7 @@
 @import "./app-shell.css";
 @import "../features/pixelMemories/pixelMemories.css";
 @import "./reflection-chat.css";
+@import "./settings.css";
 @import "./theme.css";
 @import "./account-menu.css";
 @import "./motion.css";

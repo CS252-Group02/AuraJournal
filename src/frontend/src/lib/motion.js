@@ -5,6 +5,7 @@ export const EASE_SPRING = 'cubic-bezier(0.34, 1.56, 0.64, 1)';
 export const EASE_EXIT = 'cubic-bezier(0.55, 0, 1, 0.45)';
 
 export function prefersReducedMotion() {
+  if (globalThis.document?.documentElement?.dataset?.motion === 'reduced') return true;
   return Boolean(globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
 }
 

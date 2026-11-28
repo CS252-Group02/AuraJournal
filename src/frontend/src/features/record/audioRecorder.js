@@ -28,6 +28,7 @@ export function createAudioRecorder({
   secureContext = globalThis.isSecureContext !== false,
   schedule = globalThis.setTimeout,
   cancel = globalThis.clearTimeout,
+  audioConstraints = () => true,
 } = {}) {
   let snapshot = READY;
   let generation = 0;
@@ -100,7 +101,7 @@ export function createAudioRecorder({
       const candidates = allowedMimeTypes ? MIME_TYPES.filter(type => allowedMimeTypes.includes(type)) : MIME_TYPES;
       const mimeType = candidates.find((type) => MediaRecorder.isTypeSupported?.(type)) || '';
       if (allowedMimeTypes && !mimeType) throw new DOMException('No agreed recording format.', 'NotSupportedError');
-      stream = await mediaDevices.getUserMedia({ audio: true });
+      stream = await mediaDevices.getUserMedia({ audio: audioConstraints() });
       if (request !== generation) { stopTracks(stream); return; }
       const tracks = stream.getAudioTracks();
       if (!tracks.length || tracks.some((track) => track.readyState === 'ended')) {

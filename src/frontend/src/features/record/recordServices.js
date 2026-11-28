@@ -1,6 +1,7 @@
 import { api, API_URL, getAuthEpoch, subscribeAuthChanges } from '../../lib/api.js';
 import { createTranscriptionSession } from './transcriptionSession.js';
 import { createAudioUpload } from './audioUpload.js';
+import { readPreferences } from '../settings/preferences.js';
 
 // Set paths only after the backend deploys and verifies the proposed protocol.
 // Missing contracts are intentionally unavailable; no mock is used by the app.
@@ -17,6 +18,7 @@ export const recordServices = {
   uploadAvailable: true,
   uploadAudio: createAudioUpload({ apiUrl: API_URL, getAuthEpoch, subscribeAuthChanges }),
   proofreadAvailable: Boolean(proofreadPath),
+  proofreadEnabled: () => readPreferences().proofread,
   idempotentSaveAvailable,
   getAuthEpoch,
   subscribeAuthChanges,

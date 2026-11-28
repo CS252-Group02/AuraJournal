@@ -11,10 +11,14 @@ import ReflectionChatPage from './pages/ReflectionChatPage.jsx';
 import ReflectionPage from './pages/ReflectionPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import PixelMemoriesPage from './pages/PixelMemoriesPage.jsx';
+import SettingsPage from './pages/SettingsPage.jsx';
 import AppShell from './components/layout/AppShell.jsx';
 import './styles/index.css';
 import { AuthProvider, GuestPage, PrivatePage } from './auth/Auth.jsx';
 import { ThemeProvider } from './theme/ThemeProvider.jsx';
+import { applyMotion } from './features/settings/preferences.js';
+
+applyMotion();
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
@@ -32,6 +36,7 @@ createRoot(document.getElementById('root')).render(
               <Route path="/reflection-chat/:chatId" element={<ReflectionChatPage />} />
               <Route path="/reflection" element={<ReflectionPage />} />
               <Route path="/record" element={<RecordPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
             </Route>
             <Route path="/login" element={<GuestPage><LoginPage /></GuestPage>} />
             <Route path="/register" element={<GuestPage><RegisterPage /></GuestPage>} />

@@ -151,6 +151,10 @@ export function createRecordFlow({ recorder, services, schedule = setTimeout, ca
       enterReview({ warning: text.trim() ? 'The transcript exceeds 5000 characters. Shorten it before saving; nothing has been removed.' : 'No speech was confirmed. Listen to your recording and enter text, or reset.' });
       return;
     }
+    if (services.proofreadEnabled?.() === false) {
+      enterReview({});
+      return;
+    }
     if (!services.proofreadAvailable) {
       enterReview({ warning: 'AI proofreading is unavailable. Review and edit the original transcript before saving.' });
       return;
