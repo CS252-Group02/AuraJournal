@@ -53,6 +53,14 @@ function ChatWorkspace() {
         {state.error && <div role="alert"><p>{state.error}</p><button onClick={() => workspace.refresh()}>Reload conversation</button> <Link to="/reflection-chat">Back to chats</Link></div>}
         {state.chatId === chatId && state.detail && <><div className="chat-conversation-header"><h2>{state.detail.chat.title}</h2>
           <button ref={deleteButton} className="aj-btn aj-btn-danger" onClick={() => deleteDialog.current?.showModal()}>Delete chat</button></div>
+          <section className="chat-journal-access" aria-label="Journal access">
+            <label><input type="checkbox" checked={state.detail.chat.use_journals}
+              disabled={state.accessPending || state.refreshing || state.deleting || state.needsRefresh}
+              onChange={event => workspace.setAccess(event.target.checked)} aria-describedby="chat-journals-help" /> Use my journals</label>
+            <p id="chat-journals-help">When enabled, AuraJournal searches your saved journals and sends selected excerpts to its AI provider, Groq. Disabling access stops future retrieval; saved messages remain in this chat. Excerpts already sent cannot be recalled.</p>
+            {state.accessPending && <p role="status">Updating journal access…</p>}
+            {state.notice && <p role="status">{state.notice}</p>}
+          </section>
           <ChatMessages key={chatId} state={state} onOlder={() => workspace.older()} renderSupport={turn => turn.support_kind && <SupportOptions key={`${turn.turn_id}:${locale}`} kind={turn.support_kind} locale={locale} />} />
           <ChatComposer state={state} locale={locale} onLocale={setLocale} onDraft={workspace.setDraft} onSend={workspace.send} />
         </>}

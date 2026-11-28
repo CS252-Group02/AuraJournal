@@ -36,3 +36,7 @@
 .chat-support input { width: 100px; }
 .chat-support a { color: var(--aj-green-dark); }
 .chat-page .aj-dialog { max-width: min(480px, 90vw); }
+.chat-journal-access { border: 1px solid var(--aj-line); background: var(--aj-bg); border-radius: 8px; padding: 14px; margin: 12px 0 20px; }
+.chat-journal-access label { display: flex; gap: 10px; align-items: center; font-weight: 600; }
+.chat-journal-access input { width: 18px; height: 18px; accent-color: var(--aj-green-dark); }
+.chat-journal-access p { color: var(--aj-muted); font-size: .85rem; line-height: 1.6; margin: 8px 0 0; }

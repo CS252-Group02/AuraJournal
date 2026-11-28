@@ -121,3 +121,34 @@ test('older pages remain chronological, deduplicate boundaries and preserve curr
   assert.deepEqual(workspace.getSnapshot().detail.turns.map(turn => turn.revision), [1, 2]);
   assert.equal(workspace.getSnapshot().detail.chat.revision, 2);
 });
+
+test('journal access adapter sends explicit consent and optimistic version', async () => {
+  const calls = [], signal = new AbortController().signal;
+  const api = createChatApi(async (...args) => { calls.push(args); return fixtures.journal_access_response; });
+  await api.access('id', fixtures.journal_access_request, signal);
+  assert.deepEqual(calls[0], ['/api/reflection-chats/id', { method: 'PATCH', body: fixtures.journal_access_request, signal }]);
+});
+
+test('opt-out during generation cancels stale replies, refreshes consent and preserves draft', async () => {
+  const response = deferred(), patch = deferred(); let enabled = true, version = 1, signal;
+  const workspace = await loadWorkspace({ read: async () => ({ ...fixtures.empty_detail, chat: { ...fixtures.chat, use_journals: enabled, journal_access_version: version } }),
+    access: async (id, body) => { assert.deepEqual(body, { use_journals: false, expected_journal_access_version: 1 });
+      await patch.promise; enabled = false; version++; return { ...fixtures.chat, use_journals: enabled, journal_access_version: version }; },
+    send: (id, body, value) => { signal = value; return response.promise; } });
+  await workspace.open('a'); workspace.setDraft('Reflect on my journals'); const sending = workspace.send('en');
+  const changing = workspace.setAccess(false); assert.ok(signal.aborted); assert.ok(workspace.getSnapshot().accessPending);
+  await workspace.send('en'); response.resolve(fixtures.turn_responses.grounded_reflection); await sending;
+  assert.equal(workspace.getSnapshot().detail.turns.length, 0);
+  patch.resolve(); await changing;
+  assert.equal(workspace.getSnapshot().detail.chat.use_journals, false); assert.equal(workspace.getSnapshot().draft, 'Reflect on my journals');
+});
+
+test('stale consent reloads the server setting without silently applying it again', async () => {
+  let version = 0, patches = 0;
+  const workspace = await loadWorkspace({ read: async () => ({ ...fixtures.empty_detail, chat: { ...fixtures.chat, journal_access_version: version } }),
+    access: async () => { version++; patches++; throw Object.assign(new Error('Stale'), { status: 409 }); } });
+  await workspace.open('a'); await workspace.setAccess(true);
+  assert.equal(patches, 1); assert.equal(workspace.getSnapshot().detail.chat.use_journals, false);
+  assert.equal(workspace.getSnapshot().detail.chat.journal_access_version, 1);
+  assert.match(workspace.getSnapshot().error, /another tab/);
+});

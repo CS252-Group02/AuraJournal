@@ -29,10 +29,10 @@ export function createChatWorkspace(api = chatApi) {
   }
   async function open(id) {
     if (state.chatId) drafts.set(state.chatId, { draft: state.draft, retry: state.retry || state.pending, retryAt: state.retryAt });
-    cancel('detail'); cancel('turn'); cancel('older'); cancel('create'); cancel('delete');
+    cancel('detail'); cancel('turn'); cancel('older'); cancel('create'); cancel('delete'); cancel('access');
     update({ chatId: id || null, detail: null, status: id ? 'loading' : 'idle', error: '',
       draft: drafts.get(id)?.draft || '', retry: drafts.get(id)?.retry || null, retryAt: drafts.get(id)?.retryAt || 0,
-      sending: false, pending: null, refreshing: false, loadingOlder: false, creating: false, deleting: false, deleteError: '', needsRefresh: false });
+      sending: false, pending: null, refreshing: false, loadingOlder: false, creating: false, deleting: false, deleteError: '', accessPending: false, notice: '', needsRefresh: false });
     if (!id) return;
     const task = job('detail');
     try {
@@ -102,6 +102,31 @@ export function createChatWorkspace(api = chatApi) {
       }
     }
   }
+  async function setAccess(useJournals) {
+    if (!state.detail || state.accessPending || state.refreshing || state.deleting || state.needsRefresh) return;
+    const id = state.chatId, task = job('access');
+    cancel('turn'); cancel('detail'); cancel('older');
+    update({ accessPending: true, sending: false, pending: null, loadingOlder: false, error: '', notice: '' });
+    try {
+      const chat = await api.access(id, { use_journals: useJournals,
+        expected_journal_access_version: state.detail.chat.journal_access_version }, task.signal);
+      if (!task.current()) return;
+      update({ detail: { ...state.detail, chat } });
+      await refresh();
+      if (task.current()) update({ accessPending: false,
+        notice: useJournals ? 'Journal access enabled for this conversation.' : 'Journal access disabled. Saved messages remain visible.' });
+    } catch (error) {
+      if (!task.current()) return;
+      // A lost PATCH response may still have changed consent on the server.
+      // Reload instead of assuming the old control value is authoritative.
+      update({ needsRefresh: true });
+      await refresh();
+      if (task.current()) update({ accessPending: false,
+        error: state.needsRefresh ? state.error : error.status === 409
+          ? 'Journal access changed in another tab. Review the current setting before trying again.'
+          : 'Could not confirm your change. The current setting has been reloaded. Please try again.' });
+    }
+  }
   async function remove() {
     if (!state.chatId || state.deleting) return false;
     const id = state.chatId, task = job('delete');
@@ -119,8 +144,8 @@ export function createChatWorkspace(api = chatApi) {
     }
   }
   return { subscribe: fn => { listeners.add(fn); return () => listeners.delete(fn); }, getSnapshot: () => state,
-    list, open, create, older, send, refresh, remove, cancelAll,
+    list, open, create, older, send, refresh, remove, setAccess, cancelAll,
     setDraft: draft => update({ draft, retry: draft.trim() === state.retry?.message ? state.retry : null }),
-    clear() { cancelAll(); drafts.clear(); update({ chats: [], detail: null, draft: '', chatId: null, sending: false, pending: null, retry: null, retryAt: 0, creating: false, loadingOlder: false, refreshing: false, needsRefresh: false, error: '' }); },
+    clear() { cancelAll(); drafts.clear(); update({ chats: [], detail: null, draft: '', chatId: null, sending: false, pending: null, retry: null, retryAt: 0, creating: false, loadingOlder: false, refreshing: false, accessPending: false, notice: '', needsRefresh: false, error: '' }); },
   };
 }
