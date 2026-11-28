@@ -5,6 +5,8 @@ from uuid import UUID, uuid4
 import json
 
 from fastapi.testclient import TestClient
+from groq import RateLimitError
+import httpx
 import pytest
 from sqlalchemy import func, inspect, select
 from sqlalchemy.orm import Session
@@ -33,13 +35,13 @@ class FakeAssistant:
         self.histories = []
         self.error = None
 
-    def classify(self, request, history):
+    def classify(self, request, history, **_):
         self.histories.append(history)
         if self.error:
             raise self.error
         return RoutingDecision(outcome='reflection')
 
-    def reflect(self, request, history, sources):
+    def reflect(self, request, history, sources, **_):
         return GeneratedReflection(reply=REPLY, source_ids=[])
 
 
@@ -150,15 +152,34 @@ def test_errors_rate_limit_and_support_without_provider(application):
         assert 'emergency services' in unknown['urgent_support']['guidance']
 
 
+def test_groq_rate_limit_returns_retry_after_without_saving(application):
+    def create(**_):
+        upstream = httpx.Response(429, headers={'Retry-After': '12'},
+                                  request=httpx.Request('POST', 'https://api.groq.com/openai/v1/chat/completions'))
+        raise RateLimitError('private provider detail', response=upstream, body=None)
+
+    transport = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    application.state.reflection_chat_assistant = ReflectionChatAssistant(transport)
+    with TestClient(application, headers=HEADERS) as client:
+        register(client, 'alice')
+        path = f'{PATH}/{client.post(PATH, json={}).json()["id"]}'
+        response = client.post(path + '/turns', json=payload())
+        assert response.status_code == 429
+        assert response.headers['Retry-After'] == '12'
+        assert response.headers['Access-Control-Expose-Headers'].lower() == 'retry-after'
+        assert 'private provider detail' not in response.text
+        assert client.get(path).json()['turns'] == []
+
+
 @pytest.mark.parametrize(('change', 'expected'), [('turn', 409), ('logout', 401), ('chat', 404), ('account', 401)])
 def test_changes_while_provider_is_running(application, change, expected):
     entered, release = Event(), Event()
 
     class BlockingAssistant:
-        def classify(self, request, history):
+        def classify(self, request, history, **_):
             return RoutingDecision(outcome='reflection')
 
-        def reflect(self, request, history, sources):
+        def reflect(self, request, history, sources, **_):
             if request.message == QUESTION:
                 entered.set()
                 assert release.wait(10)
@@ -223,13 +244,14 @@ def test_generator_requires_a_review_and_rejects_bad_routes():
     result, calls = run_assistant(text, [{'outcome': 'reflection'}, {'reply': 'Bạn chú ý điều gì trong buổi học đó?', 'source_ids': []},
                                          {'approved': True}], 'vi')
     assert result[0] == 'reflection' and len(calls) == 3
+    assert all(call['max_completion_tokens'] >= 1024 for call in calls[1:])
     assert json.loads(calls[0]['messages'][1]['content'])['message'] == text
     with pytest.raises(AIInvalidResponseError):
-        run_assistant(QUESTION, [{'outcome': 'override'}])
+        run_assistant(QUESTION, [{'outcome': 'override'}] * 2)
     with pytest.raises(AIInvalidResponseError):
         run_assistant(QUESTION, [{'outcome': 'reflection'}, {'reply': 'You are depressed.', 'source_ids': []}, {'approved': False}])
     with pytest.raises(AIInvalidResponseError):
-        run_assistant(QUESTION, [{'outcome': 'reflection'}, {'reply': 'See https://example.com.', 'source_ids': []}])
+        run_assistant(QUESTION, [{'outcome': 'reflection'}] + [{'reply': 'See https://example.com.', 'source_ids': []}] * 2)
 
 
 def test_migrate_from_previous_head(isolated_engine):

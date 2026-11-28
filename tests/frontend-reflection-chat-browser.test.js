@@ -8,6 +8,7 @@ const fixtures = JSON.parse(readFileSync(new URL('../docs/fixtures/reflection-ch
 function installFixture(f) {
   const original = window.fetch, chats = new Map(); let sequence = 0;
   const control = window.__chat = { calls: [], outcome: 'reflection', fail: 0, hold: false, release: null, conflict: false, supportFail: false };
+  control.savedFor = message => [...chats.values()].flatMap(chat => chat.turns).filter(turn => turn.message === message).length;
   const json = (data, status = 200, headers = {}) => new Response(status === 204 ? null : JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json', ...headers } });
   window.fetch = async (url, options = {}) => {
     const parsed = new URL(url, location.origin), path = parsed.pathname, method = options.method || 'GET', body = options.body ? JSON.parse(options.body) : null;
@@ -69,6 +70,7 @@ test('Reflection Chat browser acceptance with fictional local fixtures', { skip:
     await browser.waitFor(expression); await evaluate(`${expression}.click()`);
   }
   async function draft(value) {
+    await browser.waitFor("document.querySelector('textarea#chat-draft:not(:disabled)')");
     await evaluate(`{ const el = document.querySelector('#chat-draft'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(el, ${JSON.stringify(value)}); el.dispatchEvent(new Event('input',{bubbles:true})); }`);
   }
   async function waitReply(text) { await browser.waitFor(`document.querySelector('.chat-messages').innerText.includes(${JSON.stringify(text)})`); }
@@ -116,7 +118,13 @@ test('Reflection Chat browser acceptance with fictional local fixtures', { skip:
     await evaluate('__chat.fail=429'); await draft('Cooldown'); await button('Send');
     await browser.waitFor("document.querySelector('.chat-composer').innerText.includes('Try again in')");
     assert.equal(await evaluate("document.querySelector('.chat-composer button').disabled"), true);
+    assert.equal(await evaluate("document.querySelector('#chat-draft').value"), 'Cooldown');
+    assert.equal(await evaluate("__chat.savedFor('Cooldown')"), 0);
     await browser.waitFor("!document.querySelector('.chat-composer button').disabled"); await button('Retry message'); await waitReply('Cooldown');
+    assert.equal(await evaluate("__chat.savedFor('Cooldown')"), 1);
+    const cooldownCalls = await evaluate("__chat.calls.filter(call=>call.body?.message==='Cooldown').map(call=>call.body.turn_id)");
+    assert.equal(cooldownCalls.length, 2);
+    assert.equal(cooldownCalls[0], cooldownCalls[1]);
   });
   await context.test('switching chats discards pending results and preserves in-memory drafts', async () => {
     await evaluate('__chat.hold=true'); await draft('Pending in first chat'); await button('Send');
@@ -150,8 +158,7 @@ test('Reflection Chat browser acceptance with fictional local fixtures', { skip:
     await browser.waitFor(`location.pathname !== ${JSON.stringify(firstUrl)} && document.querySelector('.chat-journal-access input')`);
     assert.equal(await evaluate(`document.querySelector('${toggle}').checked`), false);
     await click(`.chat-history a[href="${firstUrl}"]`);
-    await browser.waitFor(`location.pathname === ${JSON.stringify(firstUrl)} && document.querySelector('#chat-draft')`);
-    await browser.waitFor("document.querySelectorAll('.chat-sources a').length===0");
+    await browser.waitFor(`location.pathname === ${JSON.stringify(firstUrl)} && document.querySelector('#chat-draft')?.value === 'Pending journal reflection' && document.querySelectorAll('.chat-sources a').length === 0`);
     await evaluate("__chat.outcome='reflection';__chat.fail=0"); await draft('No matching journal evidence'); await button('Send'); await waitReply('No matching journal evidence');
     assert.equal(await evaluate("document.querySelectorAll('.chat-sources a').length"), 0);
   });
