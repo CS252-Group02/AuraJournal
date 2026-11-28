@@ -13,6 +13,13 @@ from app.database import make_engine
 
 
 @pytest.fixture(autouse=True)
+def disable_pixel_art_workers(monkeypatch):
+    # API tests share their connection pool with lifespan workers. Run worker
+    # passes explicitly; lifecycle tests can opt in before starting the app.
+    monkeypatch.setenv("PIXEL_ART_WORKER_ENABLED", "false")
+
+
+@pytest.fixture(autouse=True)
 def block_external_http(monkeypatch):
     """Provider calls must be fakes; ASGI/MockTransport and PostgreSQL still work."""
     def blocked(*args, **kwargs):

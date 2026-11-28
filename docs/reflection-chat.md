@@ -78,10 +78,10 @@ Returned citations appear as calendar dates linked to `/journal/{entry_id}`;
 reloading history removes citations the backend no longer returns. No frontend
 journal search or citation extraction is performed.
 
-Implementation is split into six Phase 1 commits on `feat/reflection-chat-ui`
-and two Phase 2 commits on `feat/reflection-chat-journals-ui`. Phase 2 is stacked
-on Phase 1 for review; merge Phase 1 first, then retarget Phase 2 to `main`.
-Preserve the logical commits rather than squashing a whole phase together.
+Phase 1 and Phase 2 frontend work was delivered as six and two logical commits,
+respectively, and merged into `main` through PR #67. Follow-up retrieval, provider
+recovery and later backend fixes are also merged. The former stacked frontend
+branches are no longer awaiting a merge.
 
 Before tester release, record staging verification with fictional English,
 Vietnamese and mixed-language journals: natural reflection, all routing outcomes,
@@ -90,9 +90,69 @@ weak match, consent changes during generation, and edited/deleted citations.
 Assign and record a support-resource review owner before enabling the backend
 feature flag. Local mocks do not establish live model quality or resource review.
 
-Local frontend verification (2026-11-28): 224 frontend tests, 33 browser checks
+Historical Phase 1/2 frontend verification (2026-11-28): 224 frontend tests, 33 browser checks
 (including the existing account/gallery/AI-contract regressions), and production
 build passed. Browser checks ran with headless Brave and fictional API fixtures;
 PostgreSQL, live provider behavior, and joint staging sign-off were not exercised.
 
 See the [Phase 3 retrieval benchmark](reflection-retrieval-benchmark.md) for the semantic comparison and the Groq conversation-context checks.
+
+
+## Phase 3 frontend validation and release handoff
+
+Contextual lexical retrieval is implemented on `main`; embeddings remain deferred
+under the [benchmark decision](reflection-retrieval-benchmark.md). The frontend
+continues to use the existing API, journal consent disclosure and source links.
+It sends only the current message and turn metadata; retrieval context stays on
+the backend. No new retrieval controls, confidence scores or semantic-search
+claims are introduced.
+
+History reads finish independently of failed turns. A successful turn refreshes
+history and supersedes the older read. History errors retain the loaded chats
+and cursor and expose the existing retry action. Account changes and unmounts
+still cancel requests and discard late responses. Draft and turn-ID retry
+behavior is preserved.
+
+Automated client checks use scripted fictional API responses. They cover English,
+Vietnamese and mixed-language dependent follow-ups, topic changes, explicit date
+ranges, older returned citations and empty evidence. They also cover history
+recovery after a failed send, keyboard activation of history retry, opt-out
+during generation, edited/deleted citation removal and account/chat isolation.
+They establish request and presentation behavior, not live retrieval quality.
+
+### Local validation results
+
+On 2026-11-28, `npm run test:frontend` passed **231 tests** and
+`npm run test:frontend:browser` passed **39 checks**, including the existing
+account, gallery and AI-contract regressions. The focused chat suites contributed
+20 state/API tests and 14 browser checks (the parent suite plus 13 scenarios).
+`npm run build` and `git diff --check` also passed.
+
+Browser validation used headless Brave with fictional local API fixtures.
+No PostgreSQL integration tests, live provider calls, retrieval benchmark reruns
+or joint staging checks were performed for this frontend change.
+
+### Pending joint staging evidence
+
+Every row below remains **pending** until a reviewer records the deployment/model,
+fictional case, result, reviewer and date. Backend benchmark results are separate
+evidence and do not mark a staging scenario complete.
+
+| Scenario | Expected observation | Status |
+| --- | --- | --- |
+| English, Vietnamese and mixed-language follow-up | Follow-up uses the intended prior topic; source links open the supplied entries | Pending |
+| Topic change | The next response reflects the new topic without borrowing unsupported prior journal facts | Pending |
+| Explicit current-message date or range | Returned sources honor the current dates, without inheriting prior dates | Pending |
+| Older strong match and recent weak distractor | The older relevant evidence is retrieved and its dated link is shown | Pending |
+| No relevant evidence | Reply avoids claims about journal history; no invented citations appear | Pending |
+| Disable journals during generation | No late local reply appears; draft and saved messages remain; future sends use the disabled setting | Pending |
+| Edit or delete a cited entry | Reloaded history omits invalid citations; saved messages remain readable | Pending |
+| History/provider error and revision conflict | History and draft recover through explicit actions without duplicate turns | Pending |
+| Switch chat/account with a pending response | Consent, drafts, replies and sources stay within their originating account/chat | Pending |
+| Reflection and boundary/support routes | Natural reflection, refusals and support outcomes work in both languages | Pending |
+
+**Support-resource review owner: unassigned. Joint staging sign-off: pending.**
+Record the assigned owner and reviewed guidance/directory metadata before enabling
+the feature for testers. The professional-support path's missing approved
+resource links remains a separate release follow-up. This frontend change does
+not alter support policy or resource metadata.

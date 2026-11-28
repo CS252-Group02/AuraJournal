@@ -1,6 +1,6 @@
 # Reflection chat retrieval benchmark
 
-**Decision:** carry forward contextual lexical retrieval for follow-ups as the next candidate. Hold the embeddings pilot. Hybrid retrieval gained **3.03 percentage points** over contextual lexical retrieval, below the **10-point** gate. The production retrieval path is still Phase 2.
+**Decision:** retain contextual lexical retrieval for follow-ups, now merged into `main`, and hold the embeddings pilot. Hybrid retrieval gained **3.03 percentage points** over contextual lexical retrieval, below the **10-point** gate. The “Phase 2 lexical” baseline below describes the historical current-message-only search; it is retained for comparison with the contextual implementation.
 
 ## Results
 
@@ -56,3 +56,22 @@ python scripts/evaluate-reflection-retrieval.py --live-routing
 ```
 
 The final local run against Groq `openai/gpt-oss-120b` matched all 12 expected routing decisions. Current-message-only search found six of the 12 labeled sources. Classifier-routed search found all 12, including all six dependent follow-ups. There were zero ownership or date violations. The final run passed after increasing the classifier completion budget from 300 to 768 tokens. Earlier runs returned provider HTTP 400 for one mixed-language case. To retry a specific case, append `--routing-case mixed-10`. These results cover a 12-case sample drawn from the offline benchmark’s held-out queries, with reflection framing added to the live controls.
+
+
+## Frontend acceptance boundary
+
+The existing Reflection Chat UI uses the same turn and citation contract for
+contextual lexical retrieval. It sends the current message, locale, revision and
+turn ID; the backend selects eligible history and builds retrieval queries.
+There are no frontend retrieval-mode controls or embedding/indexing status fields.
+
+`tests/fixtures/reflection-chat-context.json` supplies scripted English,
+Vietnamese and mixed-language replies for browser acceptance: an initial grounded
+turn, dependent follow-up, topic change, explicit current-message date range and
+empty evidence. Browser checks verify exact request fields and render only the
+returned entry/date links, including an older source. They do not evaluate model
+routing, ranking, factual accuracy or the benchmark metrics above.
+
+See the [frontend release handoff](reflection-chat.md#phase-3-frontend-validation-and-release-handoff)
+for current checks and the pending live staging scenarios. The recorded backend
+benchmark and Groq results above were not rerun as part of frontend validation.

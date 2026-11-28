@@ -5,6 +5,7 @@ from threading import Event
 from unittest.mock import Mock
 from uuid import UUID, uuid4
 
+from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import event, func, select, update
 from sqlalchemy.exc import OperationalError
@@ -482,17 +483,16 @@ def test_missing_image_status_does_not_resubmit(pixel_app):
     app.state.pixellab_client.generate.assert_called_once()
 
 
-def test_worker_lifespan_starts_and_drains_durable_jobs(pixel_app):
+def test_worker_lifespan_starts_and_drains_durable_jobs(pixel_app, monkeypatch):
     app = pixel_app
     entry = create(app)
     finished = Event()
     app.state.pixellab_client.generate.side_effect = lambda prompt: (finished.set(), png())[1]
     workers = PixelArtWorkers(app.state)
-    workers.start()
-    try:
+    monkeypatch.setenv("PIXEL_ART_WORKER_ENABLED", "true")
+    monkeypatch.setattr("app.main.PixelArtWorkers", lambda state: workers)
+    with TestClient(app):
         assert finished.wait(10)
-    finally:
-        workers.stop()
     assert all(not thread.is_alive() for thread in workers.threads)
     assert status(app, entry)["generation"]["status"] == "ready"
 

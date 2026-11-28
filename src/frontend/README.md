@@ -388,6 +388,16 @@ See [the chat contract](../../docs/reflection-chat.md) for staging requirements.
 Journal access is server-confirmed per chat and defaults off. Consent updates
 reload metadata on conflicts and discard in-flight local replies. Citations are
 backend-returned entry/date links using calendar dates without timezone shifts.
-`ChatSources.jsx` does not infer journal evidence from model text. Phase 2 is
-reviewed on `feat/reflection-chat-journals-ui`, stacked on `feat/reflection-chat-ui`
-until Phase 1 merges.
+`ChatSources.jsx` does not infer journal evidence from model text. Phase 1 and
+Phase 2 frontend work is merged into `main` through PR #67.
+
+
+Contextual follow-ups keep the same frontend API. The client sends the current
+message and turn metadata; the backend owns eligible history and expanded
+retrieval queries. Scripted browser cases live in
+`tests/fixtures/reflection-chat-context.json` and check multilingual request
+boundaries, date links, empty evidence and consent/account isolation. These mocks
+do not establish live retrieval quality. History reads continue during a failed
+send; successful turns refresh the list and supersede any older history read.
+See the [Phase 3 release handoff](../../docs/reflection-chat.md#phase-3-frontend-validation-and-release-handoff)
+for actual validation results and pending staging evidence.
