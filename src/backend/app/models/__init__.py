@@ -8,8 +8,10 @@ from app.models.journal_image import JournalImage
 from app.models.auth import AuthSession, LoginAttempt, RateLimitBucket
 from app.models.weekly_reflection import WeeklyReflection
 from app.models.pixel_art_job import PixelArtJob
+from app.models.reflection_chat import ReflectionChat, ReflectionChatMessage
 
 __all__ = [
     "Base", "User", "JournalEntry", "MoodRecord", "JournalImage", "AuthSession",
     "LoginAttempt", "RateLimitBucket", "WeeklyReflection", "PixelArtJob",
+    "ReflectionChat", "ReflectionChatMessage",
 ]

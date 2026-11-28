@@ -210,6 +210,6 @@ def test_upgrade_from_main_preserves_journal_and_adds_security_budgets(isolated_
                    'day':'2026-11-01'})
     migrate(isolated_engine)
     with isolated_engine.connect() as c:
-        assert c.scalar(text('SELECT version_num FROM alembic_version')) == '0010'
+        assert c.scalar(text('SELECT version_num FROM alembic_version')) == '0011'
         assert c.scalar(text('SELECT content FROM journal_entries WHERE id=:id'), {'id':entry_id}) == 'Preserve on upgrade'
         assert 'rate_limit_buckets' in inspect(c).get_table_names()
