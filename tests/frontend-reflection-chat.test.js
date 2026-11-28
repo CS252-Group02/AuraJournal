@@ -49,3 +49,15 @@ test('history pagination merges chats and conversation switching discards late r
   await workspace.open('b'); assert.equal(workspace.getSnapshot().draft, 'private');
   workspace.clear(); assert.equal(workspace.getSnapshot().draft, ''); assert.deepEqual(workspace.getSnapshot().chats, []);
 });
+
+test('sending prevents duplicates and clears draft only after a saved response', async () => {
+  const response = deferred(), calls = [];
+  const workspace = await loadWorkspace({ read: async () => fixtures.empty_detail, list: async () => fixtures.empty_list,
+    send: (id, payload) => { calls.push(payload); return response.promise; } });
+  await workspace.open('a'); workspace.setDraft('Một buổi chiều yên tĩnh.');
+  const sending = workspace.send('vi'); await workspace.send('vi');
+  assert.equal(calls.length, 1); assert.equal(workspace.getSnapshot().draft, 'Một buổi chiều yên tĩnh.');
+  assert.equal(calls[0].locale, 'vi'); assert.equal(calls[0].expected_revision, 0);
+  response.resolve({ ...fixtures.turn_responses.reflection, turn_id: calls[0].turn_id }); await sending;
+  assert.equal(workspace.getSnapshot().draft, ''); assert.equal(workspace.getSnapshot().detail.turns.length, 1);
+});

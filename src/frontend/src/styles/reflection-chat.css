@@ -23,3 +23,9 @@
   .chat-history-toggle { display: inline-flex; }
   .chat-message-user { margin-left: 5%; }
 }
+.chat-messages { max-height: 55dvh; overflow-y: auto; overflow-anchor: none; padding: 2px 6px; }
+.chat-composer { display: grid; gap: 10px; padding-top: 20px; border-top: 1px solid var(--aj-line); margin-top: 20px; }
+.chat-composer textarea { box-sizing: border-box; width: 100%; resize: vertical; padding: 14px; background: var(--aj-bg); color: var(--aj-ink); border: 1px solid var(--aj-line); border-radius: 8px; font: inherit; }
+.chat-composer-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; justify-content: space-between; }
+.chat-page select, .chat-page input { background: var(--aj-bg); color: var(--aj-ink); border: 1px solid var(--aj-line); padding: 8px; border-radius: 6px; font: inherit; }
+.chat-composer > p { color: var(--aj-muted); font-size: .85rem; margin: 0; }

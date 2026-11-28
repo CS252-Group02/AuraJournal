@@ -58,8 +58,23 @@ export function createChatWorkspace(api = chatApi) {
         turns: mergeBy(data.turns, state.detail.turns, 'turn_id'), next_before_revision: data.next_before_revision }, loadingOlder: false });
     } catch (error) { if (task.current()) update({ loadingOlder: false, error: error.message }); }
   }
+  async function send(locale) {
+    const message = state.draft.trim();
+    if (state.sending || !state.detail || !message || message.length > 2000) return;
+    const id = state.chatId;
+    const payload = { turn_id: crypto.randomUUID(), expected_revision: state.detail.chat.revision, message, locale };
+    const task = job('turn'); update({ sending: true, pending: payload, error: '' });
+    try {
+      const turn = await api.send(id, payload, task.signal);
+      if (!task.current()) return;
+      drafts.delete(id);
+      update({ detail: { ...state.detail, chat: { ...state.detail.chat, revision: turn.revision },
+        turns: mergeBy(state.detail.turns, [turn], 'turn_id') }, draft: '', sending: false, pending: null });
+      list();
+    } catch (error) { if (task.current()) update({ sending: false, pending: null, error: error.message }); }
+  }
   return { subscribe: fn => { listeners.add(fn); return () => listeners.delete(fn); }, getSnapshot: () => state,
-    list, open, create, older, cancelAll,
+    list, open, create, older, send, cancelAll,
     setDraft: draft => update({ draft }),
     clear() { cancelAll(); drafts.clear(); update({ chats: [], detail: null, draft: '', chatId: null }); },
   };

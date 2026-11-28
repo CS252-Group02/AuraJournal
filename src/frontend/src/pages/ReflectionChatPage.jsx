@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/Auth.jsx';
 import { subscribeAuthChanges } from '../lib/api.js';
+import ChatMessages from '../features/reflection-chat/ChatMessages.jsx';
+import ChatComposer from '../features/reflection-chat/ChatComposer.jsx';
 import { createChatWorkspace } from '../features/reflection-chat/chatWorkspace.js';
 
 export default function ReflectionChatPage() {
@@ -11,6 +13,7 @@ export default function ReflectionChatPage() {
 
 function ChatWorkspace() {
   const { chatId } = useParams(), navigate = useNavigate();
+  const [locale, setLocale] = useState(() => navigator.language?.startsWith('vi') ? 'vi' : 'en');
   const [workspace] = useState(() => createChatWorkspace());
   const state = useSyncExternalStore(workspace.subscribe, workspace.getSnapshot);
   const drawer = useRef(null), historyButton = useRef(null);
@@ -44,12 +47,8 @@ function ChatWorkspace() {
         {state.status === 'loading' && <p role="status">Loading conversation…</p>}
         {state.error && <div role="alert"><p>{state.error}</p><button onClick={() => workspace.open(chatId)}>Reload conversation</button> <Link to="/reflection-chat">Back to chats</Link></div>}
         {state.detail && <><h2>{state.detail.chat.title}</h2>
-          {state.detail.next_before_revision && <button disabled={state.loadingOlder} onClick={() => workspace.older()}>Load older messages</button>}
-          <div className="chat-messages">{state.detail.turns.map(turn => <article key={turn.turn_id}>
-            <div className="chat-message chat-message-user"><strong>You</strong><p>{turn.message}</p></div>
-            <div className="chat-message"><strong>Reflection</strong><p>{turn.reply}</p></div>
-          </article>)}</div>
-          {!state.detail.turns.length && <p>Share an experience you would like to think through.</p>}
+          <ChatMessages key={chatId} state={state} onOlder={() => workspace.older()} />
+          <ChatComposer state={state} locale={locale} onLocale={setLocale} onDraft={workspace.setDraft} onSend={workspace.send} />
         </>}
       </section>
     </div>
