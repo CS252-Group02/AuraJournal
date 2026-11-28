@@ -26,7 +26,7 @@ function installFixture() {
     if (fixture.mode === 'network') throw new TypeError('PRIVATE-provider-prompt');
     if (fixture.mode === 'proxy') return new Response('<html>PRIVATE-provider-prompt</html>', { status: 503 });
     if (fixture.mode === 'expired') return new Response('<html>PRIVATE-session</html>', { status: 401 });
-    const status = { missing: 503, quota: 429, invalid: 502 }[fixture.mode];
+    const status = { missing: 503, quota: 429, invalid: 502, oversized: 413 }[fixture.mode];
     return json({ detail: 'PRIVATE-provider-prompt' }, status);
   };
 }
@@ -70,6 +70,15 @@ test('A10 UI recovers safely from AI and malformed HTTP failures', { skip: !bina
       await browser.waitFor("Array.from(document.querySelectorAll('button')).some(node => node.textContent === 'Try again' && !node.disabled)");
       assert.doesNotMatch(await browser.evaluate('document.body.innerText'), /PRIVATE|Unexpected token|SyntaxError/);
     }
+  });
+
+  await context.test('oversized saved reflection keeps the prior result and links to the week', async () => {
+    await browser.evaluate("window.__aiFixture.mode = 'oversized'");
+    await click('Regenerate');
+    await browser.waitFor("document.querySelector('.saved-reflection-error')?.textContent.includes('too much text')");
+    assert.equal(await browser.evaluate("document.querySelector('.saved-reflection-summary').textContent"), 'Previous valid weekly reflection.');
+    assert.match(await browser.evaluate("document.querySelector('.saved-reflection-foot a.aj-btn').getAttribute('href')"), /history\?start=.+&end=.+/);
+    assert.equal(await browser.evaluate("document.querySelector('.saved-reflection-foot button') === null"), true);
   });
 
   await context.test('non-JSON session expiry clears private UI and returns to login', async () => {

@@ -61,8 +61,8 @@ entries. These structural checks do not prove that a claim is factually correct.
 
 - `401`: invalid/missing session; `403`: origin/CSRF failure; `415`: not JSON.
 - `422`: invalid date, non-Monday start, invalid timezone, or extra request fields.
-- `413`: serialized source records exceed 60,000 characters. Nothing is silently
-  truncated or omitted, and the provider is not called.
+- `413`: serialized source records exceed 60,000 characters or the provider rejects the request size. The local
+  check runs before the provider call. The app never truncates or omits entries.
 - `409`: selected journals were inserted, edited, or deleted during generation.
   Refresh entries, then generate again. Server revalidation compares IDs, text,
   creation times, and update times; the frontend discards cancelled/older requests.

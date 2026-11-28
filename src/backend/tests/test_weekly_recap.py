@@ -4,7 +4,9 @@ from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 from uuid import uuid4
 
+import httpx
 import pytest
+from groq import APIStatusError
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
@@ -260,3 +262,17 @@ def test_journal_date_sources_use_existing_factual_ai_provider():
     assert result.summary == 'You finished an exam.'
     assert json.loads(completions.calls[0]['messages'][1]['content']) == {'entries': records}
     assert 'a calendar day chosen by the writer' in completions.calls[0]['messages'][0]['content']
+
+
+
+def test_provider_input_limit_returns_safe_413_without_retry(app):
+    insert_entry(app, 'A short fictional journal.')
+    upstream = httpx.Response(413, request=httpx.Request('POST', 'https://provider.invalid'))
+    completions = FakeCompletions(error=APIStatusError('PRIVATE PROVIDER LIMIT', response=upstream, body=None))
+    app.state.weekly_recap_generator = WeeklyRecapGenerator(client=client_for(completions))
+
+    response = recap(app)
+    assert response.status_code == 413
+    assert 'too long' in response.json()['detail']
+    assert 'PRIVATE' not in response.text
+    assert len(completions.calls) == 1

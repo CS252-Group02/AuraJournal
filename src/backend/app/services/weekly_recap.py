@@ -2,11 +2,14 @@ import json
 from datetime import datetime
 from uuid import UUID
 
+from groq import APIStatusError
 from pydantic import AwareDatetime, BaseModel, ConfigDict, field_validator, model_validator
 
 from app.schemas.entries import JournalDate
 from app.schemas.weekly import WeeklyRecap
-from app.services._groq import AIInvalidResponseError, EmptyJournalError, GroqChatClient, _GroqJSONClient
+from app.services._groq import (
+    AIInvalidResponseError, AIServiceUnavailableError, EmptyJournalError, GroqChatClient, _GroqJSONClient,
+)
 
 MAX_WEEKLY_INPUT = 60_000
 
@@ -102,7 +105,13 @@ class WeeklyRecapGenerator:
         source = json.dumps({"entries": sources}, ensure_ascii=False)
         if len(source) > MAX_WEEKLY_INPUT:
             raise WeeklyRecapTooLarge("The week's entries exceed the recap input limit.")
-        result = self._ai.generate(source, system_prompt=SYSTEM_PROMPT,
-                                   response_model=WeeklyRecap, max_completion_tokens=1024)
+        try:
+            result = self._ai.generate(source, system_prompt=SYSTEM_PROMPT,
+                                       response_model=WeeklyRecap, max_completion_tokens=1024)
+        except AIServiceUnavailableError as error:
+            cause = error.__cause__
+            if isinstance(cause, APIStatusError) and cause.status_code == 413:
+                raise WeeklyRecapTooLarge("The provider rejected the week input size. No entries were omitted.") from cause
+            raise
         validate_recap_sources(result, sources)
         return result
