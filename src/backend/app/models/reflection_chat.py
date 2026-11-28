@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID, uuid4
 
 from sqlalchemy import CheckConstraint, ForeignKey, Index, String, UniqueConstraint
@@ -11,12 +12,15 @@ class ReflectionChat(CreatedAt, UpdatedAt, Base):
     __table_args__ = (
         Index('ix_reflection_chats_owner_activity', 'user_id', 'updated_at', 'id'),
         CheckConstraint('revision >= 0', name='ck_reflection_chats_revision'),
+        CheckConstraint('journal_access_version >= 0', name='ck_reflection_chats_access_version'),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     user_id: Mapped[UUID] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'))
     title: Mapped[str] = mapped_column(String(60), server_default='New reflection')
     revision: Mapped[int] = mapped_column(server_default='0')
+    use_journals: Mapped[bool] = mapped_column(server_default='false')
+    journal_access_version: Mapped[int] = mapped_column(server_default='0')
 
 
 class ReflectionChatMessage(CreatedAt, Base):
@@ -40,3 +44,16 @@ class ReflectionChatMessage(CreatedAt, Base):
     role: Mapped[str] = mapped_column(String(9))
     text: Mapped[str] = mapped_column(String(2000))
     outcome: Mapped[str | None] = mapped_column(String(20))
+    journal_context_used: Mapped[bool] = mapped_column(server_default='false')
+
+
+class ReflectionChatSource(Base):
+    __tablename__ = 'reflection_chat_sources'
+    __table_args__ = (Index('ix_reflection_chat_sources_entry', 'entry_id'),)
+
+    message_id: Mapped[UUID] = mapped_column(
+        ForeignKey('reflection_chat_messages.id', ondelete='CASCADE'), primary_key=True,
+    )
+    entry_id: Mapped[UUID] = mapped_column(ForeignKey('journal_entries.id', ondelete='CASCADE'), primary_key=True)
+    journal_date: Mapped[date]
+    content_version: Mapped[int]

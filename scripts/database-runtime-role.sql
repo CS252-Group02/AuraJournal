@@ -33,7 +33,7 @@ BEGIN
   FOREACH item IN ARRAY ARRAY['users','journal_entries','mood_records','journal_images',
                               'auth_sessions','login_attempts','rate_limit_buckets','weekly_reflections',
                               'pixel_art_jobs','reflection_chats','reflection_chat_messages',
-                              'alembic_version'] LOOP
+                              'reflection_chat_sources','alembic_version'] LOOP
     EXECUTE format('ALTER TABLE public.%I OWNER TO aurajournal_owner', item);
     EXECUTE format('REVOKE ALL ON TABLE public.%I FROM PUBLIC, aurajournal_runtime', item);
     IF item <> 'alembic_version' THEN

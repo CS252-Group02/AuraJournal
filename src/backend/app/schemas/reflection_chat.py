@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
@@ -29,8 +29,21 @@ class ReflectionChatMetadata(BaseModel):
     id: UUID
     title: str
     revision: int
+    use_journals: bool
+    journal_access_version: int
     created_at: datetime
     updated_at: datetime
+
+
+class ReflectionChatAccess(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    use_journals: bool = Field(strict=True)
+    expected_journal_access_version: int = Field(ge=0, le=2_147_483_646, strict=True)
+
+
+class ReflectionSource(BaseModel):
+    entry_id: UUID
+    journal_date: date
 
 
 class ReflectionTurn(BaseModel):
@@ -40,6 +53,7 @@ class ReflectionTurn(BaseModel):
     reply: str
     outcome: Outcome
     support_kind: SupportKind | None
+    sources: list[ReflectionSource]
     created_at: datetime
 
 

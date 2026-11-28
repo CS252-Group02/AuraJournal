@@ -9,15 +9,29 @@
     "id": "aef0224d-402b-44ce-97ac-28012fe80d46",
     "title": "New reflection",
     "revision": 0,
+    "use_journals": false,
+    "journal_access_version": 0,
     "created_at": "2026-11-28T08:00:00Z",
     "updated_at": "2026-11-28T08:00:00Z"
   },
   "empty_list": { "chats": [], "next_cursor": null },
+  "journal_access_request": { "use_journals": true, "expected_journal_access_version": 0 },
+  "journal_access_response": {
+    "id": "aef0224d-402b-44ce-97ac-28012fe80d46",
+    "title": "New reflection",
+    "revision": 0,
+    "use_journals": true,
+    "journal_access_version": 1,
+    "created_at": "2026-11-28T08:00:00Z",
+    "updated_at": "2026-11-28T08:00:30Z"
+  },
   "empty_detail": {
     "chat": {
       "id": "aef0224d-402b-44ce-97ac-28012fe80d46",
       "title": "New reflection",
       "revision": 0,
+      "use_journals": false,
+      "journal_access_version": 0,
       "created_at": "2026-11-28T08:00:00Z",
       "updated_at": "2026-11-28T08:00:00Z"
     },
@@ -32,6 +46,17 @@
       "reply": "You took a walk after the meeting. What did you notice on the walk?",
       "outcome": "reflection",
       "support_kind": null,
+      "sources": [],
+      "created_at": "2026-11-28T08:01:00Z"
+    },
+    "grounded_reflection": {
+      "turn_id": "3a9df408-24d3-4f45-8a1e-b15b7c032550",
+      "revision": 1,
+      "message": "Help me reflect on my walks by the harbor.",
+      "reply": "In the entry I found, you took a walk by the harbor after a meeting. What did you notice once you were outside?",
+      "outcome": "reflection",
+      "support_kind": null,
+      "sources": [{ "entry_id": "3514c39a-4637-40e5-b332-4b4b423fa82c", "journal_date": "2026-11-27" }],
       "created_at": "2026-11-28T08:01:00Z"
     },
     "out_of_scope": {
@@ -41,6 +66,7 @@
       "reply": "I’m here to help you reflect on your experiences. Is there something that happened that you’d like to think through?",
       "outcome": "out_of_scope",
       "support_kind": null,
+      "sources": [],
       "created_at": "2026-11-28T08:01:00Z"
     },
     "mood_boundary": {
@@ -50,6 +76,7 @@
       "reply": "I’ll leave the name of your mood up to you. What did you notice about how you felt in that moment?",
       "outcome": "mood_boundary",
       "support_kind": null,
+      "sources": [],
       "created_at": "2026-11-28T08:01:00Z"
     },
     "professional_support": {
@@ -59,6 +86,7 @@
       "reply": "A qualified health professional can help assess what you’re experiencing. You can start with a primary care doctor or a licensed mental health professional.",
       "outcome": "professional_support",
       "support_kind": "professional_support",
+      "sources": [],
       "created_at": "2026-11-28T08:01:00Z"
     },
     "urgent_support": {
@@ -68,6 +96,7 @@
       "reply": "If you or someone else is in immediate danger, contact local emergency services now. If you can, reach out to someone you trust who can stay with you.",
       "outcome": "urgent_support",
       "support_kind": "urgent_support",
+      "sources": [],
       "created_at": "2026-11-28T08:01:00Z"
     }
   },
