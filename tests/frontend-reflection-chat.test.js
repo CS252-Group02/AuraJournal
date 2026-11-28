@@ -168,3 +168,86 @@ test('source dates use calendar dates and citations link only returned entry IDs
   assert.equal(render([]), '');
   assert.match(render(fixtures.turn_responses.grounded_reflection.sources), /href="\/journal\/3514c39a-4637-40e5-b332-4b4b423fa82c"/);
 });
+
+for (const status of [503, 409, null]) {
+  test(`a pending history page survives a ${status || 'network'} turn failure`, async () => {
+    const page = deferred(), calls = [];
+    let historySignal;
+    const firstChat = { ...fixtures.chat, id: 'current' }, olderChat = { ...fixtures.chat, id: 'older' };
+    const workspace = await loadWorkspace({
+      read: async () => fixtures.empty_detail,
+      list: (cursor, signal) => {
+        if (!cursor) return Promise.resolve({ chats: [firstChat], next_cursor: 'older-page' });
+        assert.equal(cursor, 'older-page'); historySignal = signal; return page.promise;
+      },
+      send: async (id, body) => { calls.push(body); throw Object.assign(new Error('Try again'), { status }); },
+    });
+    await workspace.open('current'); await workspace.list();
+    const history = workspace.list(true);
+    workspace.setDraft('A fictional follow-up'); await workspace.send('en');
+    assert.equal(historySignal.aborted, false);
+    assert.equal(workspace.getSnapshot().draft, 'A fictional follow-up');
+    assert.equal(workspace.getSnapshot().cursor, 'older-page');
+    assert.deepEqual(workspace.getSnapshot().chats, [firstChat]);
+    page.resolve({ chats: [olderChat], next_cursor: null }); await history;
+    assert.equal(workspace.getSnapshot().listStatus, 'ready');
+    assert.deepEqual(workspace.getSnapshot().chats, [firstChat, olderChat]);
+    assert.equal(workspace.getSnapshot().cursor, null);
+    await workspace.send('en');
+    assert.equal(calls[0].turn_id, calls[1].turn_id);
+    workspace.cancelAll();
+  });
+}
+
+test('history failure retains loaded chats and pagination and can be explicitly retried', async () => {
+  let fail = false;
+  const firstChat = { ...fixtures.chat, id: 'current' };
+  const workspace = await loadWorkspace({
+    list: async cursor => {
+      if (!cursor) return { chats: [firstChat], next_cursor: 'older-page' };
+      if (fail) throw new Error('History unavailable');
+      return { chats: [{ ...fixtures.chat, id: 'older' }], next_cursor: null };
+    },
+  });
+  await workspace.list(); fail = true; await workspace.list(true);
+  assert.equal(workspace.getSnapshot().listStatus, 'error');
+  assert.equal(workspace.getSnapshot().listError, 'History unavailable');
+  assert.deepEqual(workspace.getSnapshot().chats, [firstChat]);
+  assert.equal(workspace.getSnapshot().cursor, 'older-page');
+  fail = false; await workspace.list(true);
+  assert.equal(workspace.getSnapshot().listStatus, 'ready');
+  assert.equal(workspace.getSnapshot().listError, '');
+  assert.deepEqual(workspace.getSnapshot().chats.map(chat => chat.id), ['current', 'older']);
+});
+
+test('successful turns supersede older history refreshes without accepting stale results', async () => {
+  const oldPage = deferred(); let reads = 0, oldSignal;
+  const workspace = await loadWorkspace({
+    read: async () => fixtures.empty_detail,
+    list: (cursor, signal) => {
+      if (++reads === 1) { oldSignal = signal; return oldPage.promise; }
+      return Promise.resolve({ chats: [{ ...fixtures.chat, title: 'Fresh title' }], next_cursor: null });
+    },
+    send: async () => fixtures.turn_responses.reflection,
+  });
+  await workspace.open(fixtures.chat.id); const oldRead = workspace.list();
+  workspace.setDraft('A fictional experience'); await workspace.send('en');
+  assert.equal(oldSignal.aborted, true);
+  oldPage.resolve({ chats: [{ ...fixtures.chat, title: 'Stale title' }], next_cursor: 'stale' }); await oldRead;
+  assert.equal(workspace.getSnapshot().chats[0].title, 'Fresh title');
+  assert.equal(workspace.getSnapshot().detail.chat.title, 'Fresh title');
+  assert.equal(workspace.getSnapshot().listStatus, 'ready');
+});
+
+test('account changes discard late history even when the transport ignores cancellation', async () => {
+  const oldPage = deferred(); let reads = 0, oldSignal;
+  const workspace = await loadWorkspace({ list: (cursor, signal) => {
+    if (++reads === 1) { oldSignal = signal; return oldPage.promise; }
+    return Promise.resolve({ chats: [{ ...fixtures.chat, id: 'new-account-chat' }], next_cursor: null });
+  } });
+  const oldRead = workspace.list(); workspace.clear(); await workspace.list();
+  oldPage.resolve({ chats: [{ ...fixtures.chat, id: 'old-account-chat' }], next_cursor: 'old' }); await oldRead;
+  assert.equal(oldSignal.aborted, true);
+  assert.deepEqual(workspace.getSnapshot().chats.map(chat => chat.id), ['new-account-chat']);
+  assert.equal(workspace.getSnapshot().cursor, null);
+});

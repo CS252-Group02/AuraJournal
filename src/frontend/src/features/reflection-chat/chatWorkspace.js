@@ -87,7 +87,8 @@ export function createChatWorkspace(api = chatApi) {
     const payload = state.retry?.message === message && state.retry.locale === locale
       ? { ...state.retry, expected_revision: state.detail.chat.revision }
       : { turn_id: crypto.randomUUID(), expected_revision: state.detail.chat.revision, message, locale };
-    cancel('list');
+    // History reads can finish independently of a failed turn. A successful
+    // turn refreshes the list below and supersedes any older read through job().
     const task = job('turn'); update({ sending: true, pending: payload, retry: payload, error: '' });
     try {
       const turn = await api.send(id, payload, task.signal);
