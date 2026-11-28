@@ -23,6 +23,7 @@ thi ma ve voi cho tu tai o trong tren den mot nhung cac nay do gi nao dau khi ho
 qua nhat ky xin hay ke lai biet the nao lam toi cung nhieu rat
 """.split())
 DATE_PATTERN = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
+DATE_RANGE_PATTERN = re.compile(r"\b(\d{4}-\d{2}-\d{2})\s+(?:to|đến)\s+(\d{4}-\d{2}-\d{2})\b", re.IGNORECASE)
 WORD_PATTERN = re.compile(r"[^\W_]+", re.UNICODE)
 
 
@@ -53,6 +54,12 @@ class RetrievedJournals:
     snapshot: tuple
 
 
+@dataclass(frozen=True, repr=False)
+class ReflectionJournalContext:
+    sources: list[JournalQASource]
+    versions: dict[UUID, tuple[date, int]]
+
+
 def _excerpt(content: str, terms: list[str], maximum: int) -> str:
     folded, positions = [], []
     for position, char in enumerate(content):
@@ -72,28 +79,19 @@ def _excerpt(content: str, terms: list[str], maximum: int) -> str:
     return content[start:start + maximum].strip()
 
 
-def retrieve_journals(session: Session, user_id: UUID, question: str) -> RetrievedJournals:
-    date_strings = list(dict.fromkeys(DATE_PATTERN.findall(question)))
-    try:
-        dates = [date.fromisoformat(value) for value in date_strings]
-    except ValueError:
-        return RetrievedJournals([], ())
+def _lexical_matches(question: str):
     terms = list(dict.fromkeys(word for word in WORD_PATTERN.findall(fold_text(DATE_PATTERN.sub(" ", question)))
                                if len(word) > 1 and word not in STOP_WORDS))[:12]
-    if not terms and not dates:
-        return RetrievedJournals([], ())
     folded = func.lower(func.translate(JournalEntry.content, FOLD_FROM, FOLD_TO))
     conditions = [folded.op("~")(r"(^|[^[:alnum:]])" + re.escape(term) + r"([^[:alnum:]]|$)") for term in terms]
     ordering = [JournalEntry.journal_date.desc(), JournalEntry.created_at.desc(), JournalEntry.id.desc()]
     if conditions:
         ordering.insert(0, sum(case((condition, 1), else_=0) for condition in conditions).desc())
-    query = select(JournalEntry.id, JournalEntry.journal_date, JournalEntry.content).where(JournalEntry.user_id == user_id)
-    if dates:
-        query = query.where(JournalEntry.journal_date.in_(dates))
-    else:
-        query = query.where(or_(*conditions))
-    rows = session.execute(query.order_by(*ordering).limit(MAX_QA_SOURCES)).all()
-    sources, snapshot = [], []
+    return terms, conditions, ordering
+
+
+def _bounded_excerpts(rows, terms: list[str], question: str):
+    sources, included_rows = [], []
     for row in rows:
         maximum = MAX_EXCERPT_CHARS
         while maximum:
@@ -104,10 +102,60 @@ def retrieve_journals(session: Session, user_id: UUID, question: str) -> Retriev
             size = len(json.dumps({"question": question, "entries": [*sources, source]}, ensure_ascii=False))
             if size <= MAX_QA_CONTEXT_CHARS:
                 sources.append(source)
-                snapshot.append((row.id, row.journal_date, row.content))
+                included_rows.append(row)
                 break
             maximum //= 2
-    return RetrievedJournals(sources, tuple(snapshot))
+    return sources, included_rows
+
+
+def retrieve_journals(session: Session, user_id: UUID, question: str) -> RetrievedJournals:
+    try:
+        dates = [date.fromisoformat(value) for value in dict.fromkeys(DATE_PATTERN.findall(question))]
+    except ValueError:
+        return RetrievedJournals([], ())
+    terms, conditions, ordering = _lexical_matches(question)
+    if not terms and not dates:
+        return RetrievedJournals([], ())
+    date_or_term_match = JournalEntry.journal_date.in_(dates) if dates else or_(*conditions)
+    query = select(JournalEntry.id, JournalEntry.journal_date, JournalEntry.content).where(
+        JournalEntry.user_id == user_id, date_or_term_match,
+    )
+    rows = session.execute(query.order_by(*ordering).limit(MAX_QA_SOURCES)).all()
+    sources, included_rows = _bounded_excerpts(rows, terms, question)
+    return RetrievedJournals(sources, tuple((row.id, row.journal_date, row.content) for row in included_rows))
+
+
+def retrieve_reflection_journals(session: Session, owner: UUID, message: str) -> ReflectionJournalContext:
+    date_filters = []
+    try:
+        for match in DATE_RANGE_PATTERN.finditer(message):
+            start, end = map(date.fromisoformat, match.groups())
+            if start > end:
+                return ReflectionJournalContext([], {})
+            date_filters.append(JournalEntry.journal_date.between(start, end))
+        for value in dict.fromkeys(DATE_PATTERN.findall(DATE_RANGE_PATTERN.sub(' ', message))):
+            date_filters.append(JournalEntry.journal_date == date.fromisoformat(value))
+    except ValueError:
+        return ReflectionJournalContext([], {})
+
+    terms, matches, ordering = _lexical_matches(DATE_RANGE_PATTERN.sub(' ', message))
+    filters = date_filters or matches
+    if not filters:
+        return ReflectionJournalContext([], {})
+    rows = session.execute(select(
+        JournalEntry.id, JournalEntry.journal_date, JournalEntry.content, JournalEntry.content_version,
+    ).where(JournalEntry.user_id == owner, or_(*filters)).order_by(*ordering).limit(MAX_QA_SOURCES)).all()
+    sources, included_rows = _bounded_excerpts(rows, terms, message)
+    return ReflectionJournalContext(sources, {row.id: (row.journal_date, row.content_version) for row in included_rows})
+
+
+def lock_reflection_sources(session: Session, owner: UUID, context: ReflectionJournalContext) -> bool:
+    if not context.versions:
+        return True
+    rows = session.execute(select(JournalEntry.id, JournalEntry.journal_date, JournalEntry.content_version).where(
+        JournalEntry.user_id == owner, JournalEntry.id.in_(context.versions),
+    ).order_by(JournalEntry.id).with_for_update(read=True)).all()
+    return {row.id: (row.journal_date, row.content_version) for row in rows} == context.versions
 
 
 def sources_unchanged(session: Session, user_id: UUID, context: RetrievedJournals) -> bool:
