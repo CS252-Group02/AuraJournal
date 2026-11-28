@@ -369,3 +369,25 @@ dependencies or browser test framework to the repository.
   rendered by login/register. Google sign-in is not implemented.
 - Legacy global CSS/default inheritance remains a consideration for future
   screens. Broader scoping or a design system needs its own visual review.
+
+## Reflection Chat
+
+Protected routes `/reflection-chat` and `/reflection-chat/:chatId` provide private,
+saved conversations separately from Weekly recap. `features/reflection-chat/`
+owns API adapters, cancellable workspace state, the composer, message history,
+and server-provided support options. The route page composes these controls;
+`styles/reflection-chat.css` uses the existing theme tokens.
+
+Drafts and retry IDs stay only in memory while the workspace is mounted and are
+cleared on account changes. Chat text is never sent to analytics or browser
+storage. Browser tests use fictional local responses, not real provider calls.
+Run `node --test tests/frontend-reflection-chat.test.js` and
+`BROWSER_BIN=/usr/bin/brave-browser node --test tests/frontend-reflection-chat-browser.test.js`.
+See [the chat contract](../../docs/reflection-chat.md) for staging requirements.
+
+Journal access is server-confirmed per chat and defaults off. Consent updates
+reload metadata on conflicts and discard in-flight local replies. Citations are
+backend-returned entry/date links using calendar dates without timezone shifts.
+`ChatSources.jsx` does not infer journal evidence from model text. Phase 2 is
+reviewed on `feat/reflection-chat-journals-ui`, stacked on `feat/reflection-chat-ui`
+until Phase 1 merges.

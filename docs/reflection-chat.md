@@ -36,4 +36,50 @@ Apply Alembic revision `0012` and rerun `scripts/database-runtime-role.sql` afte
 
 Run `python -m pytest tests/test_reflection_chat.py tests/test_reflection_chat_journals.py tests/test_account_data.py tests/test_database.py -q` from `src/backend` with the disposable PostgreSQL `TEST_DATABASE_URL`. Tests use fake provider transports. Before enabling staging, review routing, excerpts, and citations with fictional English, Vietnamese, and mixed-language conversations. Check present danger, past disclosures, mood-label requests, an older high-relevance match, and an opt-out during generation.
 
+## Phase 1 frontend
+
+The protected `/reflection-chat` workspace includes desktop history, mobile
+history drawer, new/resumed conversations, older-message pagination, composer,
+plain-text replies, explicit country support lookup, and confirmed deletion.
+Weekly recap remains at `/reflection`. English UI offers an English/Vietnamese
+reply selector (initially based on browser language).
+
+Unchanged retries retain their turn ID; editing a failed message creates a new
+submission. Conflicts reload metadata/history and require explicit resend.
+Cooldowns honor `Retry-After`. Switching chats cancels local requests; a server
+turn already running may still save, so history reloads when returning. Drafts
+and pending IDs stay in memory and clear on account changes or workspace exit.
+
+Frontend checks: `npm run test:frontend`, `npm run build`, and
+`BROWSER_BIN=/usr/bin/brave-browser npm run test:frontend:browser`. Browser checks
+use fictional mocked API data. Live staging and support-owner sign-off remain
+required before enabling the feature for testers.
+
+## Phase 2 frontend and review handoff
+
+Each chat has a server-confirmed **Use my journals** control with provider
+processing disclosure. Consent updates block sends, preserve drafts, and discard
+late local replies. Version conflicts reload the actual setting instead of
+silently reapplying consent. Historical messages remain visible after opt-out.
+Returned citations appear as calendar dates linked to `/journal/{entry_id}`;
+reloading history removes citations the backend no longer returns. No frontend
+journal search or citation extraction is performed.
+
+Implementation is split into six Phase 1 commits on `feat/reflection-chat-ui`
+and two Phase 2 commits on `feat/reflection-chat-journals-ui`. Phase 2 is stacked
+on Phase 1 for review; merge Phase 1 first, then retarget Phase 2 to `main`.
+Preserve the logical commits rather than squashing a whole phase together.
+
+Before tester release, record staging verification with fictional English,
+Vietnamese and mixed-language journals: natural reflection, all routing outcomes,
+unknown-country support fallback, an older relevant source beating a recent
+weak match, consent changes during generation, and edited/deleted citations.
+Assign and record a support-resource review owner before enabling the backend
+feature flag. Local mocks do not establish live model quality or resource review.
+
+Local frontend verification (2026-11-28): 224 frontend tests, 33 browser checks
+(including the existing account/gallery/AI-contract regressions), and production
+build passed. Browser checks ran with headless Brave and fictional API fixtures;
+PostgreSQL, live provider behavior, and joint staging sign-off were not exercised.
+
 See the [Phase 3 retrieval benchmark](reflection-retrieval-benchmark.md) for the semantic comparison and the Groq conversation-context checks.

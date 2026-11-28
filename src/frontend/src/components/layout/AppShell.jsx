@@ -67,7 +67,7 @@ export default function AppShell() {
       <Sidebar drawer onClose={() => closeSidebar()} onNavigate={() => closeSidebar(false)} />
     </dialog>}
     <div className="shell-content" id="app-content" tabIndex={-1}>
-      <div key={location.pathname} className="page-move" data-direction={direction}>
+      <div key={/^\/reflection-chat(?:\/|$)/.test(location.pathname) ? '/reflection-chat' : location.pathname} className="page-move" data-direction={direction}>
         <Outlet context={{ openSidebar, sidebarOpen: open, registerNavigationGuard, confirmNavigation }} />
       </div>
     </div>

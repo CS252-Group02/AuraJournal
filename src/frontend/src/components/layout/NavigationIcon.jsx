@@ -1,5 +1,6 @@
 export default function NavigationIcon({ name }) {
   const paths = {
+    chat: <path d="M4 3h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H9l-6 4V4a1 1 0 0 1 1-1Z" />,
     main: <><path d="m3 10 9-7 9 7" /><path d="M5 9v12h5v-7h4v7h5V9" /></>,
     dashboard: <><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M3 9h18M8 2v4m8-4v4M8 13h1m6 0h1m-8 4h1m6 0h1" /></>,
     history: <><path d="M5 3h13a1 1 0 0 1 1 1v17H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" /><path d="M5 17h14M7 7h8m-8 4h6" /></>,

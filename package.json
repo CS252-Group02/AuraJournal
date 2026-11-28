@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:frontend": "node --test tests/frontend-api.test.js tests/frontend-record.test.js tests/frontend-record-flow.test.js tests/frontend-record-animation.test.js tests/frontend-journal.test.js tests/frontend-recap.test.js tests/frontend-calendar.test.js tests/frontend-home.test.js tests/frontend-navigation.test.js tests/frontend-dashboard.test.js tests/frontend-pixel-memories.test.js tests/frontend-theme.test.js tests/frontend-qa.test.js",
-    "test:frontend:browser": "node --test --test-concurrency=1 tests/frontend-account-browser.test.js tests/frontend-pixel-memories-browser.test.js tests/frontend-ai-contract-browser.test.js",
+    "test:frontend": "node --test tests/frontend-api.test.js tests/frontend-record.test.js tests/frontend-record-flow.test.js tests/frontend-record-animation.test.js tests/frontend-journal.test.js tests/frontend-recap.test.js tests/frontend-calendar.test.js tests/frontend-home.test.js tests/frontend-navigation.test.js tests/frontend-dashboard.test.js tests/frontend-pixel-memories.test.js tests/frontend-theme.test.js tests/frontend-qa.test.js tests/frontend-reflection-chat.test.js",
+    "test:frontend:browser": "node --test --test-concurrency=1 tests/frontend-account-browser.test.js tests/frontend-pixel-memories-browser.test.js tests/frontend-ai-contract-browser.test.js tests/frontend-reflection-chat-browser.test.js",
     "start": "node scripts/start.js",
     "dev": "vite src/frontend --config src/frontend/vite.config.js",
     "build": "vite build src/frontend --config src/frontend/vite.config.js"

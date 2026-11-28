@@ -55,7 +55,7 @@ test('desktop sidebar starts collapsed with working links, accessible names, and
   const html = render(Sidebar);
   assert.match(html, /data-expanded="false"/);
   assert.match(html, /aria-label="Main navigation"/);
-  for (const [label, path] of [['Main', '/'], ['Dashboard', '/dashboard'], ['History', '/history'], ['Moments in Pixels', '/memories'], ['Weekly recap', '/reflection']]) {
+  for (const [label, path] of [['Main', '/'], ['Dashboard', '/dashboard'], ['History', '/history'], ['Moments in Pixels', '/memories'], ['Weekly recap', '/reflection'], ['Reflection Chat', '/reflection-chat']]) {
     assert.match(html, new RegExp(`aria-label="${label}"`));
     assert.ok(html.includes(`href="${path}"`));
   }
@@ -66,7 +66,7 @@ test('desktop sidebar starts collapsed with working links, accessible names, and
 test('sidebar highlights exactly one route, including History for a journal detail', async () => {
   const { Sidebar } = await components;
   for (const [path, label] of [['/', 'Main'], ['/dashboard', 'Dashboard'], ['/history', 'History'],
-    ['/memories', 'Moments in Pixels'], ['/journal/id', 'History'], ['/reflection', 'Weekly recap']]) {
+    ['/memories', 'Moments in Pixels'], ['/journal/id', 'History'], ['/reflection', 'Weekly recap'], ['/reflection-chat/abc', 'Reflection Chat']]) {
     const html = render(Sidebar, {}, path);
     assert.equal((html.match(/aria-current="page"/g) || []).length, 1, path);
     const active = html.match(/<a[^>]*aria-current="page"[^>]*>/)?.[0];
