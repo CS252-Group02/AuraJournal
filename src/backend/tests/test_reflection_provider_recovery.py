@@ -1,5 +1,5 @@
 import json
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from threading import Event
 from types import SimpleNamespace
 from uuid import uuid4
@@ -50,6 +50,34 @@ def status_error(status, *, code=None, error_type=APIStatusError):
 
 def turn():
     return ReflectionTurnRequest(turn_id=uuid4(), expected_revision=0, message='I took a walk.', locale='en')
+
+
+def wait_for_provider(entered, sending):
+    completed, _ = wait((entered, sending), timeout=8, return_when=FIRST_COMPLETED)
+    if sending in completed:
+        # Propagate request exceptions instead of hiding them behind a timeout.
+        response = sending.result()
+        pytest.fail(f'Request finished before the provider checkpoint: HTTP {response.status_code}.')
+    assert entered in completed, 'Timed out waiting for the provider checkpoint.'
+    entered.result()
+
+
+@pytest.mark.parametrize(('error', 'expected', 'message'), [
+    (AssertionError('provider precondition failed'), AssertionError, 'provider precondition failed'),
+    (AIServiceUnavailableError('provider unavailable'), pytest.fail.Exception, 'HTTP 503'),
+])
+def test_provider_checkpoint_surfaces_early_request_failure(migrated_engine, error, expected, message):
+    app = application_for(migrated_engine)
+    app.state.reflection_chat_assistant = ReflectionChatAssistant(Completions(error), model=PRIMARY)
+    entered = Future()
+    with TestClient(app, headers=HEADERS) as alice:
+        register(alice, 'alice')
+        path = f'{PATH}/{alice.post(PATH, json={}).json()["id"]}'
+        with ThreadPoolExecutor() as pool:
+            sending = pool.submit(alice.post, path + '/turns', json=payload())
+            with pytest.raises(expected, match=message):
+                wait_for_provider(entered, sending)
+        assert not entered.done()
 
 
 def test_recovers_only_failed_steps_with_strict_outputs_and_safe_logs(caplog):
@@ -126,12 +154,12 @@ def test_deadline_discards_late_results_and_skips_fallback(monkeypatch):
 
 
 def test_opt_out_stops_resending_prepared_excerpts(migrated_engine):
-    entered, release = Event(), Event()
+    entered, release = Future(), Event()
 
     class BlockGeneration(Completions):
         def create(self, **kwargs):
             if kwargs['response_format']['json_schema']['name'] == 'GeneratedReflection':
-                entered.set()
+                entered.set_result(None)
                 assert release.wait(10)
             return super().create(**kwargs)
 
@@ -147,7 +175,7 @@ def test_opt_out_stops_resending_prepared_excerpts(migrated_engine):
         with ThreadPoolExecutor() as pool:
             sending = pool.submit(alice.post, path + '/turns', json=payload('Harbor.'))
             try:
-                assert entered.wait(8)
+                wait_for_provider(entered, sending)
                 assert set_access(second_tab, path, False, 1).status_code == 200
             finally:
                 release.set()
@@ -158,7 +186,7 @@ def test_opt_out_stops_resending_prepared_excerpts(migrated_engine):
 
 
 def test_retry_stops_when_another_tab_advances_revision(migrated_engine):
-    entered, release = Event(), Event()
+    entered, release = Future(), Event()
     stale_message = 'I took a walk.'
     current_message = 'I read a book.'
 
@@ -172,7 +200,7 @@ def test_retry_stops_when_another_tab_advances_revision(migrated_engine):
             message = json.loads(kwargs['messages'][1]['content'])['message']
             self.steps.append((message, step))
             if message == stale_message and step == 'RoutingDecision':
-                entered.set()
+                entered.set_result(None)
                 assert release.wait(10)
                 raise status_error(502)
             result = {
@@ -193,7 +221,7 @@ def test_retry_stops_when_another_tab_advances_revision(migrated_engine):
         with ThreadPoolExecutor() as pool:
             sending = pool.submit(alice.post, path + '/turns', json=payload(stale_message))
             try:
-                assert entered.wait(8)
+                wait_for_provider(entered, sending)
                 saved = second_tab.post(path + '/turns', json=current)
                 assert saved.status_code == 200
             finally:
@@ -212,14 +240,14 @@ def test_retry_stops_when_another_tab_advances_revision(migrated_engine):
     ('opt_out', 409), ('edit', 409), ('delete', 409), ('logout', 401), ('none', 200),
 ])
 def test_first_review_rechecks_journal_context_after_successful_generation(migrated_engine, change, expected_status):
-    entered, release = Event(), Event()
+    entered, release = Future(), Event()
 
     class BlockGeneration(Completions):
         def create(self, **kwargs):
             assert migrated_engine.pool.checkedout() == 0
             if kwargs['response_format']['json_schema']['name'] == 'GeneratedReflection':
                 assert json.loads(kwargs['messages'][1]['content'])['journal_excerpts']
-                entered.set()
+                entered.set_result(None)
                 assert release.wait(10)
             return super().create(**kwargs)
 
@@ -235,7 +263,7 @@ def test_first_review_rechecks_journal_context_after_successful_generation(migra
         with ThreadPoolExecutor() as pool:
             sending = pool.submit(alice.post, path + '/turns', json=payload('Harbor.'))
             try:
-                assert entered.wait(8)
+                wait_for_provider(entered, sending)
                 if change == 'opt_out':
                     assert set_access(second_tab, path, False, 1).status_code == 200
                 elif change == 'edit':
