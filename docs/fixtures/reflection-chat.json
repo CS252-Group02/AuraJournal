@@ -1,0 +1,92 @@
+{
+  "turn_request": {
+    "turn_id": "2f8b1d34-da8c-4280-bede-1fd4f8237398",
+    "expected_revision": 0,
+    "message": "I took a walk after my meeting. Help me think through the afternoon.",
+    "locale": "en"
+  },
+  "chat": {
+    "id": "aef0224d-402b-44ce-97ac-28012fe80d46",
+    "title": "New reflection",
+    "revision": 0,
+    "created_at": "2026-11-28T08:00:00Z",
+    "updated_at": "2026-11-28T08:00:00Z"
+  },
+  "empty_list": { "chats": [], "next_cursor": null },
+  "empty_detail": {
+    "chat": {
+      "id": "aef0224d-402b-44ce-97ac-28012fe80d46",
+      "title": "New reflection",
+      "revision": 0,
+      "created_at": "2026-11-28T08:00:00Z",
+      "updated_at": "2026-11-28T08:00:00Z"
+    },
+    "turns": [],
+    "next_before_revision": null
+  },
+  "turn_responses": {
+    "reflection": {
+      "turn_id": "2f8b1d34-da8c-4280-bede-1fd4f8237398",
+      "revision": 1,
+      "message": "I took a walk after my meeting. Help me think through the afternoon.",
+      "reply": "You took a walk after the meeting. What did you notice on the walk?",
+      "outcome": "reflection",
+      "support_kind": null,
+      "created_at": "2026-11-28T08:01:00Z"
+    },
+    "out_of_scope": {
+      "turn_id": "a056f9b4-19d4-42ad-afdd-4140356af33d",
+      "revision": 1,
+      "message": "Write my homework.",
+      "reply": "I’m here to help you reflect on your experiences. Is there something that happened that you’d like to think through?",
+      "outcome": "out_of_scope",
+      "support_kind": null,
+      "created_at": "2026-11-28T08:01:00Z"
+    },
+    "mood_boundary": {
+      "turn_id": "f73c1053-3a70-4a24-ba41-b274a85d9a53",
+      "revision": 1,
+      "message": "What mood am I in?",
+      "reply": "I’ll leave the name of your mood up to you. What did you notice about how you felt in that moment?",
+      "outcome": "mood_boundary",
+      "support_kind": null,
+      "created_at": "2026-11-28T08:01:00Z"
+    },
+    "professional_support": {
+      "turn_id": "2ec72c92-2fed-4220-bb29-06a448ad43b4",
+      "revision": 1,
+      "message": "Do I have depression?",
+      "reply": "A qualified health professional can help assess what you’re experiencing. You can start with a primary care doctor or a licensed mental health professional.",
+      "outcome": "professional_support",
+      "support_kind": "professional_support",
+      "created_at": "2026-11-28T08:01:00Z"
+    },
+    "urgent_support": {
+      "turn_id": "298dc43e-9cc8-4d2f-a67b-96e161ee324f",
+      "revision": 1,
+      "message": "I'm going to hurt myself tonight.",
+      "reply": "If you or someone else is in immediate danger, contact local emergency services now. If you can, reach out to someone you trust who can stay with you.",
+      "outcome": "urgent_support",
+      "support_kind": "urgent_support",
+      "created_at": "2026-11-28T08:01:00Z"
+    }
+  },
+  "support": {
+    "country": "VN",
+    "locale": "vi",
+    "urgent_support": {
+      "guidance": "Nếu bạn hoặc người khác đang gặp nguy hiểm ngay lúc này, hãy liên hệ dịch vụ cấp cứu tại địa phương. Nếu có thể, hãy nhờ một người bạn tin tưởng ở bên bạn.",
+      "resources": [{ "label": "Đường dây hỗ trợ tại Việt Nam", "url": "https://findahelpline.com/countries/vn" }]
+    },
+    "professional_support": {
+      "guidance": "Chuyên gia y tế có thể giúp bạn đánh giá những gì bạn đang trải qua. Bạn có thể bắt đầu với bác sĩ hoặc chuyên gia sức khỏe tâm thần có giấy phép.",
+      "resources": []
+    }
+  },
+  "errors": {
+    "409": { "detail": "This conversation changed. Refresh it before sending another message." },
+    "429": { "detail": "Too many requests. Try again later." },
+    "502": { "detail": "AI service returned an invalid reflection." },
+    "503": { "detail": "Reflection chat is unavailable. Please try again later." }
+  }
+}

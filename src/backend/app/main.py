@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from threading import BoundedSemaphore
 import asyncio
+import os
 
 from fastapi import Depends, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,9 +20,11 @@ from app.routers.auth import router as auth_router
 from app.routers.summaries import router as summaries_router
 from app.routers.titles import router as titles_router
 from app.routers.reflections import router as reflections_router
+from app.routers.reflection_chat import router as reflection_chat_router
 from app.routers.weekly_reflections import router as weekly_reflections_router
 from app.services.weekly_recap import WeeklyRecapGenerator
 from app.services.weekly_reflection import GroqWeeklyReflectionGenerator
+from app.services.reflection_chat import ReflectionChatAssistant
 from app.services import JournalSummarizer, JournalTitleGenerator
 from app.auth import require_browser_request
 from app.deployment import production, validate_settings, validate_database
@@ -66,6 +69,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
     app.state.weekly_recap_generator = WeeklyRecapGenerator()
     app.state.weekly_reflection_generator = GroqWeeklyReflectionGenerator()
     app.state.journal_question_answerer = GroqJournalQuestionAnswerer()
+    app.state.reflection_chat_assistant = ReflectionChatAssistant()
     app.state.deepgram_streaming_client = DeepgramStreamingClient(open_timeout=8)
     app.state.deepgram_recording_client = DeepgramRecordedClient()
     app.state.moment_extractor = MomentExtractor()
@@ -122,6 +126,8 @@ def create_app(database_url: str | None = None) -> FastAPI:
     app.include_router(titles_router)
     app.include_router(auth_router)
     app.include_router(reflections_router)
+    if not production() or os.environ.get('REFLECTION_CHAT_ENABLED', '').lower() == 'true':
+        app.include_router(reflection_chat_router)
     app.include_router(weekly_reflections_router)
     app.include_router(pixel_art_router)
     app.include_router(transcriptions_router)
