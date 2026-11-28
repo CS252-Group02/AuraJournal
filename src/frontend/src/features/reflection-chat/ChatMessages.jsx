@@ -5,12 +5,13 @@ export default function ChatMessages({ state, onOlder, renderSupport, renderSour
   const turns = state.detail.turns;
   useLayoutEffect(() => {
     const element = scroller.current;
+    if (previous.current && state.loadingOlder) return;
     if (previous.current) {
       const { height, top } = previous.current;
       element.scrollTop = top + element.scrollHeight - height;
       previous.current = null;
     } else if (nearBottom.current) element.scrollTop = element.scrollHeight;
-  }, [turns, state.pending]);
+  }, [turns, state.pending, state.loadingOlder]);
   function older() {
     const element = scroller.current;
     previous.current = { height: element.scrollHeight, top: element.scrollTop };

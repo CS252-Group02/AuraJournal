@@ -384,3 +384,10 @@ storage. Browser tests use fictional local responses, not real provider calls.
 Run `node --test tests/frontend-reflection-chat.test.js` and
 `BROWSER_BIN=/usr/bin/brave-browser node --test tests/frontend-reflection-chat-browser.test.js`.
 See [the chat contract](../../docs/reflection-chat.md) for staging requirements.
+
+Journal access is server-confirmed per chat and defaults off. Consent updates
+reload metadata on conflicts and discard in-flight local replies. Citations are
+backend-returned entry/date links using calendar dates without timezone shifts.
+`ChatSources.jsx` does not infer journal evidence from model text. Phase 2 is
+reviewed on `feat/reflection-chat-journals-ui`, stacked on `feat/reflection-chat-ui`
+until Phase 1 merges.

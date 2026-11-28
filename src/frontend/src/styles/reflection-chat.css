@@ -40,3 +40,7 @@
 .chat-journal-access label { display: flex; gap: 10px; align-items: center; font-weight: 600; }
 .chat-journal-access input { width: 18px; height: 18px; accent-color: var(--aj-green-dark); }
 .chat-journal-access p { color: var(--aj-muted); font-size: .85rem; line-height: 1.6; margin: 8px 0 0; }
+.chat-sources { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 14px; font-size: .85rem; }
+.chat-sources span { color: var(--aj-muted); }
+.chat-sources a { color: var(--aj-green-dark); padding: 6px 10px; border: 1px solid var(--aj-line); border-radius: 6px; text-decoration: none; }
+.chat-sources a:hover { background: var(--aj-soft); }

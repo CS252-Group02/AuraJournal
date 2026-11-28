@@ -9,7 +9,7 @@ export default function ChatComposer({ state, locale, onLocale, onDraft, onSend 
     return () => clearInterval(timer);
   }, [state.retryAt]);
   const waiting = state.retryAt > now;
-  const disabled = state.needsRefresh || state.refreshing || state.sending || state.accessPending || !state.draft.trim() || state.draft.length > 2000 || waiting;
+  const disabled = state.deleting || state.needsRefresh || state.refreshing || state.sending || state.accessPending || !state.draft.trim() || state.draft.length > 2000 || waiting;
   return <form className="chat-composer" onSubmit={event => { event.preventDefault(); if (!disabled) onSend(locale); }}>
     <label htmlFor="chat-draft">Your message</label>
     <textarea id="chat-draft" value={state.draft} maxLength={2000} rows={4} disabled={state.sending}

@@ -23,8 +23,12 @@ export function createChatWorkspace(api = chatApi) {
     update({ listStatus: 'loading', listError: '' });
     try {
       const data = await api.list(more ? state.cursor : null, task.signal);
-      if (task.current()) update({ chats: more ? mergeBy(state.chats, data.chats, 'id') : data.chats,
-        cursor: data.next_cursor, listStatus: 'ready' });
+      if (task.current()) {
+        const summary = data.chats.find(chat => chat.id === state.chatId);
+        update({ chats: more ? mergeBy(state.chats, data.chats, 'id') : data.chats,
+          cursor: data.next_cursor, listStatus: 'ready',
+          ...(summary && state.detail ? { detail: { ...state.detail, chat: { ...state.detail.chat, title: summary.title } } } : {}) });
+      }
     } catch (error) { if (task.current()) update({ listStatus: 'error', listError: error.message }); }
   }
   async function open(id) {
@@ -83,6 +87,7 @@ export function createChatWorkspace(api = chatApi) {
     const payload = state.retry?.message === message && state.retry.locale === locale
       ? { ...state.retry, expected_revision: state.detail.chat.revision }
       : { turn_id: crypto.randomUUID(), expected_revision: state.detail.chat.revision, message, locale };
+    cancel('list');
     const task = job('turn'); update({ sending: true, pending: payload, retry: payload, error: '' });
     try {
       const turn = await api.send(id, payload, task.signal);
@@ -130,8 +135,9 @@ export function createChatWorkspace(api = chatApi) {
   async function remove() {
     if (!state.chatId || state.deleting) return false;
     const id = state.chatId, task = job('delete');
+    cancel('access');
     cancel('turn'); cancel('detail'); cancel('older');
-    update({ deleting: true, deleteError: '', sending: false, pending: null });
+    update({ deleting: true, deleteError: '', sending: false, pending: null, accessPending: false, refreshing: false });
     try {
       await api.remove(id, task.signal);
       if (!task.current()) return false;
@@ -139,7 +145,7 @@ export function createChatWorkspace(api = chatApi) {
       update({ deleting: false, chats: state.chats.filter(chat => chat.id !== id), detail: null, draft: '', retry: null });
       return true;
     } catch (error) {
-      if (task.current()) update({ deleting: false, deleteError: error.message, needsRefresh: true });
+      if (task.current()) update({ deleting: false, deleteError: error.message, error: 'Deletion could not be confirmed. Reload the conversation before continuing.', needsRefresh: true });
       return false;
     }
   }

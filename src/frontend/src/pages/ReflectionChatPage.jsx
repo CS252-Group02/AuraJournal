@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import PageHeader from '../components/layout/PageHeader.jsx';
 import { useAuth } from '../auth/Auth.jsx';
 import { subscribeAuthChanges } from '../lib/api.js';
+import ChatSources from '../features/reflection-chat/ChatSources.jsx';
 import SupportOptions from '../features/reflection-chat/SupportOptions.jsx';
 import ChatMessages from '../features/reflection-chat/ChatMessages.jsx';
 import ChatComposer from '../features/reflection-chat/ChatComposer.jsx';
@@ -39,6 +41,7 @@ function ChatWorkspace() {
     {state.cursor && <button type="button" onClick={() => workspace.list(true)} disabled={state.listStatus === 'loading'}>Load more chats</button>}
   </>;
   return <main className="aj-page chat-page">
+    <PageHeader />
     <header className="chat-header"><div><p className="aj-kicker">A space to think</p><h1>Reflection Chat</h1></div>
       <button ref={historyButton} type="button" className="aj-btn chat-history-toggle" onClick={() => drawer.current?.showModal()}>Saved chats</button>
     </header>
@@ -61,7 +64,7 @@ function ChatWorkspace() {
             {state.accessPending && <p role="status">Updating journal access…</p>}
             {state.notice && <p role="status">{state.notice}</p>}
           </section>
-          <ChatMessages key={chatId} state={state} onOlder={() => workspace.older()} renderSupport={turn => turn.support_kind && <SupportOptions key={`${turn.turn_id}:${locale}`} kind={turn.support_kind} locale={locale} />} />
+          <ChatMessages key={chatId} state={state} onOlder={() => workspace.older()} renderSources={turn => <ChatSources sources={turn.sources} />} renderSupport={turn => turn.support_kind && <SupportOptions key={`${turn.turn_id}:${locale}`} kind={turn.support_kind} locale={locale} />} />
           <ChatComposer state={state} locale={locale} onLocale={setLocale} onDraft={workspace.setDraft} onSend={workspace.send} />
         </>}
       </section>

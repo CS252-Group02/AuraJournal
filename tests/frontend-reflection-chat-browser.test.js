@@ -14,9 +14,19 @@ function installFixture(f) {
     if (!path.startsWith('/api/')) return original(url, options);
     control.calls.push({ path, method, body });
     if (path === '/api/auth/me') return json({ id: 'chat-user', email: 'chat@example.test' });
+    if (path === '/api/auth/login') { chats.clear(); return json({ id: 'other-user', email: 'other@example.test' }); }
+    if (path === '/api/entries') return json([]);
     if (path === '/api/auth/logout') return json({}, 204);
     if (path === '/api/reflection-chats/support') return control.supportFail ? json({}, 503) : json({ ...f.support, country: parsed.searchParams.get('country') });
-    if (path === '/api/reflection-chats' && method === 'GET') return json({ chats: [...chats.values()].map(item => item.chat), next_cursor: null });
+    if (path === '/api/reflection-chats' && method === 'GET') {
+      if (parsed.searchParams.has('cursor')) {
+        const id = '00000000-0000-4000-8000-000000000999';
+        chats.set(id, { chat: { ...f.chat, id, title: 'Archived chat', revision: 2 },
+          turns: [{ ...f.turn_responses.reflection, turn_id: 'archive-latest', message: 'Latest archive message', revision: 2 }], next_before_revision: 2 });
+        return json({ chats: [chats.get(id).chat], next_cursor: null });
+      }
+      return json({ chats: [...chats.values()].filter(item => item.chat.title !== 'Archived chat').map(item => item.chat), next_cursor: 'older' });
+    }
     if (path === '/api/reflection-chats' && method === 'POST') {
       const id = `00000000-0000-4000-8000-${String(++sequence).padStart(12, '0')}`;
       chats.set(id, { chat: { ...f.chat, id }, turns: [], next_before_revision: null }); return json(chats.get(id).chat, 201);
@@ -25,7 +35,8 @@ function installFixture(f) {
     if (!match) return json({ detail: 'Not configured' }, 404);
     const id = match[1], detail = chats.get(id);
     if (!detail) return json({ detail: 'Reflection chat not found.' }, 404);
-    if (method === 'GET') return json(detail);
+    if (method === 'GET' && parsed.searchParams.has('before_revision')) return json({ ...detail, turns: [{ ...f.turn_responses.reflection, turn_id: 'archive-earliest', message: 'Earlier archive message', revision: 1 }], next_before_revision: null });
+    if (method === 'GET') return json(control.clearSources ? { ...detail, turns: detail.turns.map(turn => ({ ...turn, sources: [] })) } : detail);
     if (method === 'DELETE') { chats.delete(id); return json(null, 204); }
     if (method === 'PATCH') {
       if (control.accessConflict) { control.accessConflict = false; detail.chat.journal_access_version++; return json({ detail: 'Journal access changed.' }, 409); }
@@ -63,6 +74,16 @@ test('Reflection Chat browser acceptance with fictional local fixtures', { skip:
   async function waitReply(text) { await browser.waitFor(`document.querySelector('.chat-messages').innerText.includes(${JSON.stringify(text)})`); }
   await browser.call('Page.navigate', { url: origin + '/reflection-chat' });
   await browser.waitFor("document.querySelector('.chat-empty')");
+  await click('.account-trigger'); await browser.waitFor("document.querySelector('.account-panel')");
+  assert.equal(await evaluate("document.querySelector('.account-panel').innerText.includes('chat@example.test')"), true);
+  await browser.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+  await context.test('saved history and older-message pagination resume conversations', async () => {
+    await button('Load more chats', "document.querySelector('.chat-history')");
+    await click('.chat-history a[href$="000000000999"]'); await waitReply('Latest archive message');
+    await button('Load older messages'); await waitReply('Earlier archive message');
+    assert.equal(await evaluate("document.querySelector('.chat-messages').innerText.indexOf('Earlier archive message') < document.querySelector('.chat-messages').innerText.indexOf('Latest archive message')"), true);
+    await click('a[aria-label="Reflection Chat"]'); await browser.waitFor("document.querySelector('.chat-empty')");
+  });
   await button('Start a new chat'); await browser.waitFor("document.querySelector('#chat-draft')");
   const firstUrl = await evaluate('location.pathname');
 
@@ -108,6 +129,32 @@ test('Reflection Chat browser acceptance with fictional local fixtures', { skip:
     await draft('Draft in second chat');
     await click(`.chat-history a[href="${firstUrl}"]`); await browser.waitFor("document.querySelector('#chat-draft')?.value==='' && document.querySelector('.chat-messages')?.innerText.includes('Pending in first chat')");
   });
+  await context.test('journal consent, citations, missing evidence and opt-out during generation', async () => {
+    const toggle = '.chat-journal-access input';
+    assert.equal(await evaluate(`document.querySelector('${toggle}').checked`), false);
+    await click(toggle); await browser.waitFor(`document.querySelector('${toggle}').checked && !document.querySelector('${toggle}').disabled`);
+    await evaluate("__chat.outcome='grounded_reflection'"); await draft('Find my harbor walk'); await button('Send');
+    await browser.waitFor("document.querySelector('.chat-sources a')");
+    assert.equal(await evaluate("document.querySelector('.chat-sources a').getAttribute('href')"), '/journal/3514c39a-4637-40e5-b332-4b4b423fa82c');
+    assert.equal(await evaluate("document.querySelector('.chat-sources a').textContent"), 'Nov 27, 2026');
+    await evaluate('__chat.accessConflict=true'); await click(toggle);
+    await browser.waitFor("document.body.innerText.includes('changed in another tab')");
+    assert.equal(await evaluate(`document.querySelector('${toggle}').checked`), true);
+    await evaluate("__chat.hold=true; __chat.release=null"); await draft('Pending journal reflection'); await button('Send'); await browser.waitFor('__chat.release');
+    await click(toggle); await browser.waitFor(`!document.querySelector('${toggle}').checked && !document.querySelector('${toggle}').disabled`);
+    await evaluate('__chat.fail=409;__chat.hold=false;__chat.release()');
+    assert.equal(await evaluate("document.querySelector('#chat-draft').value"), 'Pending journal reflection');
+    // Clear citations in the server fixture to represent an edited/deleted source.
+    await evaluate("__chat.clearSources=true");
+    await button('New chat', "document.querySelector('.chat-history')");
+    await browser.waitFor(`location.pathname !== ${JSON.stringify(firstUrl)} && document.querySelector('.chat-journal-access input')`);
+    assert.equal(await evaluate(`document.querySelector('${toggle}').checked`), false);
+    await click(`.chat-history a[href="${firstUrl}"]`);
+    await browser.waitFor(`location.pathname === ${JSON.stringify(firstUrl)} && document.querySelector('#chat-draft')`);
+    await browser.waitFor("document.querySelectorAll('.chat-sources a').length===0");
+    await evaluate("__chat.outcome='reflection';__chat.fail=0"); await draft('No matching journal evidence'); await button('Send'); await waitReply('No matching journal evidence');
+    assert.equal(await evaluate("document.querySelectorAll('.chat-sources a').length"), 0);
+  });
   await context.test('mobile history, keyboard composition, deletion focus, and themes', async () => {
     await browser.call('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
     await click('.chat-history-toggle'); await browser.waitFor("document.querySelector('.chat-history-dialog').open");
@@ -126,6 +173,23 @@ test('Reflection Chat browser acceptance with fictional local fixtures', { skip:
     await button('Cancel', "document.querySelector('.aj-dialog')");
     assert.equal(await evaluate("document.activeElement.textContent"), 'Delete chat');
     await button('Delete chat'); await button('Delete conversation'); await browser.waitFor("location.pathname==='/reflection-chat' && document.querySelector('.chat-empty')");
+  });
+  await context.test('session expiry discards pending replies and a new account has no inherited draft', async () => {
+    await button('Start a new chat'); await browser.waitFor("document.querySelector('#chat-draft')");
+    await evaluate("__chat.hold=true;__chat.release=null;__chat.outcome='reflection'");
+    await draft('Private old account message'); await button('Send'); await browser.waitFor('__chat.release');
+    await evaluate("dispatchEvent(new Event('aurajournal:unauthorized'))");
+    await browser.waitFor("location.pathname==='/login'");
+    await evaluate('__chat.hold=false;__chat.release()');
+    assert.equal(await evaluate("document.body.innerText.includes('Private old account message')"), false);
+    await evaluate("for (const [id,value] of [['email','other@example.test'],['password','fictional-password']]) { const el=document.getElementById(id);Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,value);el.dispatchEvent(new Event('input',{bubbles:true})); }");
+    await button('Log in'); await browser.waitFor("location.pathname==='/'");
+    // Use a same-document route change through the real React Router link.
+    await evaluate("document.querySelector('a[href=\"/reflection-chat\"]').click()");
+    await browser.waitFor("document.querySelector('.chat-empty')");
+    await button('Start a new chat'); await browser.waitFor("document.querySelector('#chat-draft')");
+    assert.equal(await evaluate("document.querySelector('#chat-draft').value"), '');
+    assert.equal(await evaluate("document.body.innerText.includes('Private old account message')"), false);
   });
   assert.deepEqual(errors, []);
 });

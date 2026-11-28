@@ -152,3 +152,19 @@ test('stale consent reloads the server setting without silently applying it agai
   assert.equal(workspace.getSnapshot().detail.chat.journal_access_version, 1);
   assert.match(workspace.getSnapshot().error, /another tab/);
 });
+
+test('source dates use calendar dates and citations link only returned entry IDs', async () => {
+  const { createRequire } = await import('node:module');
+  const React = await import('react');
+  const { renderToStaticMarkup } = await import('react-dom/server');
+  const { MemoryRouter } = await import('react-router-dom');
+  const result = await build({ entryPoints: ['src/frontend/src/features/reflection-chat/ChatSources.jsx'], bundle: true,
+    write: false, platform: 'node', format: 'cjs', packages: 'external', jsx: 'automatic' });
+  const module = { exports: {} };
+  new Function('require', 'module', 'exports', result.outputFiles[0].text)(createRequire(import.meta.url), module, module.exports);
+  const { default: Sources, sourceDate } = module.exports;
+  assert.equal(sourceDate('2026-11-27'), 'Nov 27, 2026');
+  const render = sources => renderToStaticMarkup(React.createElement(MemoryRouter, null, React.createElement(Sources, { sources })));
+  assert.equal(render([]), '');
+  assert.match(render(fixtures.turn_responses.grounded_reflection.sources), /href="\/journal\/3514c39a-4637-40e5-b332-4b4b423fa82c"/);
+});

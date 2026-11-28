@@ -52,3 +52,30 @@ Frontend checks: `npm run test:frontend`, `npm run build`, and
 `BROWSER_BIN=/usr/bin/brave-browser npm run test:frontend:browser`. Browser checks
 use fictional mocked API data. Live staging and support-owner sign-off remain
 required before enabling the feature for testers.
+
+## Phase 2 frontend and review handoff
+
+Each chat has a server-confirmed **Use my journals** control with provider
+processing disclosure. Consent updates block sends, preserve drafts, and discard
+late local replies. Version conflicts reload the actual setting instead of
+silently reapplying consent. Historical messages remain visible after opt-out.
+Returned citations appear as calendar dates linked to `/journal/{entry_id}`;
+reloading history removes citations the backend no longer returns. No frontend
+journal search or citation extraction is performed.
+
+Implementation is split into six Phase 1 commits on `feat/reflection-chat-ui`
+and two Phase 2 commits on `feat/reflection-chat-journals-ui`. Phase 2 is stacked
+on Phase 1 for review; merge Phase 1 first, then retarget Phase 2 to `main`.
+Preserve the logical commits rather than squashing a whole phase together.
+
+Before tester release, record staging verification with fictional English,
+Vietnamese and mixed-language journals: natural reflection, all routing outcomes,
+unknown-country support fallback, an older relevant source beating a recent
+weak match, consent changes during generation, and edited/deleted citations.
+Assign and record a support-resource review owner before enabling the backend
+feature flag. Local mocks do not establish live model quality or resource review.
+
+Local frontend verification (2026-11-28): 224 frontend tests, 33 browser checks
+(including the existing account/gallery/AI-contract regressions), and production
+build passed. Browser checks ran with headless Brave and fictional API fixtures;
+PostgreSQL, live provider behavior, and joint staging sign-off were not exercised.
