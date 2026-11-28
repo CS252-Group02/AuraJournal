@@ -51,7 +51,7 @@ function ChatWorkspace() {
         {!chatId && <div className="chat-empty"><h2>What would you like to reflect on?</h2><p>Start a private conversation about something you experienced. Chats are saved until you delete them or your account.</p><button className="aj-btn" onClick={newChat} disabled={state.creating}>Start a new chat</button></div>}
         {state.status === 'loading' && <p role="status">Loading conversation…</p>}
         {state.error && <div role="alert"><p>{state.error}</p><button onClick={() => workspace.refresh()}>Reload conversation</button> <Link to="/reflection-chat">Back to chats</Link></div>}
-        {state.detail && <><div className="chat-conversation-header"><h2>{state.detail.chat.title}</h2>
+        {state.chatId === chatId && state.detail && <><div className="chat-conversation-header"><h2>{state.detail.chat.title}</h2>
           <button ref={deleteButton} className="aj-btn aj-btn-danger" onClick={() => deleteDialog.current?.showModal()}>Delete chat</button></div>
           <ChatMessages key={chatId} state={state} onOlder={() => workspace.older()} renderSupport={turn => turn.support_kind && <SupportOptions key={`${turn.turn_id}:${locale}`} kind={turn.support_kind} locale={locale} />} />
           <ChatComposer state={state} locale={locale} onLocale={setLocale} onDraft={workspace.setDraft} onSend={workspace.send} />

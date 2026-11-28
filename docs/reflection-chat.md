@@ -33,3 +33,22 @@ Turning journal access off keeps old messages visible and excludes journal-groun
 Apply Alembic revision `0012` and rerun `scripts/database-runtime-role.sql` after upgrading a restricted PostgreSQL deployment. The routes are enabled in development and tests. On staging, set `REFLECTION_CHAT_ENABLED=true` in the API environment only after a team owner validates the support guidance and directory links and checks the configured model with fictional journals. Provider-backed turns require the existing `GROQ_API_KEY`. A normal reflection uses separate classification, generation, and reply review calls. Direct urgent disclosures covered by the local rules use a fixed response and can succeed when the provider is unavailable. The bundled urgent directory points to [the Vietnam listings from Find A Helpline](https://findahelpline.com/countries/vn). Other countries and professional support use general guidance until a suitable local listing is reviewed.
 
 Run `python -m pytest tests/test_reflection_chat.py tests/test_reflection_chat_journals.py tests/test_account_data.py tests/test_database.py -q` from `src/backend` with the disposable PostgreSQL `TEST_DATABASE_URL`. Tests use fake provider transports. Before enabling staging, review routing, excerpts, and citations with fictional English, Vietnamese, and mixed-language conversations. Check present danger, past disclosures, mood-label requests, an older high-relevance match, and an opt-out during generation.
+
+## Phase 1 frontend
+
+The protected `/reflection-chat` workspace includes desktop history, mobile
+history drawer, new/resumed conversations, older-message pagination, composer,
+plain-text replies, explicit country support lookup, and confirmed deletion.
+Weekly recap remains at `/reflection`. English UI offers an English/Vietnamese
+reply selector (initially based on browser language).
+
+Unchanged retries retain their turn ID; editing a failed message creates a new
+submission. Conflicts reload metadata/history and require explicit resend.
+Cooldowns honor `Retry-After`. Switching chats cancels local requests; a server
+turn already running may still save, so history reloads when returning. Drafts
+and pending IDs stay in memory and clear on account changes or workspace exit.
+
+Frontend checks: `npm run test:frontend`, `npm run build`, and
+`BROWSER_BIN=/usr/bin/brave-browser npm run test:frontend:browser`. Browser checks
+use fictional mocked API data. Live staging and support-owner sign-off remain
+required before enabling the feature for testers.

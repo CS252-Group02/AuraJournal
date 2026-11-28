@@ -357,3 +357,12 @@ unless explicitly requested.
 
 See the [Record flow guide](../README.md#record-flow--pr-a-u06u07) for the owner
 API, format references, background props, cleanup, and remaining PR B dependencies.
+
+## Reflection Chat frontend
+
+`/reflection-chat` and `/reflection-chat/:chatId` are protected routes separate
+from Weekly recap. Keep chat-specific behavior in `features/reflection-chat/`.
+Its workspace owns request cancellation and stale-result checks; do not move
+private drafts into browser storage. The shell keeps the chat workspace mounted
+across chat URLs. English UI includes an English/Vietnamese reply selector.
+The existing `api()` client remains the cookie/CSRF/session boundary.

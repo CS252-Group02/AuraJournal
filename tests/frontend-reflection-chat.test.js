@@ -110,3 +110,14 @@ test('support links accept HTTPS and call actions and reject executable metadata
   assert.equal(safeSupportUrl('tel:+1234'), 'tel:+1234');
   for (const value of ['javascript:alert(1)', 'data:text/html,bad', '//evil.test', 'https://user:pass@example.test', 'tel:abc', 'https://a.test/\n']) assert.equal(safeSupportUrl(value), null);
 });
+
+test('older pages remain chronological, deduplicate boundaries and preserve current metadata', async () => {
+  const turn = fixtures.turn_responses.reflection;
+  const workspace = await loadWorkspace({ read: async (id, before) => ({ ...fixtures.empty_detail,
+    chat: { ...fixtures.chat, revision: before ? 0 : 2 },
+    turns: before ? [{ ...turn, turn_id: 'older', revision: 1 }] : [{ ...turn, turn_id: 'newer', revision: 2 }],
+    next_before_revision: before ? null : 2 }) });
+  await workspace.open('a'); await workspace.older();
+  assert.deepEqual(workspace.getSnapshot().detail.turns.map(turn => turn.revision), [1, 2]);
+  assert.equal(workspace.getSnapshot().detail.chat.revision, 2);
+});

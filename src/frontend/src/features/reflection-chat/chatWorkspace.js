@@ -37,7 +37,11 @@ export function createChatWorkspace(api = chatApi) {
     const task = job('detail');
     try {
       const data = await api.read(id, null, task.signal);
-      if (task.current()) update({ detail: data, status: 'ready' });
+      if (task.current()) {
+        const saved = state.retry && data.turns.some(turn => turn.turn_id === state.retry.turn_id);
+        update({ detail: data, status: 'ready', ...(saved ? { draft: '', retry: null } : {}) });
+        if (saved) drafts.delete(id);
+      }
     } catch (error) { if (task.current()) update({ status: 'error', error: error.message }); }
   }
   async function create() {
